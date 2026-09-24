@@ -84,6 +84,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -115,13 +116,22 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 // Google TV quick-settings palette: dark sheet, dark cards, light-blue focus with dark text.
-private val PanelBg = Color(0xFF1F2227)
-private val CardBg = Color(0xFF2E3238)
-private val FocusBg = Color(0xFFD3E3FD)
-private val FocusText = Color(0xFF0B1D36)
+// Tablet: Google TV quick settings (dark sheet, dark cards, light-blue focus with dark text).
+// Projector: XGIMI's own panel (no sheet over the evenly dimmed picture, see-through grey tiles,
+// saturated blue focus with white text).
+private val PanelBg get() = if (Device.isTv) Color.Transparent else Color(0xFF1F2227)
+private val CardBg get() = if (Device.isTv) Color(0x38FFFFFF) else Color(0xFF2E3238)
+private val FocusBg get() = if (Device.isTv) Color(0xFF3B7CF5) else Color(0xFFD3E3FD)
+private val FocusText get() = if (Device.isTv) Color.White else Color(0xFF0B1D36)
+/** Filled part of a focused slider or switch, drawn on [FocusBg]. */
+private val FocusFill get() = if (Device.isTv) Color.White else Color(0xFF0B57D0)
 private val Accent = Color(0xFF8AB4F8)
+/** Text on a tile that is switched on (light [Accent] fill). */
+private val OnText = Color(0xFF0B1D36)
 private val PanelText = Color(0xFFE8EAED)
 private val PanelDim = Color(0xFFA8ACB3)
+/** The projector dims the whole picture evenly, like XGIMI's panel; the tablet fades in from the right. */
+private val TvScrim = Color(0xA6000000)
 
 /** Sub-pages opened from the tile grid. */
 private enum class PanelPage(val title: String) {
@@ -191,7 +201,10 @@ fun PanelScreen(onDismiss: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Brush.horizontalGradient(listOf(Color.Transparent, Color(0x99000000))))
+            .background(
+                if (Device.isTv) SolidColor(TvScrim)
+                else Brush.horizontalGradient(listOf(Color.Transparent, Color(0x99000000))),
+            )
             .arrowSoundTracker()
             .panelKey(onDismiss)
             // The overlay window has no back dispatcher, so Back is handled here for both hosts.
@@ -381,7 +394,7 @@ private fun PanelHeader(onSettings: () -> Unit) {
 private fun QuickTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val on = item.active == true
-    val fg = if (focused || on) FocusText else PanelText
+    val fg = tileText(focused, on)
     Column(
         modifier
             .height(96.dp)
@@ -400,10 +413,16 @@ private fun QuickTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) 
         Image(item.icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(fg))
         Column {
             T(item.label, 16.sp, color = fg)
-            item.active?.let { T(if (it) "Вкл." else "Выкл.", 13.sp, color = if (focused || it) FocusText else PanelDim) }
+            item.active?.let { T(if (it) "Вкл." else "Выкл.", 13.sp, color = if (focused || it) fg else PanelDim) }
             item.subtitle?.let { T(it, 13.sp, color = if (focused) FocusText else PanelDim) }
         }
     }
+}
+
+private fun tileText(focused: Boolean, on: Boolean) = when {
+    focused -> FocusText
+    on -> OnText
+    else -> PanelText
 }
 
 private fun tileColor(focused: Boolean, on: Boolean) = when {
@@ -419,7 +438,7 @@ private val TileHeight = 80.dp
 private fun WideTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val on = item.active == true
-    val fg = if (focused || on) FocusText else PanelText
+    val fg = tileText(focused, on)
     val status = item.active?.let { if (it) "Вкл." else "Выкл." } ?: item.subtitle
     Row(
         modifier
@@ -433,7 +452,7 @@ private fun WideTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             T(item.label, 16.sp, color = fg)
-            status?.let { T(it, 12.sp, color = if (focused || on) FocusText else PanelDim) }
+            status?.let { T(it, 12.sp, color = if (focused || on) fg else PanelDim) }
         }
     }
 }
@@ -447,7 +466,7 @@ private fun WideTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
 private fun IconTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val on = item.active == true
-    val fg = if (focused || on) FocusText else PanelText
+    val fg = tileText(focused, on)
     val lift by animateFloatAsState(if (focused) 1f else 0f, tween(180), label = "lift")
     Box(
         modifier
@@ -760,7 +779,7 @@ private fun Toggle(text: String, checked: Boolean, modifier: Modifier, onClick: 
                 .size(width = 50.dp, height = 30.dp)
                 .background(
                     when {
-                        checked && focused -> Color(0xFF0B57D0)
+                        checked && focused -> FocusFill
                         checked -> Accent
                         else -> Color(0xFF5F6368)
                     },
@@ -772,7 +791,7 @@ private fun Toggle(text: String, checked: Boolean, modifier: Modifier, onClick: 
                 Modifier
                     .offset(x = 20.dp * knob)
                     .size(22.dp)
-                    .background(if (checked) (if (focused) Color.White else FocusText) else Color(0xFFC4C7C5), CircleShape),
+                    .background(if (checked) (if (focused) FocusBg else OnText) else Color(0xFFC4C7C5), CircleShape),
             )
         }
     }
@@ -861,13 +880,13 @@ private fun LevelSlider(icon: ImageVector, value: Int, max: Int, modifier: Modif
                 Modifier
                     .fillMaxWidth()
                     .height(8.dp)
-                    .background(if (focused) Color(0x330B1D36) else Color(0xFF4A4E55), CircleShape),
+                    .background(if (focused) FocusFill.copy(alpha = 0.3f) else Color(0xFF4A4E55), CircleShape),
             ) {
                 Box(
                     Modifier
                         .fillMaxWidth(value / max.toFloat())
                         .height(8.dp)
-                        .background(if (focused) Color(0xFF0B57D0) else Accent, CircleShape),
+                        .background(if (focused) FocusFill else Accent, CircleShape),
                 )
             }
         }
