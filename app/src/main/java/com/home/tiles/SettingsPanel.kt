@@ -493,9 +493,6 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         PanelPage.Xgimi -> {
             Section("Разделы настроек проектора")
             ListRow("Звуковой выход") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_SOUND_OUTPUT) } }
-            ListRow("Bluetooth") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) } }
-            ListRow("Зум и сдвиг") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ZOOM) } }
-            ListRow("Эко-режим") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_GENERAL) } }
             ListRow("Все настройки") { projector { context.openSettings() } }
         }
     }

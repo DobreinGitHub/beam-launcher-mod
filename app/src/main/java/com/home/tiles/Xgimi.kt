@@ -65,7 +65,6 @@ object Xgimi {
     const val PAGE_SOUND_OUTPUT = "Settings://com.xgimi.settings.sound/soundOutput"
     const val PAGE_BLUETOOTH = "Settings://com.xgimi.settings.bluetooth"
     const val PAGE_ZOOM = "Settings://com.xgimi.settings.picture/zoom_displacement"
-    const val PAGE_GENERAL = "Settings://com.xgimi.settings.general/eco"
     const val PAGE_WIFI = "Settings://com.xgimi.settings.net/wifi"
     const val PAGE_KEYSTONE = "Settings://com.xgimi.settings.picture/keyStone"
     const val PAGE_ROTATE = "Settings://com.xgimi.settings.picture/rotate"
