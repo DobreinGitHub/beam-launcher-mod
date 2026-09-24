@@ -490,7 +490,9 @@ private fun IconTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
                     .align(Alignment.BottomCenter)
                     .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
                     .graphicsLayer { alpha = lift }
-                    .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 700),
+                    // Twice, then it rests: every marquee frame makes the system re-blend the
+                    // full-screen overlay with the video (measured ~40% CPU while it runs).
+                    .basicMarquee(iterations = 2, initialDelayMillis = 700),
                 style = TextStyle(color = fg, fontSize = 12.sp),
                 maxLines = 1,
             )
