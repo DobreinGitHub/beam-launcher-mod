@@ -19,7 +19,21 @@ object Xgimi {
 
     fun autoFocus(context: Context) = focusCommand(context, TYPE_AUTO_FOCUS)
 
-    fun autoKeystone(context: Context) = focusCommand(context, TYPE_AUTO_KEYSTONE)
+    /**
+     * Auto keystone the way XGIMI's own settings start it: ProjectorFocusManager.newAutoKst(9)
+     * from the com.xgimi.api library (the AF_AK type 10 command reaches SystemUI but no longer
+     * starts the ToF measurement on this firmware). Falls back to the SystemUI command.
+     */
+    fun autoKeystone(context: Context) {
+        val started = runCatching {
+            val cls = Class.forName("com.xgimi.gmpf.api.ProjectorFocusManager")
+            val pfm = cls.getMethod("getInstance").invoke(null)
+            cls.getMethod("newAutoKst", Int::class.javaPrimitiveType).invoke(pfm, AUTO_KST_SETTINGS)
+        }.isSuccess
+        if (!started) focusCommand(context, TYPE_AUTO_KEYSTONE)
+    }
+
+    private const val AUTO_KST_SETTINGS = 9
 
     /** Opens XGIMI's manual focus overlay, driven with the remote's arrows. */
     fun manualFocus(context: Context) = focusCommand(context, TYPE_MANUAL_FOCUS)
