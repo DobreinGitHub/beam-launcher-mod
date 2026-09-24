@@ -46,6 +46,17 @@ class AdbCommandReceiver : BroadcastReceiver() {
             }.fold({ "ok paths=$it" }, { "error ${it.cause ?: it}" })
             resultData = "auto=${SoundOutput.auto()} output=${SoundOutput.output()} connected=$devices service=$service"
         }
+        // --ei pic_item N --ei pic_value V: set one picture parameter (0 brightness .. 4 hue).
+        if (intent.hasExtra("pic_item")) {
+            XgimiService.bind(context)
+            PictureAdjust.set(intent.getIntExtra("pic_item", 0), intent.getIntExtra("pic_value", 50))
+        }
+        // --ez pic_items true: custom picture parameters (binds XGIMI's service first; ask twice).
+        if (intent.hasExtra("pic_items")) {
+            XgimiService.bind(context)
+            val items = (0..4).map { PictureAdjust.get(it) }
+            resultData = "bright/contrast/sat/sharp/hue=$items colorTemp=${PictureAdjust.colorTemp()}"
+        }
         // --ez pic_get true: current picture mode number (as XGIMI's settings use it).
         if (intent.hasExtra("pic_get")) {
             resultData = runCatching {

@@ -46,6 +46,10 @@ import androidx.compose.material.icons.rounded.BrightnessMedium
 import androidx.compose.material.icons.rounded.CenterFocusStrong
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Details
+import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.compose.material.icons.rounded.Contrast
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Eco
 import androidx.compose.material.icons.rounded.Wifi
@@ -72,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -602,6 +607,7 @@ private fun PicturePage(onXgimiPage: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var current by remember { mutableStateOf(PictureMode.current()) }
+    LaunchedEffect(Unit) { XgimiService.bind(context) }
     var confirmPerformance by remember { mutableStateOf(false) }
     fun apply(mode: Int) {
         Xgimi.setPictureMode(context, mode)
@@ -627,9 +633,69 @@ private fun PicturePage(onXgimiPage: () -> Unit) {
             )
         }
     }
+    Section("Пользовательский режим")
+    if (current == CUSTOM_PICTURE) {
+        CustomPictureControls()
+    } else {
+        // XGIMI keeps these values per mode and only saves them in the custom one.
+        ListRow("Перейти в пользовательский режим") { apply(CUSTOM_PICTURE) }
+    }
     Section("Ещё")
     ListRow("Настройки AI и режимов XGIMI", onXgimiPage)
 }
+
+private const val CUSTOM_PICTURE = 3
+
+/** Brightness, contrast, saturation, sharpness and colour temperature of the custom picture mode. */
+@Composable
+private fun CustomPictureControls() {
+    val context = LocalContext.current
+    // The values come from XGIMI's service, which binds asynchronously on first use.
+    val loaded by produceState<Map<Int, Int>?>(null) {
+        XgimiService.bind(context)
+        repeat(20) {
+            val items = listOf(PictureAdjust.BRIGHTNESS, PictureAdjust.CONTRAST, PictureAdjust.SATURATION, PictureAdjust.SHARPNESS)
+                .associateWith { PictureAdjust.get(it) }
+            if (items.values.all { it != null }) {
+                value = items.mapValues { it.value!! } + (COLOR_TEMP to (PictureAdjust.colorTemp() ?: 1))
+                return@produceState
+            }
+            delay(250)
+        }
+    }
+    val values = loaded
+    if (values == null) {
+        T("Загрузка…", 14.sp, color = PanelDim)
+        return
+    }
+    val state = remember(values) { mutableStateMapOf<Int, Int>().apply { putAll(values) } }
+    val sliders = listOf(
+        Triple(PictureAdjust.BRIGHTNESS, "Яркость", Icons.Rounded.WbSunny),
+        Triple(PictureAdjust.CONTRAST, "Контраст", Icons.Rounded.Contrast),
+        Triple(PictureAdjust.SATURATION, "Насыщенн.", Icons.Rounded.WaterDrop),
+        Triple(PictureAdjust.SHARPNESS, "Резкость", Icons.Rounded.Details),
+    )
+    sliders.forEach { (item, label, icon) ->
+        LevelSlider(icon, state.getValue(item), 100, Modifier.fillMaxWidth().padding(bottom = 8.dp), label) {
+            state[item] = it
+            PictureAdjust.set(item, it)
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    T("Цветовая температура", 14.sp, color = PanelDim)
+    Spacer(Modifier.height(8.dp))
+    PairRow {
+        listOf("Холодная" to 0, "Нейтр." to 1, "Тёплая" to 2).forEach { (label, temp) ->
+            Chip(label, state[COLOR_TEMP] == temp, Modifier.weight(1f)) {
+                state[COLOR_TEMP] = temp
+                PictureAdjust.setColorTemp(temp)
+            }
+        }
+    }
+}
+
+/** Key for the colour temperature in the custom picture state (picture items are 0..5). */
+private const val COLOR_TEMP = 100
 
 @Composable
 private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
@@ -908,7 +974,14 @@ private fun BrightnessSlider(modifier: Modifier) {
 
 /** A focusable bar: left/right step it, taps and drags set it directly. */
 @Composable
-private fun LevelSlider(icon: ImageVector, value: Int, max: Int, modifier: Modifier, onSet: (Int) -> Unit) {
+private fun LevelSlider(
+    icon: ImageVector,
+    value: Int,
+    max: Int,
+    modifier: Modifier,
+    label: String? = null,
+    onSet: (Int) -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     fun set(target: Int) {
         val clamped = target.coerceIn(0, max)
@@ -936,6 +1009,9 @@ private fun LevelSlider(icon: ImageVector, value: Int, max: Int, modifier: Modif
     ) {
         Image(icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(if (focused) FocusText else PanelText))
         Spacer(Modifier.width(14.dp))
+        label?.let {
+            T(it, 15.sp, Modifier.width(96.dp), color = if (focused) FocusText else PanelText)
+        }
         fun setFraction(fraction: Float) = set((fraction.coerceIn(0f, 1f) * max).roundToInt())
         Box(
             Modifier

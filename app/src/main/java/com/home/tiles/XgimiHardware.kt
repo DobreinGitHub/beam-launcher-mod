@@ -50,6 +50,16 @@ object PictureMode {
         val mode = cls.getMethod("getPictureMode", Int::class.javaPrimitiveType).invoke(tv, source) as Int
         if (mode == 10) 16 else mode
     }.onFailure { Log.w("PictureMode", "Could not read picture mode", it) }.getOrNull()
+
+    /**
+     * Switches the mode the way XGIMI's settings app does internally (MstPictureManager, same
+     * numbers). Needs [XgimiService.bind]; false if the service isn't bound yet.
+     */
+    fun set(mode: Int): Boolean = runCatching {
+        val cls = Class.forName("com.xgimi.video.MstPictureManager")
+        val pm = cls.getMethod("getInstance").invoke(null)
+        cls.getMethod("setPictureMode", Int::class.javaPrimitiveType).invoke(pm, mode)
+    }.onFailure { Log.w("PictureMode", "setPictureMode failed", it) }.isSuccess
 }
 
 /** XGIMI eco mode (dimmer, quieter), via com.xgimi.gmpf.api.SystemManager like the stock panel. */
@@ -107,17 +117,34 @@ object SoundOutput {
         call("setAudioDeviceSwitchMode", (if (on) 0 else 1).toByte())
     }
 
+    /** Binds XGIMI's service, which [setOutput] needs; see [XgimiService.bind]. */
+    fun prepare(context: Context) = XgimiService.bind(context)
+
     /**
      * Picks the output the way XGIMI's page does (VoiceHelper.setAudioDevice): through the audio
      * service in com.xgimi.api.XgimiAudioManager, which also moves Android's routing. The plain
      * GmAudioManager.setAudioOutput only switches the amplifier, so a Bluetooth speaker kept playing.
      */
-    /**
-     * XgimiAudioManager talks to com.xgimi.xgimiservice, which the library binds only after
-     * XgimiAidlServiceManager.init(context, listener), as XGIMI's settings do on start. Call this
-     * ahead of [setOutput]; the binding is asynchronous.
-     */
-    fun prepare(context: Context) {
+    fun setOutput(device: Int) {
+        val routed = runCatching {
+            val cls = Class.forName("com.xgimi.api.XgimiAudioManager")
+            val xam = cls.getMethod("getInstance").invoke(null)
+            cls.getMethod("setAudioDeviceOn", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).invoke(xam, device, 0)
+        }.onFailure { Log.w("SoundOutput", "setAudioDeviceOn failed", it) }.isSuccess
+        if (!routed) call("setAudioOutput", device.toByte())
+    }
+}
+
+/**
+ * Parts of com.xgimi.api (XgimiAudioManager, MstPictureManager) talk to com.xgimi.xgimiservice,
+ * which the library binds only after XgimiAidlServiceManager.init(context, listener), as XGIMI's
+ * settings do on start. Call [bind] ahead of using them; the binding is asynchronous.
+ */
+object XgimiService {
+    @Volatile
+    private var bindRequested = false
+
+    fun bind(context: Context) {
         if (bindRequested) return
         bindRequested = true
         runCatching {
@@ -128,9 +155,9 @@ object SoundOutput {
                 when (method.name) {
                     "equals" -> proxy === args?.get(0)
                     "hashCode" -> System.identityHashCode(proxy)
-                    "toString" -> "SoundOutput.bind"
+                    "toString" -> "XgimiService.bind"
                     else -> {
-                        Log.i("SoundOutput", "XGIMI service ${method.name}")
+                        Log.i("XgimiService", "XGIMI service ${method.name}")
                         null
                     }
                 }
@@ -138,19 +165,49 @@ object SoundOutput {
             cls.getMethod("init", Context::class.java, listener).invoke(instance, context.applicationContext, callback)
         }.onFailure {
             bindRequested = false
-            Log.w("SoundOutput", "Could not bind XGIMI service", it)
+            Log.w("XgimiService", "Could not bind XGIMI service", it)
+        }
+    }
+}
+
+/**
+ * The picture parameters XGIMI's picture page edits (brightness, contrast, saturation, sharpness,
+ * hue, colour temperature), through com.xgimi.video.MstPictureManager. Needs [XgimiService.bind].
+ */
+object PictureAdjust {
+    const val BRIGHTNESS = 0
+    const val CONTRAST = 1
+    const val SATURATION = 2
+    const val SHARPNESS = 3
+    const val HUE = 4
+
+    private fun manager(): Pair<Class<*>, Any>? = runCatching {
+        val cls = Class.forName("com.xgimi.video.MstPictureManager")
+        cls to cls.getMethod("getInstance").invoke(null)!!
+    }.onFailure { Log.w("PictureAdjust", "MstPictureManager unavailable", it) }.getOrNull()
+
+    fun get(item: Int): Int? = manager()?.let { (cls, pm) ->
+        runCatching { cls.getMethod("getPictureItem", Int::class.javaPrimitiveType).invoke(pm, item) as Int }.getOrNull()
+    }
+
+    fun set(item: Int, value: Int) {
+        manager()?.let { (cls, pm) ->
+            runCatching {
+                cls.getMethod("setPictureItem", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).invoke(pm, item, value)
+            }.onFailure { Log.w("PictureAdjust", "setPictureItem failed", it) }
         }
     }
 
-    @Volatile
-    private var bindRequested = false
+    /** 0 cool, 1 natural, 2 warm (MstPictureManager.COLOR_TEMP_*). */
+    fun colorTemp(): Int? = manager()?.let { (cls, pm) ->
+        runCatching { cls.getMethod("getColorTemp").invoke(pm) as Int }.getOrNull()
+    }
 
-    fun setOutput(device: Int) {
-        val routed = runCatching {
-            val cls = Class.forName("com.xgimi.api.XgimiAudioManager")
-            val xam = cls.getMethod("getInstance").invoke(null)
-            cls.getMethod("setAudioDeviceOn", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).invoke(xam, device, 0)
-        }.onFailure { Log.w("SoundOutput", "setAudioDeviceOn failed", it) }.isSuccess
-        if (!routed) call("setAudioOutput", device.toByte())
+    fun setColorTemp(value: Int) {
+        manager()?.let { (cls, pm) ->
+            runCatching { cls.getMethod("setColorTemp", Int::class.javaPrimitiveType).invoke(pm, value) }
+                .onFailure { Log.w("PictureAdjust", "setColorTemp failed", it) }
+        }
     }
 }
+

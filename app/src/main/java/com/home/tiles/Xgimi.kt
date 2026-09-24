@@ -59,12 +59,20 @@ object Xgimi {
         Intent("com.xgimi.settings.SETTINGS").setPackage(SETTINGS_PKG).putExtra("data", route),
     )
 
-    fun setPictureMode(context: Context, mode: Int) = startService(
-        context,
-        Intent("com.xgimi.settings.SETTINGS").setPackage(SETTINGS_PKG)
-            .putExtra("data", "changePictureMode")
-            .putExtra("pictureModeValue", mode),
-    )
+    /**
+     * Directly through XGIMI's picture service when it's bound; otherwise via the settings app's
+     * command, which also leaves XGIMI's picture page open behind whatever is on screen.
+     */
+    fun setPictureMode(context: Context, mode: Int) {
+        XgimiService.bind(context)
+        if (PictureMode.set(mode)) return
+        startService(
+            context,
+            Intent("com.xgimi.settings.SETTINGS").setPackage(SETTINGS_PKG)
+                .putExtra("data", "changePictureMode")
+                .putExtra("pictureModeValue", mode),
+        )
+    }
 
     /** Picture modes this model lists, in XGIMI's order, with the numbers its settings app sends. */
     val pictureModes = listOf(
