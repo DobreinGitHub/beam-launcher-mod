@@ -198,6 +198,51 @@ object PictureAdjust {
         }
     }
 
+    private fun mst(name: String, vararg args: Any): Any? = manager()?.let { (cls, pm) ->
+        runCatching { cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(pm, *args) }
+            .onFailure { Log.w("PictureAdjust", "$name failed", it) }.getOrNull()
+    }
+
+    /** GmTvManager calls that take the input first, like XGIMI's picture page makes them. */
+    private fun tv(name: String, vararg args: Any): Any? = runCatching {
+        val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
+        val tv = cls.getMethod("getInstance").invoke(null)
+        val source = cls.getMethod("getCurrentInputSource").invoke(tv) as Int
+        val all = arrayOf<Any>(source, *args)
+        cls.methods.first { it.name == name && it.parameterTypes.size == all.size }.invoke(tv, *all)
+    }.onFailure { Log.w("PictureAdjust", "$name failed", it) }.getOrNull()
+
+    /** Noise reduction: 0 off, 1 low, 2 medium, 3 high, 4 auto. */
+    fun noiseReduction(): Int? = mst("getNoiseReduction") as? Int
+    fun setNoiseReduction(level: Int) { mst("setNoiseReduction", level) }
+
+    /** Motion compensation (MEMC): 0 off, 1 low, 2 medium, 3 high. */
+    fun motion(): Int? = mst("getMfcLevel") as? Int
+    fun setMotion(level: Int) { mst("setMfcLevel", level) }
+
+    /** Gamma index: 0 = 1.8 ... 4 = 2.2 ... 8 = 2.6. */
+    fun gamma(): Int? = tv("getTvGammaLevel") as? Int
+    fun setGamma(level: Int) { tv("setTvGammaLevel", level) }
+
+    fun dynamicContrast(): Boolean? = tv("getTvDynamicContrastEnable") as? Boolean
+    fun setDynamicContrast(on: Boolean) { tv("setTvDynamicContrastEnable", on) }
+
+    /** Local contrast: 0 off, 1 low, 2 medium, 3 high. */
+    fun localContrast(): Int? = tv("getUcdLevel") as? Int
+    fun setLocalContrast(level: Int) { tv("setUcdLevel", level) }
+
+    fun hdr(): Boolean? = runCatching {
+        val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
+        cls.getMethod("getHdrEnable").invoke(cls.getMethod("getInstance").invoke(null)) as Boolean
+    }.getOrNull()
+
+    fun setHdr(on: Boolean) {
+        runCatching {
+            val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
+            cls.getMethod("setHdrEnable", Boolean::class.javaPrimitiveType).invoke(cls.getMethod("getInstance").invoke(null), on)
+        }.onFailure { Log.w("PictureAdjust", "setHdrEnable failed", it) }
+    }
+
     /** 0 cool, 1 natural, 2 warm (MstPictureManager.COLOR_TEMP_*). */
     fun colorTemp(): Int? = manager()?.let { (cls, pm) ->
         runCatching { cls.getMethod("getColorTemp").invoke(pm) as Int }.getOrNull()

@@ -51,6 +51,13 @@ class AdbCommandReceiver : BroadcastReceiver() {
             XgimiService.bind(context)
             PictureAdjust.set(intent.getIntExtra("pic_item", 0), intent.getIntExtra("pic_value", 50))
         }
+        // --ez pic_adv true: the custom mode's advanced settings.
+        if (intent.hasExtra("pic_adv")) {
+            XgimiService.bind(context)
+            resultData = "nr=${PictureAdjust.noiseReduction()} memc=${PictureAdjust.motion()} " +
+                "gamma=${PictureAdjust.gamma()} dynContrast=${PictureAdjust.dynamicContrast()} " +
+                "localContrast=${PictureAdjust.localContrast()} hdr=${PictureAdjust.hdr()}"
+        }
         // --ez pic_items true: custom picture parameters (binds XGIMI's service first; ask twice).
         if (intent.hasExtra("pic_items")) {
             XgimiService.bind(context)

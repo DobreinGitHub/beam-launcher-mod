@@ -76,7 +76,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -646,29 +645,75 @@ private fun PicturePage(onXgimiPage: () -> Unit) {
 
 private const val CUSTOM_PICTURE = 3
 
-/** Brightness, contrast, saturation, sharpness and colour temperature of the custom picture mode. */
+/** Everything XGIMI's custom picture mode page offers, read once XGIMI's service is bound. */
+private data class CustomPicture(
+    val items: Map<Int, Int>,
+    val colorTemp: Int,
+    val noise: Int,
+    val motion: Int,
+    val gamma: Int,
+    val dynamicContrast: Boolean,
+    val localContrast: Int,
+    val hdr: Boolean,
+)
+
+private fun readCustomPicture(): CustomPicture? {
+    val items = listOf(PictureAdjust.BRIGHTNESS, PictureAdjust.CONTRAST, PictureAdjust.SATURATION, PictureAdjust.SHARPNESS)
+        .associateWith { PictureAdjust.get(it) ?: return null }
+    return CustomPicture(
+        items,
+        PictureAdjust.colorTemp() ?: return null,
+        PictureAdjust.noiseReduction() ?: return null,
+        PictureAdjust.motion() ?: return null,
+        PictureAdjust.gamma() ?: return null,
+        PictureAdjust.dynamicContrast() ?: return null,
+        PictureAdjust.localContrast() ?: return null,
+        PictureAdjust.hdr() ?: return null,
+    )
+}
+
+private val NoiseLevels = listOf("Выкл", "Низкое", "Среднее", "Высокое", "Авто")
+private val MotionLevels = listOf("Выкл", "Слабая", "Средняя", "Сильная")
+private val LocalContrastLevels = listOf("Выкл", "Низкий", "Средний", "Высокий")
+private val GammaLevels = listOf("1.8", "1.9", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6")
+
+/** XGIMI's defaults for the custom mode, as the projector came. */
+private val CustomDefaults = CustomPicture(
+    items = mapOf(PictureAdjust.BRIGHTNESS to 50, PictureAdjust.CONTRAST to 50, PictureAdjust.SATURATION to 50, PictureAdjust.SHARPNESS to 50),
+    colorTemp = 1,
+    noise = 2,
+    motion = 3,
+    gamma = 4,
+    dynamicContrast = true,
+    localContrast = 2,
+    hdr = true,
+)
+
+/** The custom picture mode's settings, laid out like XGIMI's page (basic, then advanced). */
 @Composable
 private fun CustomPictureControls() {
     val context = LocalContext.current
-    // The values come from XGIMI's service, which binds asynchronously on first use.
-    val loaded by produceState<Map<Int, Int>?>(null) {
+    // XGIMI's service binds asynchronously on first use, so poll briefly for the values.
+    val loaded by produceState<CustomPicture?>(null) {
         XgimiService.bind(context)
         repeat(20) {
-            val items = listOf(PictureAdjust.BRIGHTNESS, PictureAdjust.CONTRAST, PictureAdjust.SATURATION, PictureAdjust.SHARPNESS)
-                .associateWith { PictureAdjust.get(it) }
-            if (items.values.all { it != null }) {
-                value = items.mapValues { it.value!! } + (COLOR_TEMP to (PictureAdjust.colorTemp() ?: 1))
+            readCustomPicture()?.let {
+                value = it
                 return@produceState
             }
             delay(250)
         }
     }
-    val values = loaded
-    if (values == null) {
+    val initial = loaded
+    if (initial == null) {
         T("Загрузка…", 14.sp, color = PanelDim)
         return
     }
-    val state = remember(values) { mutableStateMapOf<Int, Int>().apply { putAll(values) } }
+    var values by remember(initial) { mutableStateOf(initial) }
+    fun update(apply: () -> Unit, next: CustomPicture) {
+        apply()
+        values = next
+    }
     val sliders = listOf(
         Triple(PictureAdjust.BRIGHTNESS, "Яркость", Icons.Rounded.WbSunny),
         Triple(PictureAdjust.CONTRAST, "Контраст", Icons.Rounded.Contrast),
@@ -676,26 +721,59 @@ private fun CustomPictureControls() {
         Triple(PictureAdjust.SHARPNESS, "Резкость", Icons.Rounded.Details),
     )
     sliders.forEach { (item, label, icon) ->
-        LevelSlider(icon, state.getValue(item), 100, Modifier.fillMaxWidth().padding(bottom = 8.dp), label) {
-            state[item] = it
-            PictureAdjust.set(item, it)
+        LevelSlider(icon, values.items.getValue(item), 100, Modifier.fillMaxWidth().padding(bottom = 8.dp), label) {
+            update({ PictureAdjust.set(item, it) }, values.copy(items = values.items + (item to it)))
         }
     }
-    Spacer(Modifier.height(4.dp))
+    Selector("Шумоподавление", NoiseLevels.getOrElse(values.noise) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+        val next = (values.noise + delta).mod(NoiseLevels.size)
+        update({ PictureAdjust.setNoiseReduction(next) }, values.copy(noise = next))
+    }
     T("Цветовая температура", 14.sp, color = PanelDim)
     Spacer(Modifier.height(8.dp))
     PairRow {
-        listOf("Холодная" to 0, "Нейтр." to 1, "Тёплая" to 2).forEach { (label, temp) ->
-            Chip(label, state[COLOR_TEMP] == temp, Modifier.weight(1f)) {
-                state[COLOR_TEMP] = temp
-                PictureAdjust.setColorTemp(temp)
+        listOf("Холодная" to 0, "Станд." to 1, "Тёплая" to 2).forEach { (label, temp) ->
+            Chip(label, values.colorTemp == temp, Modifier.weight(1f)) {
+                update({ PictureAdjust.setColorTemp(temp) }, values.copy(colorTemp = temp))
             }
         }
     }
-}
 
-/** Key for the colour temperature in the custom picture state (picture items are 0..5). */
-private const val COLOR_TEMP = 100
+    Section("Расширенные")
+    Selector("Плавность (MEMC)", MotionLevels.getOrElse(values.motion) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+        val next = (values.motion + delta).mod(MotionLevels.size)
+        update({ PictureAdjust.setMotion(next) }, values.copy(motion = next))
+    }
+    Selector("Гамма", GammaLevels.getOrElse(values.gamma) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+        val next = (values.gamma + delta).coerceIn(0, GammaLevels.lastIndex)
+        update({ PictureAdjust.setGamma(next) }, values.copy(gamma = next))
+    }
+    Toggle("Динамический контраст", values.dynamicContrast, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        val next = !values.dynamicContrast
+        update({ PictureAdjust.setDynamicContrast(next) }, values.copy(dynamicContrast = next))
+    }
+    Toggle("HDR (авто)", values.hdr, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        val next = !values.hdr
+        update({ PictureAdjust.setHdr(next) }, values.copy(hdr = next))
+    }
+    Selector("Локальный контраст", LocalContrastLevels.getOrElse(values.localContrast) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+        val next = (values.localContrast + delta).mod(LocalContrastLevels.size)
+        update({ PictureAdjust.setLocalContrast(next) }, values.copy(localContrast = next))
+    }
+    ListRow("Сбросить по умолчанию") {
+        val d = CustomDefaults
+        update({
+            d.items.forEach { (item, v) -> PictureAdjust.set(item, v) }
+            PictureAdjust.setColorTemp(d.colorTemp)
+            PictureAdjust.setNoiseReduction(d.noise)
+            PictureAdjust.setMotion(d.motion)
+            PictureAdjust.setGamma(d.gamma)
+            PictureAdjust.setDynamicContrast(d.dynamicContrast)
+            PictureAdjust.setLocalContrast(d.localContrast)
+            PictureAdjust.setHdr(d.hdr)
+        }, d)
+    }
+}
 
 @Composable
 private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
