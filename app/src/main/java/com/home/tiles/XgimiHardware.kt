@@ -38,6 +38,20 @@ object Lumens {
     }
 }
 
+/**
+ * The current picture mode, as a number [Xgimi.setPictureMode] takes. GmTvManager reports the
+ * mode of the current input; it numbers AI picture 10 where the settings app sends 16.
+ */
+object PictureMode {
+    fun current(): Int? = runCatching {
+        val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
+        val tv = cls.getMethod("getInstance").invoke(null)
+        val source = cls.getMethod("getCurrentInputSource").invoke(tv) as Int
+        val mode = cls.getMethod("getPictureMode", Int::class.javaPrimitiveType).invoke(tv, source) as Int
+        if (mode == 10) 16 else mode
+    }.onFailure { Log.w("PictureMode", "Could not read picture mode", it) }.getOrNull()
+}
+
 /** XGIMI eco mode (dimmer, quieter), via com.xgimi.gmpf.api.SystemManager like the stock panel. */
 object Eco {
     private val manager: Pair<Class<*>, Any>? by lazy {

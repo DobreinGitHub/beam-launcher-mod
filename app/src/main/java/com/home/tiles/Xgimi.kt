@@ -66,7 +66,7 @@ object Xgimi {
             .putExtra("pictureModeValue", mode),
     )
 
-    /** Picture modes this model lists, with the numbers its settings app sends. */
+    /** Picture modes this model lists, in XGIMI's order, with the numbers its settings app sends. */
     val pictureModes = listOf(
         "AI-изображение" to 16,
         "Кино" to 1,
@@ -74,7 +74,14 @@ object Xgimi {
         "ТВ" to 7,
         "Пользовательский" to 3,
         "Офис" to 25,
+        "Производительность" to PICTURE_PERFORMANCE,
     )
+
+    /** Brightest mode: drives the light source harder; XGIMI warns about heat before enabling it. */
+    const val PICTURE_PERFORMANCE = 5
+
+    /** XGIMI's picture mode page (the list with the AI picture settings behind "AI ›"). */
+    const val PAGE_PICTURE = "Settings://com.xgimi.settings.image/mode"
 
     const val PAGE_SOUND_OUTPUT = "Settings://com.xgimi.settings.sound/soundOutput"
     const val PAGE_BLUETOOTH = "Settings://com.xgimi.settings.bluetooth"

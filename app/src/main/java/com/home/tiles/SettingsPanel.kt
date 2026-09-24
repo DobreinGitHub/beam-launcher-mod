@@ -274,6 +274,9 @@ private fun ColumnScope.MainPage(
     val inputs = remember { if (Device.isTv) Xgimi.hdmiInputs(context) else emptyList() }
     var eco by remember { mutableStateOf(if (Device.isTv) Eco.enabled() else null) }
     val soundOutput = remember { if (Device.isTv) SoundOutput.output()?.let(::soundOutputName) else null }
+    val pictureMode = remember {
+        if (Device.isTv) PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first } else null
+    }
     // Projector actions close the panel first so it doesn't cover the picture (keystone photographs it).
     fun projector(action: () -> Unit): () -> Unit = {
         onDismiss()
@@ -288,7 +291,7 @@ private fun ColumnScope.MainPage(
             add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }, wide = true))
             add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) }, wide = true))
             add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput, wide = true))
-            add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture, wide = true))
+            add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture, subtitle = pictureMode, wide = true))
             // One HDMI port: switch straight to it; with several, number them.
             inputs.forEachIndexed { i, input ->
                 val label = if (inputs.size == 1) "HDMI" else "HDMI ${i + 1}"
@@ -569,13 +572,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
     }
     Spacer(Modifier.height(8.dp))
     when (page) {
-        PanelPage.Picture -> {
-            // Stays open so the change can be judged against the picture behind the panel.
-            Section("Режим изображения")
-            Xgimi.pictureModes.forEach { (label, mode) ->
-                ListRow(label) { Xgimi.setPictureMode(context, mode) }
-            }
-        }
+        PanelPage.Picture -> PicturePage(onXgimiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_PICTURE) } })
         PanelPage.Sound -> {
             Section("Громкость")
             VolumeSlider(Modifier.fillMaxWidth())
@@ -592,6 +589,73 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
             Section("Разделы настроек проектора")
             ListRow("Звуковой выход") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_SOUND_OUTPUT) } }
             ListRow("Все настройки") { projector { context.openSettings() } }
+        }
+    }
+}
+
+/**
+ * Picture modes with the current one ticked. The panel stays open so the change can be judged
+ * against the picture behind it. Performance asks first, like XGIMI does (heat warning).
+ */
+@Composable
+private fun PicturePage(onXgimiPage: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var current by remember { mutableStateOf(PictureMode.current()) }
+    var confirmPerformance by remember { mutableStateOf(false) }
+    fun apply(mode: Int) {
+        Xgimi.setPictureMode(context, mode)
+        current = mode
+        // The firmware switches asynchronously; read back what it actually applied.
+        scope.launch {
+            delay(1500)
+            PictureMode.current()?.let { current = it }
+        }
+    }
+    Section("Режим изображения")
+    Xgimi.pictureModes.forEach { (label, mode) ->
+        Chip(label, current == mode, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            if (mode == Xgimi.PICTURE_PERFORMANCE && current != mode) confirmPerformance = true else apply(mode)
+        }
+        if (mode == Xgimi.PICTURE_PERFORMANCE && confirmPerformance) {
+            PerformanceWarning(
+                onConfirm = {
+                    confirmPerformance = false
+                    apply(mode)
+                },
+                onCancel = { confirmPerformance = false },
+            )
+        }
+    }
+    Section("Ещё")
+    ListRow("Настройки AI и режимов XGIMI", onXgimiPage)
+}
+
+@Composable
+private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val confirm = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos {}
+        runCatching { confirm.requestFocus() }
+    }
+    Column(
+        Modifier
+            .padding(bottom = 8.dp)
+            .fillMaxWidth()
+            .border(1.dp, Color(0x66FFB74D), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+    ) {
+        T("Режим производительности", 16.sp, color = PanelText, weight = FontWeight.Medium)
+        Spacer(Modifier.height(6.dp))
+        BasicText(
+            "Максимальная яркость. Вентиляция не должна быть закрыта, в комнате — не выше 25 °C. " +
+                "Долгое использование может перегреть проектор и сократить срок службы.",
+            style = TextStyle(color = PanelDim, fontSize = 13.sp),
+        )
+        Spacer(Modifier.height(10.dp))
+        PairRow {
+            Chip("Включить", false, Modifier.weight(1f).focusRequester(confirm), onClick = onConfirm)
+            Chip("Отмена", false, Modifier.weight(1f), onClick = onCancel)
         }
     }
 }
