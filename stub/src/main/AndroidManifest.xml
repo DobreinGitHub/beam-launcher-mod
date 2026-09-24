@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <queries>
+        <package android:name="com.home.tiles" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:label="${label}">
+        <activity
+            android:name=".StubActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
+
+        <!-- The exact component the firmware starts for this key. Some keys start it by component,
+             others via getLaunchIntentForPackage, hence the launcher entry (Beam hides it). -->
+        <activity-alias
+            android:name="${firmwareActivity}"
+            android:exported="true"
+            android:targetActivity=".StubActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+</manifest>

@@ -1,0 +1,100 @@
+package com.home.tiles
+
+import android.content.Context
+import android.content.Intent
+import android.media.tv.TvContract
+import android.media.tv.TvInputInfo
+import android.media.tv.TvInputManager
+import android.widget.Toast
+
+/**
+ * Projector functions. The remote's focus key ends up as an AF_AK command to XGIMI SystemUI
+ * (via com.xgimi.windowsystem), so we send the same command directly.
+ * Types come from FocusUIV2.receiveIntent in the firmware's SystemUI.
+ */
+object Xgimi {
+    private const val TYPE_MANUAL_FOCUS = 1
+    private const val TYPE_AUTO_FOCUS = 8
+    private const val TYPE_AUTO_KEYSTONE = 10
+
+    fun autoFocus(context: Context) = focusCommand(context, TYPE_AUTO_FOCUS)
+
+    fun autoKeystone(context: Context) = focusCommand(context, TYPE_AUTO_KEYSTONE)
+
+    /** Opens XGIMI's manual focus overlay, driven with the remote's arrows. */
+    fun manualFocus(context: Context) = focusCommand(context, TYPE_MANUAL_FOCUS)
+
+    private fun focusCommand(context: Context, type: Int) = startService(
+        context,
+        Intent("com.xgimi.systemui.action.AF_AK")
+            .setPackage("com.xgimi.systemui")
+            .putExtra("type", type)
+            .putExtra("from", context.packageName),
+    )
+
+    /** Same menu as the power key: screen off, power off, restart, sleep timer. */
+    fun powerMenu(context: Context) =
+        startService(context, Intent("com.xgimi.action.WINODWSYSTEM").setPackage("com.xgimi.systemui"))
+
+    /**
+     * The settings app's ActionService takes a page route in "data" (Settings://...), or the
+     * "changePictureMode" command with a GmTvManager picture mode number.
+     */
+    fun openSettingsPage(context: Context, route: String) = startService(
+        context,
+        Intent("com.xgimi.settings.SETTINGS").setPackage(SETTINGS_PKG).putExtra("data", route),
+    )
+
+    fun setPictureMode(context: Context, mode: Int) = startService(
+        context,
+        Intent("com.xgimi.settings.SETTINGS").setPackage(SETTINGS_PKG)
+            .putExtra("data", "changePictureMode")
+            .putExtra("pictureModeValue", mode),
+    )
+
+    /** Picture modes this model lists, with the numbers its settings app sends. */
+    val pictureModes = listOf(
+        "AI-изображение" to 16,
+        "Кино" to 1,
+        "Спорт" to 9,
+        "ТВ" to 7,
+        "Пользовательский" to 3,
+        "Офис" to 25,
+    )
+
+    const val PAGE_SOUND_OUTPUT = "Settings://com.xgimi.settings.sound/soundOutput"
+    const val PAGE_BLUETOOTH = "Settings://com.xgimi.settings.bluetooth"
+    const val PAGE_ZOOM = "Settings://com.xgimi.settings.picture/zoom_displacement"
+    const val PAGE_GENERAL = "Settings://com.xgimi.settings.general/eco"
+    const val PAGE_WIFI = "Settings://com.xgimi.settings.net/wifi"
+    const val PAGE_KEYSTONE = "Settings://com.xgimi.settings.picture/keyStone"
+    const val PAGE_ROTATE = "Settings://com.xgimi.settings.picture/rotate"
+
+    /** "Any Door" (任意门): XGIMI's ambient scenes, also used as the screensaver. */
+    const val SCREENSAVER_APP = "com.xgimi.atmosphere"
+
+    private const val SETTINGS_PKG = "com.android.newsettings"
+
+    private fun startService(context: Context, intent: Intent) {
+        val started = runCatching { context.startService(intent) != null }.getOrDefault(false)
+        if (!started) Toast.makeText(context, "Недоступно на этом проекторе", Toast.LENGTH_SHORT).show()
+    }
+
+    class Input(val label: String, val id: String)
+
+    fun hdmiInputs(context: Context): List<Input> {
+        val tv = context.getSystemService(TvInputManager::class.java) ?: return emptyList()
+        val hdmi = tv.tvInputList.filter { it.type == TvInputInfo.TYPE_HDMI }
+        return hdmi.mapIndexed { i, info ->
+            val name = info.loadLabel(context).toString().takeIf { it.isNotBlank() && hdmi.size == 1 }
+            Input(name ?: "HDMI ${i + 1}", info.id)
+        }
+    }
+
+    fun openInput(context: Context, input: Input) {
+        val intent = Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(input.id))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(intent) }
+            .onFailure { Toast.makeText(context, "Не удалось переключить вход", Toast.LENGTH_SHORT).show() }
+    }
+}

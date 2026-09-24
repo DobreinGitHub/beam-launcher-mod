@@ -1,0 +1,24 @@
+<!-- Android TV banner: the same lens and beam, stretched across the card. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#0E1B2C"
+        android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:fillAlpha="0.35"
+        android:fillColor="#00C3E3"
+        android:pathData="M84,90L320,10L320,170Z" />
+    <path
+        android:fillAlpha="0.8"
+        android:fillColor="#7FF0FF"
+        android:pathData="M84,90L320,64L320,116Z" />
+    <path
+        android:fillColor="#00C3E3"
+        android:pathData="M84,62a28,28 0,1 1,0 56a28,28 0,1 1,0 -56z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M84,74a16,16 0,1 1,0 32a16,16 0,1 1,0 -32z" />
+</vector>
