@@ -11,6 +11,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -236,6 +239,8 @@ private class QuickItem(
     val active: Boolean? = null,
     /** A second line under the label, e.g. the current sound output. */
     val subtitle: String? = null,
+    /** On the projector: a double-width tile with its label, instead of a square icon tile. */
+    val wide: Boolean = false,
 )
 
 @Composable
@@ -256,19 +261,19 @@ private fun ColumnScope.MainPage(
     }
     val items = buildList {
         if (Device.isTv) {
-            add(QuickItem(Icons.Rounded.CenterFocusStrong, "Автофокус", action = projector { Xgimi.autoFocus(context) }))
-            add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { Xgimi.autoKeystone(context) }))
-            add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
-            add(QuickItem(Icons.Rounded.Crop, "Ручная трапеция", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_KEYSTONE) }))
-            add(QuickItem(Icons.Rounded.ZoomOutMap, "Зум и сдвиг", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ZOOM) }))
-            add(QuickItem(Icons.Rounded.ScreenRotation, "Поворот экрана", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ROTATE) }))
+            // Everyday actions first as wide labelled tiles, then setup and settings as square
+            // icon tiles that show their name only when focused (like XGIMI's own panel).
+            add(QuickItem(Icons.Rounded.CenterFocusStrong, "Автофокус", action = projector { Xgimi.autoFocus(context) }, wide = true))
+            add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { Xgimi.autoKeystone(context) }, wide = true))
+            add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }, wide = true))
+            add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) }, wide = true))
+            add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput, wide = true))
+            add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture, wide = true))
             // One HDMI port: switch straight to it; with several, number them.
             inputs.forEachIndexed { i, input ->
                 val label = if (inputs.size == 1) "HDMI" else "HDMI ${i + 1}"
                 add(QuickItem(Icons.Rounded.SettingsInputHdmi, label, action = projector { Xgimi.openInput(context, input) }))
             }
-            add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }))
-            add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) }))
             eco?.let { on ->
                 // Stays open: the change is visible behind the panel.
                 add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = { if (Eco.set(!on)) eco = Eco.enabled() }))
@@ -276,46 +281,71 @@ private fun ColumnScope.MainPage(
             // XGIMI's "Any Door" scenes, the app behind the default screensaver.
             add(QuickItem(Icons.Rounded.Landscape, "Заставки", action = projector { context.launchPackage(Xgimi.SCREENSAVER_APP) }))
             add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", action = projector { Xgimi.powerMenu(context) }))
-            add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture))
-        }
-        add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput))
-        add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
-        add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
-        if (Device.isTv) {
+            add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
+            add(QuickItem(Icons.Rounded.Crop, "Ручная трапеция", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_KEYSTONE) }))
+            add(QuickItem(Icons.Rounded.ZoomOutMap, "Зум и сдвиг", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ZOOM) }))
+            add(QuickItem(Icons.Rounded.ScreenRotation, "Поворот экрана", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ROTATE) }))
+            add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
+            add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
             add(QuickItem(Icons.Rounded.SettingsRemote, "Кнопки пульта", PanelPage.Remote))
             add(QuickItem(Icons.Rounded.SettingsApplications, "XGIMI", PanelPage.Xgimi))
+        } else {
+            add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound))
+            add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
+            add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
         }
     }
 
-    // The projector has every tile on one screen: three compact columns, no tip card.
+    // The projector fits every tile on one screen: a 4-unit grid of wide (2 units) and square
+    // (1 unit) tiles, no tip card. The tablet keeps two big tiles per row.
     val compact = Device.isTv
-    val columns = if (compact) 3 else 2
+    val units = if (compact) 4 else 2
     val gap = if (compact) 8.dp else 12.dp
+    fun span(item: QuickItem) = if (compact && item.wide) 2 else 1
+    val rows = buildList {
+        var row = mutableListOf<QuickItem>()
+        for (item in items) {
+            if (row.sumOf(::span) + span(item) > units) {
+                add(row)
+                row = mutableListOf()
+            }
+            row += item
+        }
+        if (row.isNotEmpty()) add(row)
+    }
     PanelHeader(onSettings = projector { context.openSettings() })
     Spacer(Modifier.height(if (compact) 14.dp else 20.dp))
     if (Device.isTv) {
         BrightnessSlider(Modifier.fillMaxWidth())
         Spacer(Modifier.height(10.dp))
     }
-    items.chunked(columns).forEachIndexed { row, pair ->
-        if (row > 0) Spacer(Modifier.height(gap))
-        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-            pair.forEachIndexed { col, item ->
-                val requester = when {
-                    row == 0 && col == 0 -> firstTile
-                    item.page != null -> tileRequesters.getValue(item.page)
-                    else -> null
-                }
-                QuickTile(
-                    item,
-                    Modifier.weight(1f).then(if (requester != null) Modifier.focusRequester(requester) else Modifier),
-                    compact,
-                ) {
-                    val target = item.page
-                    if (target != null) open(target) else item.action?.invoke()
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val unit = (maxWidth - gap * (units - 1)) / units
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            rows.forEachIndexed { r, row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    row.forEachIndexed { c, item ->
+                        val requester = when {
+                            r == 0 && c == 0 -> firstTile
+                            item.page != null -> tileRequesters.getValue(item.page)
+                            else -> null
+                        }
+                        // A double tile also covers the gap it spans, so columns line up.
+                        val width = unit * span(item) + gap * (span(item) - 1)
+                        val modifier = Modifier.width(width)
+                            .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+                        val onClick: () -> Unit = {
+                            val target = item.page
+                            if (target != null) open(target) else item.action?.invoke()
+                        }
+                        when {
+                            !compact -> QuickTile(item, modifier, onClick)
+                            item.wide -> WideTile(item, modifier, onClick)
+                            else -> IconTile(item, modifier, onClick)
+                        }
+                    }
                 }
             }
-            repeat(columns - pair.size) { Spacer(Modifier.weight(1f)) }
         }
     }
     if (!compact) {
@@ -347,43 +377,10 @@ private fun PanelHeader(onSettings: () -> Unit) {
 
 /** Google TV style tile: icon and label on a dark card, light-blue when focused. */
 @Composable
-private fun QuickTile(item: QuickItem, modifier: Modifier, compact: Boolean, onClick: () -> Unit) {
+private fun QuickTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val on = item.active == true
     val fg = if (focused || on) FocusText else PanelText
-    val status = item.active?.let { if (it) "Вкл." else "Выкл." } ?: item.subtitle
-    val statusColor = if (focused || on) FocusText else PanelDim
-    if (compact) {
-        Column(
-            modifier
-                .height(68.dp)
-                .background(
-                    when {
-                        focused -> FocusBg
-                        on -> Accent
-                        else -> CardBg
-                    },
-                    RoundedCornerShape(16.dp),
-                )
-                .panelControl({ focused = it }, onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            // State sits beside the icon so every tile keeps a single text line.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(item.icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(fg))
-                Spacer(Modifier.weight(1f))
-                status?.let { T(it, 11.sp, color = statusColor) }
-            }
-            BasicText(
-                item.label,
-                style = TextStyle(color = fg, fontSize = 14.sp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        return
-    }
     Column(
         modifier
             .height(96.dp)
@@ -404,6 +401,79 @@ private fun QuickTile(item: QuickItem, modifier: Modifier, compact: Boolean, onC
             T(item.label, 16.sp, color = fg)
             item.active?.let { T(if (it) "Вкл." else "Выкл.", 13.sp, color = if (focused || it) FocusText else PanelDim) }
             item.subtitle?.let { T(it, 13.sp, color = if (focused) FocusText else PanelDim) }
+        }
+    }
+}
+
+private fun tileColor(focused: Boolean, on: Boolean) = when {
+    focused -> FocusBg
+    on -> Accent
+    else -> CardBg
+}
+
+private val TileHeight = 72.dp
+
+/** Projector: double-width tile with icon, label and optional state (sound output). */
+@Composable
+private fun WideTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val on = item.active == true
+    val fg = if (focused || on) FocusText else PanelText
+    val status = item.active?.let { if (it) "Вкл." else "Выкл." } ?: item.subtitle
+    Row(
+        modifier
+            .height(TileHeight)
+            .background(tileColor(focused, on), RoundedCornerShape(16.dp))
+            .panelControl({ focused = it }, onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(item.icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(fg))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            T(item.label, 16.sp, color = fg)
+            status?.let { T(it, 12.sp, color = if (focused || on) FocusText else PanelDim) }
+        }
+    }
+}
+
+/**
+ * Projector: square icon-only tile. When focused the icon slides up and the name scrolls in
+ * underneath, like the small buttons in XGIMI's panel. An "on" state fills the tile.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun IconTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val on = item.active == true
+    val fg = if (focused || on) FocusText else PanelText
+    val lift by animateFloatAsState(if (focused) 1f else 0f, tween(180), label = "lift")
+    Box(
+        modifier
+            .height(TileHeight)
+            .background(tileColor(focused, on), RoundedCornerShape(16.dp))
+            .panelControl({ focused = it }, onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            item.icon,
+            item.label,
+            Modifier
+                .size(28.dp)
+                .graphicsLayer { translationY = -12.dp.toPx() * lift },
+            colorFilter = ColorFilter.tint(fg),
+        )
+        if (focused) {
+            BasicText(
+                item.label,
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
+                    .graphicsLayer { alpha = lift }
+                    .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 700),
+                style = TextStyle(color = fg, fontSize = 12.sp),
+                maxLines = 1,
+            )
         }
     }
 }
