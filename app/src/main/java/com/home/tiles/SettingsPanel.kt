@@ -210,14 +210,15 @@ fun PanelScreen(onDismiss: () -> Unit) {
         ) {
             Column(
                 Modifier
-                    .padding(16.dp)
-                    .width(if (Device.isTv) 480.dp else 400.dp)
+                    .padding(if (Device.isTv) 12.dp else 16.dp)
+                    // Projector: tiles the size of XGIMI's panel (352dp of tiles, 80dp squares).
+                    .width(if (Device.isTv) 392.dp else 400.dp)
                     .fillMaxHeight()
                     .background(PanelBg, RoundedCornerShape(28.dp))
                     // Taps on the panel itself must not reach the close-on-tap backdrop.
                     .pointerInput(Unit) { detectTapGestures { } }
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 22.dp),
+                    .padding(horizontal = 20.dp, vertical = if (Device.isTv) 16.dp else 22.dp),
             ) {
                 val current = page
                 if (current == null) {
@@ -300,7 +301,7 @@ private fun ColumnScope.MainPage(
     // (1 unit) tiles, no tip card. The tablet keeps two big tiles per row.
     val compact = Device.isTv
     val units = if (compact) 4 else 2
-    val gap = if (compact) 8.dp else 12.dp
+    val gap = if (compact) 10.dp else 12.dp
     fun span(item: QuickItem) = if (compact && item.wide) 2 else 1
     val rows = buildList {
         var row = mutableListOf<QuickItem>()
@@ -314,9 +315,9 @@ private fun ColumnScope.MainPage(
         if (row.isNotEmpty()) add(row)
     }
     PanelHeader(onSettings = projector { context.openSettings() })
-    Spacer(Modifier.height(if (compact) 14.dp else 20.dp))
+    Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
     if (Device.isTv) {
-        BrightnessSlider(Modifier.fillMaxWidth())
+        BrightnessSlider(Modifier.fillMaxWidth().height(48.dp))
         Spacer(Modifier.height(10.dp))
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -411,7 +412,7 @@ private fun tileColor(focused: Boolean, on: Boolean) = when {
     else -> CardBg
 }
 
-private val TileHeight = 72.dp
+private val TileHeight = 80.dp
 
 /** Projector: double-width tile with icon, label and optional state (sound output). */
 @Composable
@@ -425,11 +426,11 @@ private fun WideTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
             .height(TileHeight)
             .background(tileColor(focused, on), RoundedCornerShape(16.dp))
             .panelControl({ focused = it }, onClick)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(item.icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(fg))
-        Spacer(Modifier.width(12.dp))
+        Image(item.icon, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(fg))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             T(item.label, 16.sp, color = fg)
             status?.let { T(it, 12.sp, color = if (focused || on) FocusText else PanelDim) }
