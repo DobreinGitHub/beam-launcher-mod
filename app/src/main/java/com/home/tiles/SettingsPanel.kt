@@ -84,7 +84,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -130,8 +129,15 @@ private val Accent = Color(0xFF8AB4F8)
 private val OnText = Color(0xFF0B1D36)
 private val PanelText = Color(0xFFE8EAED)
 private val PanelDim = Color(0xFFA8ACB3)
-/** The projector dims the whole picture evenly, like XGIMI's panel; the tablet fades in from the right. */
-private val TvScrim = Color(0xA6000000)
+/**
+ * Projector: like XGIMI's panel, darkest along the panel's edge and fading across the picture
+ * (theirs is on the left, ours on the right).
+ */
+private val TvScrim = Brush.horizontalGradient(
+    0f to Color(0x26000000),
+    0.5f to Color(0x8C000000),
+    1f to Color(0xD9000000),
+)
 
 /** Sub-pages opened from the tile grid. */
 private enum class PanelPage(val title: String) {
@@ -202,7 +208,7 @@ fun PanelScreen(onDismiss: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(
-                if (Device.isTv) SolidColor(TvScrim)
+                if (Device.isTv) TvScrim
                 else Brush.horizontalGradient(listOf(Color.Transparent, Color(0x99000000))),
             )
             .arrowSoundTracker()
