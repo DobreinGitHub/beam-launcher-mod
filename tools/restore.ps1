@@ -1,6 +1,6 @@
 ﻿<#
   Restores the XGIMI Play 6 setup: the Beam launcher as the home screen, Chinese services off, keyboard,
-  permissions, accessibility services, language and Bluetooth name.
+  permissions, accessibility services, language, time zone and Bluetooth name.
   Safe to run repeatedly; steps whose app is missing are skipped.
 
   Usage (PowerShell):
@@ -133,6 +133,10 @@ Step "Панель Beam (голосовая кнопка и кнопки пул�
 
 Write-Host "`n6. Система" -ForegroundColor Cyan
 Step "Русский язык (применится после перезагрузки)" { Adb shell setprop persist.sys.locale ru-RU | Out-Null }
+Step "Часовой пояс: Москва (прошивка по умолчанию ставит Шанхай)" {
+    Adb shell settings put global auto_time_zone 0 | Out-Null
+    Adb shell service call alarm 3 s16 Europe/Moscow | Out-Null
+}
 Step "Bluetooth-имя «XGIMI Play 6»" {
     Expect (Adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es bt_name "'XGIMI Play 6'") 'data="ok"'
 }
