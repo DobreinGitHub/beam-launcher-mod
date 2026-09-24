@@ -46,6 +46,15 @@ class AdbCommandReceiver : BroadcastReceiver() {
             }.fold({ "ok paths=$it" }, { "error ${it.cause ?: it}" })
             resultData = "auto=${SoundOutput.auto()} output=${SoundOutput.output()} connected=$devices service=$service"
         }
+        // --ez pic_get true: current picture mode number (as XGIMI's settings use it).
+        if (intent.hasExtra("pic_get")) {
+            resultData = runCatching {
+                val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
+                val tv = cls.getMethod("getInstance").invoke(null)
+                val source = cls.getMethod("getCurrentInputSource").invoke(tv) as Int
+                "source=$source mode=${cls.getMethod("getPictureMode", Int::class.javaPrimitiveType).invoke(tv, source)}"
+            }.getOrElse { "error $it" }
+        }
         intent.getStringExtra("bt_name")?.let { name ->
             @Suppress("DEPRECATION", "MissingPermission")
             val ok = BluetoothAdapter.getDefaultAdapter()?.setName(name) == true
