@@ -2,11 +2,20 @@
 <!-- Projector-only components; merged into the main manifest for the tv flavor. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Only for MicTestActivity, the remote microphone experiment. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application>
         <!-- XGIMI's public platform library: real battery level (the Android battery service reports none). -->
         <uses-library
             android:name="com.xgimi.api"
             android:required="false" />
+        <!-- Diagnostic: records the microphone (does the remote's voice reach apps?). -->
+        <activity
+            android:name=".MicTestActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- Started by the stub apps (:stub) when a remote shortcut key is pressed. -->
         <activity
             android:name=".RemoteButtonActivity"
