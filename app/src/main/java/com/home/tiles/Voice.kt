@@ -189,20 +189,27 @@ class VoiceSession(private val context: Context) {
         recording = false
         thread?.join(2000)
         VoiceModel.load(context) ?: return null
-        val samples = synchronized(chunks) { chunks.toList() }
-        val peak = samples.maxOfOrNull { c -> c.maxOfOrNull { kotlin.math.abs(it.toInt()) } ?: 0 } ?: 0
-        Log.i("Voice", "Recorded ${samples.sumOf { it.size } / rate.toFloat()} s, peak $peak")
-        return samples
+        val all = synchronized(chunks) { chunks.toList() }.flatMap { it.asList() }
+        // The remote clicks as its microphone starts (full-scale pop), which the model hears as
+        // "а": skip the silence before the stream and its first 0.3 s.
+        val start = all.indexOfFirst { it.toInt() != 0 }
+        val speech = if (start < 0) ShortArray(0) else all.subList(minOf(all.size, start + rate * 3 / 10), all.size).toShortArray()
+        Log.i("Voice", "Recorded ${all.size / rate.toFloat()} s, speech ${speech.size / rate.toFloat()} s")
+        return listOf(speech)
     }
 
     private fun recognize(samples: List<ShortArray>, grammar: String?): String {
         val model = VoiceModel.load(context) ?: return ""
         val recognizer = if (grammar != null) Recognizer(model, rate.toFloat(), grammar) else Recognizer(model, rate.toFloat())
-        return recognizer.use { r ->
+        val text = recognizer.use { r ->
             samples.forEach { r.acceptWaveForm(it, it.size) }
             JSONObject(r.finalResult).optString("text")
         }
+        // A stray leading "а"/"и" (click remains, hesitation) would break "найди …" and searches.
+        return text.trim().split(' ').dropWhile { it in fillers }.joinToString(" ")
     }
+
+    private val fillers = setOf("а", "и", "э", "ну")
 
     companion object {
         const val NO_MODEL = "\u0000no-model"
