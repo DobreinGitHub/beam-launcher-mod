@@ -1,0 +1,267 @@
+package com.home.tiles
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
+import org.vosk.Model
+import org.vosk.Recognizer
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.zip.ZipInputStream
+
+/**
+ * Offline speech model (Vosk, small Russian). Not in the APK: downloaded once into the app's files
+ * and loaded only while the voice key is in use, since the projector has little memory.
+ */
+object VoiceModel {
+    const val DEFAULT_URL = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip"
+
+    private fun dir(context: Context) = File(context.filesDir, "vosk-ru")
+
+    fun installed(context: Context) = File(dir(context), "am").isDirectory
+
+    @Volatile
+    private var model: Model? = null
+    private val unload = Runnable { release() }
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** Blocking; call off the main thread. Null until the model is installed. */
+    @Synchronized
+    fun load(context: Context): Model? {
+        handler.removeCallbacks(unload)
+        model?.let { return it }
+        if (!installed(context)) return null
+        return runCatching { Model(dir(context).absolutePath) }
+            .onFailure { Log.w("Voice", "Model load failed", it) }
+            .getOrNull()
+            .also { model = it }
+    }
+
+    /** Frees the model a minute after the last use. */
+    fun releaseLater() {
+        handler.removeCallbacks(unload)
+        handler.postDelayed(unload, 60_000)
+    }
+
+    @Synchronized
+    private fun release() {
+        model?.close()
+        model = null
+        Log.i("Voice", "Model unloaded")
+    }
+
+    /** Blocking download + unzip. */
+    fun download(context: Context, url: String = DEFAULT_URL): Boolean = runCatching {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 60_000
+        connection.inputStream.use { install(context, it) }
+    }.onFailure { Log.w("Voice", "Model download failed", it) }.getOrDefault(false)
+
+    /** The zip pushed over adb into [VoiceModelProvider]. */
+    fun installFrom(file: File, context: Context): Boolean = runCatching {
+        file.inputStream().use { install(context, it) }.also { file.delete() }
+    }.onFailure { Log.w("Voice", "Model install failed", it) }.getOrDefault(false)
+
+    /** Unzips the model (the zip has one top folder, which is stripped). */
+    private fun install(context: Context, input: java.io.InputStream): Boolean {
+        val target = dir(context)
+        val tmp = File(context.filesDir, "vosk-ru.tmp").apply { deleteRecursively(); mkdirs() }
+        ZipInputStream(input.buffered()).use { zip ->
+            generateSequence { zip.nextEntry }.forEach { entry ->
+                val relative = entry.name.substringAfter('/', "")
+                if (relative.isEmpty()) return@forEach
+                val out = File(tmp, relative)
+                if (entry.isDirectory) out.mkdirs() else {
+                    out.parentFile?.mkdirs()
+                    out.outputStream().use { zip.copyTo(it) }
+                }
+            }
+        }
+        target.deleteRecursively()
+        check(tmp.renameTo(target))
+        Log.i("Voice", "Model installed")
+        return installed(context)
+    }
+}
+
+/**
+ * Lets adb push the model zip without a network download:
+ *   adb exec-in "content write --uri content://com.home.tiles.voicemodel/model.zip" < model.zip
+ * then `am broadcast ... --ez voice_install true`. Guarded by DUMP, which only the shell holds.
+ */
+class VoiceModelProvider : android.content.ContentProvider() {
+    override fun onCreate() = true
+
+    override fun openFile(uri: android.net.Uri, mode: String): android.os.ParcelFileDescriptor {
+        val file = File(context!!.cacheDir, "vosk-model.zip")
+        return android.os.ParcelFileDescriptor.open(
+            file,
+            android.os.ParcelFileDescriptor.parseMode(if ("w" in mode) "wt" else "r"),
+        )
+    }
+
+    companion object {
+        fun pushedZip(context: Context) = File(context.cacheDir, "vosk-model.zip")
+    }
+
+    override fun query(uri: android.net.Uri, p: Array<String>?, s: String?, a: Array<String>?, o: String?) = null
+    override fun getType(uri: android.net.Uri) = "application/zip"
+    override fun insert(uri: android.net.Uri, values: android.content.ContentValues?) = null
+    override fun delete(uri: android.net.Uri, s: String?, a: Array<String>?) = 0
+    override fun update(uri: android.net.Uri, v: android.content.ContentValues?, s: String?, a: Array<String>?) = 0
+}
+
+/**
+ * One press of the voice key: records the remote's microphone (the audio HAL streams it while the
+ * key is held) and recognises the phrase against [VoiceCommands] when the key is released.
+ */
+class VoiceSession(private val context: Context) {
+    private val rate = 16000
+    private val chunks = mutableListOf<ShortArray>()
+
+    @Volatile
+    private var recording = false
+    private var thread: Thread? = null
+
+    @SuppressLint("MissingPermission")
+    fun start() {
+        recording = true
+        thread = Thread {
+            // Load the model while the user speaks, so recognition is quick on release.
+            Thread { VoiceModel.load(context) }.start()
+            val size = maxOf(AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), rate / 2)
+            val recorder = runCatching {
+                AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
+            }.getOrNull()
+            if (recorder == null || recorder.state != AudioRecord.STATE_INITIALIZED) {
+                Log.w("Voice", "Microphone unavailable")
+                recording = false
+                return@Thread
+            }
+            recorder.startRecording()
+            val buffer = ShortArray(rate / 10)
+            while (recording) {
+                val n = recorder.read(buffer, 0, buffer.size)
+                if (n > 0) synchronized(chunks) { chunks += buffer.copyOf(n) }
+            }
+            recorder.stop()
+            recorder.release()
+        }.apply { start() }
+    }
+
+    fun cancel() {
+        recording = false
+    }
+
+    /** Stops recording and returns the recognised phrase ("" if nothing matched). Blocking. */
+    fun finish(): String {
+        recording = false
+        thread?.join(2000)
+        val model = VoiceModel.load(context) ?: return NO_MODEL
+        val samples = synchronized(chunks) { chunks.toList() }
+        val peak = samples.maxOfOrNull { c -> c.maxOfOrNull { kotlin.math.abs(it.toInt()) } ?: 0 } ?: 0
+        Log.i("Voice", "Recorded ${samples.sumOf { it.size } / rate.toFloat()} s, peak $peak")
+        val text = Recognizer(model, rate.toFloat(), VoiceCommands.grammar()).use { recognizer ->
+            samples.forEach { recognizer.acceptWaveForm(it, it.size) }
+            JSONObject(recognizer.finalResult).optString("text")
+        }
+        VoiceModel.releaseLater()
+        Log.i("Voice", "Heard \"$text\"")
+        return text
+    }
+
+    companion object {
+        const val NO_MODEL = "\u0000no-model"
+    }
+}
+
+/** The phrases the voice key understands, and what they do. */
+object VoiceCommands {
+    private class Command(val phrases: List<String>, val run: (Context) -> String)
+
+    private val numbers = listOf("один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять", "десять")
+
+    private val commands: List<Command> by lazy {
+        buildList {
+            fun cmd(vararg phrases: String, run: (Context) -> String) = add(Command(phrases.toList(), run))
+            fun app(name: String, pkg: String, vararg phrases: String) = cmd(*phrases) { it.launchPackage(pkg); name }
+
+            app("SmartTube", "org.smarttube.stable", "ютуб", "открой ютуб", "смарт тюб", "открой смарт тюб")
+            app("Spotify", "com.spotify.tv.android", "музыка", "включи музыку", "открой музыку")
+            app("Jellyfin", "org.jellyfin.androidtv", "фильмы", "открой фильмы", "медиатека")
+            cmd("домой", "главный экран", "на главный экран") { ctx ->
+                ctx.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_MAIN)
+                        .addCategory(android.content.Intent.CATEGORY_HOME)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+                "Главный экран"
+            }
+            cmd("эйч ди эм ай", "приставка", "включи приставку") { ctx ->
+                Xgimi.hdmiInputs(ctx).firstOrNull()?.let { Xgimi.openInput(ctx, it); "HDMI" } ?: "HDMI не найден"
+            }
+            cmd("настройки", "панель") { PanelOverlay.show(); "Панель" }
+
+            numbers.forEachIndexed { i, word ->
+                cmd("яркость $word") { Lumens.setLevel(i + 1); "Яркость ${i + 1}" }
+            }
+            cmd("ярче", "сделай ярче") { val l = ((Lumens.level() ?: 8) + 2).coerceAtMost(Lumens.MAX); Lumens.setLevel(l); "Яркость $l" }
+            cmd("темнее", "сделай темнее") { val l = ((Lumens.level() ?: 8) - 2).coerceAtLeast(1); Lumens.setLevel(l); "Яркость $l" }
+            cmd("эко режим", "включи эко режим", "экономный режим") { Eco.set(true); "Эко-режим включён" }
+            cmd("выключи эко режим", "обычная яркость") { Eco.set(false); "Эко-режим выключен" }
+
+            listOf(
+                "кино" to 1, "фильм" to 1, "спорт" to 9, "телевизор" to 7, "офис" to 25,
+                "пользовательский" to 3, "умный" to 16, "автоматический" to 16,
+            ).forEach { (word, mode) ->
+                cmd("режим $word", "$word режим") { ctx ->
+                    Xgimi.setPictureMode(ctx, mode)
+                    "Режим: " + (Xgimi.pictureModes.firstOrNull { it.second == mode }?.first ?: word)
+                }
+            }
+
+            cmd("громче", "сделай громче") { ctx -> volume(ctx, android.media.AudioManager.ADJUST_RAISE); "Громче" }
+            cmd("тише", "сделай тише") { ctx -> volume(ctx, android.media.AudioManager.ADJUST_LOWER); "Тише" }
+            cmd("без звука", "выключи звук") { ctx -> volume(ctx, android.media.AudioManager.ADJUST_TOGGLE_MUTE); "Звук выключен" }
+            cmd("пауза", "стоп", "останови") { ctx -> media(ctx, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE); "Пауза" }
+            cmd("играй", "продолжи", "воспроизведение") { ctx -> media(ctx, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "Воспроизведение" }
+            cmd("следующий", "следующий трек", "дальше") { ctx -> media(ctx, android.view.KeyEvent.KEYCODE_MEDIA_NEXT); "Следующий" }
+            cmd("предыдущий", "предыдущий трек") { ctx -> media(ctx, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS); "Предыдущий" }
+
+            cmd("фокус", "автофокус") { ctx -> Xgimi.autoFocus(ctx); "Автофокус" }
+            cmd("трапеция", "выровняй", "выровняй картинку") { ctx -> Xgimi.autoKeystone(ctx); "Трапеция" }
+        }
+    }
+
+    private fun volume(context: Context, direction: Int) {
+        context.getSystemService(android.media.AudioManager::class.java)
+            .adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, direction, android.media.AudioManager.FLAG_SHOW_UI)
+    }
+
+    private fun media(context: Context, code: Int) {
+        val audio = context.getSystemService(android.media.AudioManager::class.java)
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+    }
+
+    /** JSON phrase list for Vosk's grammar mode; "[unk]" lets anything else fall through. */
+    fun grammar(): String = JSONArray(commands.flatMap { it.phrases }.distinct() + "[unk]").toString()
+
+    /** Runs the command for a recognised phrase; returns what to show, or null if nothing matched. */
+    fun run(context: Context, text: String): String? {
+        val phrase = text.trim()
+        val command = commands.firstOrNull { phrase in it.phrases } ?: return null
+        return runCatching { command.run(context) }
+            .onFailure { Log.w("Voice", "Command \"$phrase\" failed", it) }
+            .getOrNull()
+    }
+}

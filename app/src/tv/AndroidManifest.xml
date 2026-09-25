@@ -10,6 +10,12 @@
         <uses-library
             android:name="com.xgimi.api"
             android:required="false" />
+        <!-- Receives the speech model zip over adb (content write); shell-only via DUMP. -->
+        <provider
+            android:name=".VoiceModelProvider"
+            android:authorities="com.home.tiles.voicemodel"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
         <!-- Diagnostic: records the microphone (does the remote's voice reach apps?). -->
         <activity
             android:name=".MicTestActivity"

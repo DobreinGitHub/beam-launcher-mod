@@ -73,6 +73,19 @@ class AdbCommandReceiver : BroadcastReceiver() {
                 "source=$source mode=${cls.getMethod("getPictureMode", Int::class.javaPrimitiveType).invoke(tv, source)}"
             }.getOrElse { "error $it" }
         }
+        // Voice model: --ez voice_install true unzips the pushed zip (see VoiceModelProvider),
+        // --es voice_url URL downloads it instead. Both run in the background; watch tag Voice.
+        if (intent.hasExtra("voice_install") || intent.hasExtra("voice_url")) {
+            val url = intent.getStringExtra("voice_url")
+            val app = context.applicationContext
+            Thread {
+                if (url != null) VoiceModel.download(app, url) else VoiceModel.installFrom(VoiceModelProvider.pushedZip(app), app)
+            }.start()
+            resultData = "installing"
+        }
+        if (intent.hasExtra("voice_status")) resultData = "installed=${VoiceModel.installed(context)}"
+        // --es voice_test "фраза": run a command as if it had been spoken.
+        intent.getStringExtra("voice_test")?.let { resultData = VoiceCommands.run(context, it) ?: "no match" }
         intent.getStringExtra("bt_name")?.let { name ->
             @Suppress("DEPRECATION", "MissingPermission")
             val ok = BluetoothAdapter.getDefaultAdapter()?.setName(name) == true

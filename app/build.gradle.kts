@@ -23,12 +23,15 @@ android {
             dimension = "device"
             buildConfigField("boolean", "TV", "true")
             manifestPlaceholders["orientation"] = "landscape"
+            // The projector is 32-bit ARM; keeps Vosk/JNA native libraries to the one ABI.
+            ndk { abiFilters += "armeabi-v7a" }
         }
         create("tablet") {
             dimension = "device"
             applicationIdSuffix = ".tablet"
             buildConfigField("boolean", "TV", "false")
             manifestPlaceholders["orientation"] = "unspecified"
+            ndk { abiFilters += "arm64-v8a" }
         }
     }
 
@@ -71,4 +74,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.palette:palette-ktx:1.0.0")
+    // Offline speech recognition for the remote's voice key.
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
 }
