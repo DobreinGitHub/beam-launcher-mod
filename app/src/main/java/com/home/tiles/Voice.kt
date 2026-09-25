@@ -162,21 +162,46 @@ class VoiceSession(private val context: Context) {
         recording = false
     }
 
-    /** Stops recording and returns the recognised phrase ("" if nothing matched). Blocking. */
+    /**
+     * Stops recording and returns what to act on (blocking): a "найди …" search in free speech,
+     * otherwise the phrase matched against [VoiceCommands] ("" if nothing matched).
+     */
     fun finish(): String {
+        val samples = stop() ?: return NO_MODEL
+        val free = recognize(samples, null)
+        val text = if (VoiceCommands.searchQuery(free) != null) free else recognize(samples, VoiceCommands.grammar())
+        VoiceModel.releaseLater()
+        Log.i("Voice", "Heard \"$text\" (free speech: \"$free\")")
+        return text
+    }
+
+    /** Stops recording and returns free speech, for apps that asked for dictation. Blocking. */
+    fun finishDictation(): String {
+        val samples = stop() ?: return NO_MODEL
+        return recognize(samples, null).also {
+            VoiceModel.releaseLater()
+            Log.i("Voice", "Dictated \"$it\"")
+        }
+    }
+
+    /** Null when the model isn't installed. */
+    private fun stop(): List<ShortArray>? {
         recording = false
         thread?.join(2000)
-        val model = VoiceModel.load(context) ?: return NO_MODEL
+        VoiceModel.load(context) ?: return null
         val samples = synchronized(chunks) { chunks.toList() }
         val peak = samples.maxOfOrNull { c -> c.maxOfOrNull { kotlin.math.abs(it.toInt()) } ?: 0 } ?: 0
         Log.i("Voice", "Recorded ${samples.sumOf { it.size } / rate.toFloat()} s, peak $peak")
-        val text = Recognizer(model, rate.toFloat(), VoiceCommands.grammar()).use { recognizer ->
-            samples.forEach { recognizer.acceptWaveForm(it, it.size) }
-            JSONObject(recognizer.finalResult).optString("text")
+        return samples
+    }
+
+    private fun recognize(samples: List<ShortArray>, grammar: String?): String {
+        val model = VoiceModel.load(context) ?: return ""
+        val recognizer = if (grammar != null) Recognizer(model, rate.toFloat(), grammar) else Recognizer(model, rate.toFloat())
+        return recognizer.use { r ->
+            samples.forEach { r.acceptWaveForm(it, it.size) }
+            JSONObject(r.finalResult).optString("text")
         }
-        VoiceModel.releaseLater()
-        Log.i("Voice", "Heard \"$text\"")
-        return text
     }
 
     companion object {
@@ -256,12 +281,192 @@ object VoiceCommands {
     /** JSON phrase list for Vosk's grammar mode; "[unk]" lets anything else fall through. */
     fun grammar(): String = JSONArray(commands.flatMap { it.phrases }.distinct() + "[unk]").toString()
 
+    private val searchWords = listOf("найди", "найти", "поищи", "поиск", "ищи", "покажи")
+
+    /** "найди котики" -> "котики"; null if the phrase isn't a search. */
+    fun searchQuery(text: String): String? {
+        val words = text.trim().split(' ').filter { it.isNotBlank() }
+        if (words.size < 2 || words.first() !in searchWords) return null
+        return words.drop(1).joinToString(" ")
+    }
+
+    /** YouTube search in SmartTube (it opens youtube.com search links). */
+    fun search(context: Context, query: String) {
+        val url = "https://www.youtube.com/results?search_query=" + java.net.URLEncoder.encode(query, "UTF-8")
+        context.startActivity(
+            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .setPackage("org.smarttube.stable")
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+
     /** Runs the command for a recognised phrase; returns what to show, or null if nothing matched. */
     fun run(context: Context, text: String): String? {
+        searchQuery(text)?.let { query ->
+            return runCatching { search(context, query); "Поиск: $query" }.getOrNull()
+        }
         val phrase = text.trim()
         val command = commands.firstOrNull { phrase in it.phrases } ?: return null
         return runCatching { command.run(context) }
             .onFailure { Log.w("Voice", "Command \"$phrase\" failed", it) }
             .getOrNull()
+    }
+}
+
+/**
+ * A dictation request from another app (system speech recognition). The remote only streams its
+ * microphone while the voice key is held, so the request waits for that key: [PanelOverlay] hands
+ * it the key instead of toggling the panel while one is pending.
+ */
+object VoiceRequests {
+    /** Called on the main thread with true when the voice key goes down, false when it comes up. */
+    @Volatile
+    var onVoiceKey: ((Boolean) -> Unit)? = null
+}
+
+/**
+ * Beam as the system speech recogniser, so apps' own microphone buttons (SmartTube search) work:
+ * set with `settings put secure voice_recognition_service com.home.tiles/com.home.tiles.VoskRecognitionService`.
+ */
+class VoskRecognitionService : android.speech.RecognitionService() {
+    private val handler = Handler(Looper.getMainLooper())
+    private var session: VoiceSession? = null
+    private val timeout = Runnable { finishRequest(null) }
+    private var callback: Callback? = null
+
+    override fun onStartListening(intent: android.content.Intent?, listener: Callback) {
+        if (!VoiceModel.installed(this)) {
+            listener.error(android.speech.SpeechRecognizer.ERROR_CLIENT)
+            return
+        }
+        callback = listener
+        session = VoiceSession(this).also { it.start() }
+        listener.readyForSpeech(android.os.Bundle())
+        PanelOverlay.caption("🎤  Зажмите голосовую кнопку и говорите")
+        VoiceRequests.onVoiceKey = { down ->
+            if (down) {
+                handler.removeCallbacks(timeout)
+                PanelOverlay.caption("🎤  Слушаю…")
+                callback?.beginningOfSpeech()
+            } else {
+                callback?.endOfSpeech()
+                finishRequest(session)
+            }
+        }
+        handler.postDelayed(timeout, 15_000)
+    }
+
+    override fun onStopListening(listener: Callback) = finishRequest(session)
+
+    override fun onCancel(listener: Callback) {
+        session?.cancel()
+        clear()
+        PanelOverlay.caption(null)
+    }
+
+    /** Recognises what was recorded and returns it to the app; null (timeout) reports no speech. */
+    private fun finishRequest(recorded: VoiceSession?) {
+        val listener = callback ?: return
+        val current = session
+        clear()
+        if (recorded == null) {
+            current?.cancel()
+            PanelOverlay.caption(null)
+            runCatching { listener.error(android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT) }
+            return
+        }
+        PanelOverlay.caption("…")
+        Thread {
+            val text = recorded.finishDictation().takeIf { it != VoiceSession.NO_MODEL }.orEmpty()
+            handler.post {
+                PanelOverlay.caption(if (text.isBlank()) "Не расслышал" else "«$text»", hideAfterMs = 1500)
+                runCatching {
+                    if (text.isBlank()) listener.error(android.speech.SpeechRecognizer.ERROR_NO_MATCH)
+                    else listener.results(
+                        android.os.Bundle().apply {
+                            putStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf(text))
+                            putFloatArray(android.speech.SpeechRecognizer.CONFIDENCE_SCORES, floatArrayOf(1f))
+                        },
+                    )
+                }
+            }
+        }.start()
+    }
+
+    private fun clear() {
+        handler.removeCallbacks(timeout)
+        VoiceRequests.onVoiceKey = null
+        callback = null
+        session = null
+    }
+
+    override fun onDestroy() {
+        session?.cancel()
+        clear()
+        super.onDestroy()
+    }
+}
+
+/**
+ * The same dictation for apps that start the ACTION_RECOGNIZE_SPEECH activity instead of using
+ * the recognition service; returns the text in RecognizerIntent.EXTRA_RESULTS.
+ */
+class VoiceSearchActivity : android.app.Activity() {
+    private val handler = Handler(Looper.getMainLooper())
+    private var session: VoiceSession? = null
+    private val timeout = Runnable { done(null) }
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (!VoiceModel.installed(this)) {
+            setResult(RESULT_CANCELED)
+            finish()
+            return
+        }
+        session = VoiceSession(this).also { it.start() }
+        PanelOverlay.caption("🎤  Зажмите голосовую кнопку и говорите")
+        VoiceRequests.onVoiceKey = { down ->
+            if (down) {
+                handler.removeCallbacks(timeout)
+                PanelOverlay.caption("🎤  Слушаю…")
+            } else {
+                done(session)
+            }
+        }
+        handler.postDelayed(timeout, 15_000)
+    }
+
+    private fun done(recorded: VoiceSession?) {
+        handler.removeCallbacks(timeout)
+        VoiceRequests.onVoiceKey = null
+        session = null
+        if (recorded == null) {
+            PanelOverlay.caption(null)
+            setResult(RESULT_CANCELED)
+            finish()
+            return
+        }
+        PanelOverlay.caption("…")
+        Thread {
+            val text = recorded.finishDictation().takeIf { it != VoiceSession.NO_MODEL }.orEmpty()
+            handler.post {
+                PanelOverlay.caption(if (text.isBlank()) "Не расслышал" else "«$text»", hideAfterMs = 1500)
+                if (text.isBlank()) setResult(RESULT_CANCELED)
+                else setResult(
+                    RESULT_OK,
+                    android.content.Intent().putStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS, arrayListOf(text)),
+                )
+                finish()
+            }
+        }.start()
+    }
+
+    override fun onDestroy() {
+        if (session != null) {
+            session?.cancel()
+            VoiceRequests.onVoiceKey = null
+            PanelOverlay.caption(null)
+        }
+        super.onDestroy()
     }
 }

@@ -16,6 +16,29 @@
             android:authorities="com.home.tiles.voicemodel"
             android:exported="true"
             android:permission="android.permission.DUMP" />
+        <!-- System speech recognition (Vosk) so apps' microphone buttons work; the voice key is push-to-talk. -->
+        <service
+            android:name=".VoskRecognitionService"
+            android:exported="true"
+            android:label="Beam: распознавание речи">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
+        <activity
+            android:name=".VoiceSearchActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+                <action android:name="android.speech.action.WEB_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <!-- Diagnostic: records the microphone (does the remote's voice reach apps?). -->
         <activity
             android:name=".MicTestActivity"

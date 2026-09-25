@@ -70,6 +70,11 @@ class PanelOverlay : AccessibilityService() {
      * it only counts as a voice command once the key has been held past [HOLD_MS].
      */
     private fun voiceKeyDown() {
+        // Another app is waiting for dictation: the key is its push-to-talk.
+        VoiceRequests.onVoiceKey?.let {
+            it(true)
+            return
+        }
         voice?.cancel()
         voice = if (VoiceModel.installed(this)) VoiceSession(this).also { it.start() } else null
         listening = false
@@ -77,6 +82,10 @@ class PanelOverlay : AccessibilityService() {
     }
 
     private fun voiceKeyUp() {
+        VoiceRequests.onVoiceKey?.let {
+            it(false)
+            return
+        }
         handler.removeCallbacks(startListening)
         val session = voice
         voice = null
@@ -184,6 +193,17 @@ class PanelOverlay : AccessibilityService() {
         private const val HOLD_MS = 400L
 
         private var instance: PanelOverlay? = null
+
+        /** Shows [text] at the bottom of the screen (null hides it), optionally hiding it later. */
+        fun caption(text: String?, hideAfterMs: Long = 0) {
+            val service = instance ?: return
+            service.handler.post {
+                if (text == null) service.hideBubble() else {
+                    service.showBubble(text)
+                    if (hideAfterMs > 0) service.handler.postDelayed(service.hideBubbleTask, hideAfterMs)
+                }
+            }
+        }
 
         /** Whether the service is connected, so it (not the launcher) handles the panel key. */
         val running get() = instance != null
