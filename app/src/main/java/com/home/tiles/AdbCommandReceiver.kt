@@ -110,6 +110,20 @@ class AdbCommandReceiver : BroadcastReceiver() {
         if (intent.hasExtra("hdmi_get") || intent.hasExtra("hdmi_auto")) {
             resultData = "autoSwitch=${Hdmi.autoSwitch()} connected=${Hdmi.connected()} boot=${LauncherSettings.bootSource}"
         }
+        // Sensors: --ez eye_protection BOOL (test), then read all three.
+        if (intent.hasExtra("eye_protection")) Sensors.setEyeProtection(intent.getBooleanExtra("eye_protection", false))
+        if (intent.hasExtra("sensors_get") || intent.hasExtra("eye_protection")) {
+            resultData = "realtimeKeystone=${Sensors.realtimeKeystone()} motionFocus=${Sensors.motionFocus()} eyes=${Sensors.eyeProtection()}"
+        }
+        // Generic read of a gmpf manager getter, for exploring: --es gmpf "DisplayManager.getHumanDetectOnOff"
+        intent.getStringExtra("gmpf")?.let { spec ->
+            resultData = runCatching {
+                val (cls, method) = spec.split('.', limit = 2)
+                val c = Class.forName("com.xgimi.gmpf.api.$cls")
+                val m = c.getMethod("getInstance").invoke(null)
+                c.getMethod(method).invoke(m).toString()
+            }.getOrElse { "error ${it.cause ?: it}" }
+        }
         intent.getStringExtra("bt_name")?.let { name ->
             @Suppress("DEPRECATION", "MissingPermission")
             val ok = BluetoothAdapter.getDefaultAdapter()?.setName(name) == true

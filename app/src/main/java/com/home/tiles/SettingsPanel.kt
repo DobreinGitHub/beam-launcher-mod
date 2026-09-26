@@ -596,6 +596,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         PanelPage.Remote -> RemoteButtonsSection()
         PanelPage.Bluetooth -> BluetoothPage(onXgimiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) } })
         PanelPage.Xgimi -> {
+            SensorToggles()
             Section("Разделы настроек проектора")
             ListRow("Звуковой выход") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_SOUND_OUTPUT) } }
             ListRow("Все настройки") { projector { context.openSettings() } }
@@ -889,6 +890,34 @@ private fun BluetoothPage(onXgimiPage: () -> Unit) {
     }
     Section("Ещё")
     ListRow("Добавить устройство", onXgimiPage)
+}
+
+/** XGIMI's sensor switches: keystone when moved, refocus on tilt, eye protection. */
+@Composable
+private fun SensorToggles() {
+    var realtime by remember { mutableStateOf(Sensors.realtimeKeystone()) }
+    var motionFocus by remember { mutableStateOf(Sensors.motionFocus()) }
+    var eyes by remember { mutableStateOf(Sensors.eyeProtection()) }
+    if (realtime == null && motionFocus == null && eyes == null) return
+    Section("Датчики")
+    realtime?.let { on ->
+        Toggle("Коррекция при сдвиге", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Sensors.setRealtimeKeystone(!on)
+            realtime = Sensors.realtimeKeystone() ?: !on
+        }
+    }
+    motionFocus?.let { on ->
+        Toggle("Автофокус при сдвиге", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Sensors.setMotionFocus(!on)
+            motionFocus = Sensors.motionFocus() ?: !on
+        }
+    }
+    eyes?.let { on ->
+        Toggle("Защита глаз", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Sensors.setEyeProtection(!on)
+            eyes = Sensors.eyeProtection() ?: !on
+        }
+    }
 }
 
 @Composable

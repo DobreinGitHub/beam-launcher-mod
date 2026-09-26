@@ -431,3 +431,26 @@ object Hdmi {
     const val BOOT_HDMI = "hdmi"
 }
 
+
+/**
+ * Motion and presence sensors, as XGIMI's settings switch them: re-run keystone when the projector
+ * is moved (MotionDetectionManager.setAccTriggerAK, "实时画面校正"), refocus on tilt
+ * (setAngTriggerAF), and eye protection that dims the light when someone stands in the beam
+ * (DisplayManager.setHumanDetectOnOff).
+ */
+object Sensors {
+    private fun call(cls: String, name: String, vararg args: Any): Any? = runCatching {
+        val c = Class.forName("com.xgimi.gmpf.api.$cls")
+        val m = c.getMethod("getInstance").invoke(null)
+        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
+    }.onFailure { Log.w("Sensors", "$cls.$name failed", it) }.getOrNull()
+
+    fun realtimeKeystone(): Boolean? = call("MotionDetectionManager", "getAccTriggerAK") as? Boolean
+    fun setRealtimeKeystone(on: Boolean) { call("MotionDetectionManager", "setAccTriggerAK", on) }
+
+    fun motionFocus(): Boolean? = call("MotionDetectionManager", "getAngTriggerAF") as? Boolean
+    fun setMotionFocus(on: Boolean) { call("MotionDetectionManager", "setAngTriggerAF", on) }
+
+    fun eyeProtection(): Boolean? = call("DisplayManager", "getHumanDetectOnOff") as? Boolean
+    fun setEyeProtection(on: Boolean) { call("DisplayManager", "setHumanDetectOnOff", on) }
+}
