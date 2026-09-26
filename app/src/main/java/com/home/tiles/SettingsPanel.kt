@@ -587,9 +587,17 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
             VolumeSlider(Modifier.fillMaxWidth())
             if (Device.isTv && SoundOutput.available) SoundOutputSection()
             if (Device.isTv) SoundModeSection()
+            if (Device.isTv) EarcToggle()
             Section("Интерфейс")
             Toggle("Звуки навигации", LauncherSettings.sounds, Modifier.fillMaxWidth()) {
                 LauncherSettings.sounds = !LauncherSettings.sounds
+            }
+            if (Device.isTv && ScreensaverTimeout.canWrite(context)) {
+                var keyTones by remember { mutableStateOf(KeyTones.enabled(context)) }
+                Spacer(Modifier.height(10.dp))
+                Toggle("Системный звук нажатий", keyTones, Modifier.fillMaxWidth()) {
+                    if (KeyTones.set(context, !keyTones)) keyTones = KeyTones.enabled(context)
+                }
             }
         }
         PanelPage.Appearance -> AppearancePage()
@@ -891,6 +899,17 @@ private fun BluetoothPage(onXgimiPage: () -> Unit) {
             }
         }
     }
+    var visible by remember { mutableStateOf(BluetoothOptions.discoverable(context)) }
+    var absolute by remember { mutableStateOf(BluetoothOptions.absoluteVolume()) }
+    Section("Настройки")
+    Toggle("Видимость для других устройств", visible, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        BluetoothOptions.setDiscoverable(context, !visible)
+        visible = BluetoothOptions.discoverable(context)
+    }
+    Toggle("Абсолютная громкость", absolute, Modifier.fillMaxWidth()) {
+        BluetoothOptions.setAbsoluteVolume(context, !absolute)
+        absolute = BluetoothOptions.absoluteVolume()
+    }
     Section("Ещё")
     ListRow("Добавить устройство", onXgimiPage)
 }
@@ -926,6 +945,19 @@ private fun SensorToggles() {
         Toggle("Защита глаз", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             Sensors.setEyeProtection(!on)
             eyes = Sensors.eyeProtection() ?: !on
+        }
+    }
+}
+
+/** eARC for an HDMI 2.1 sound system (XGIMI's "eARC mode": Auto / Off). */
+@Composable
+private fun EarcToggle() {
+    var earc by remember { mutableStateOf(Earc.enabled()) }
+    earc?.let { on ->
+        Section("HDMI")
+        Toggle("eARC", on, Modifier.fillMaxWidth()) {
+            Earc.set(!on)
+            earc = Earc.enabled() ?: !on
         }
     }
 }

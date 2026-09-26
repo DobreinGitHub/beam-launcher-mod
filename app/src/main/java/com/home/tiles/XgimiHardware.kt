@@ -500,3 +500,65 @@ object SoundMode {
         call("setSoundeffect", mode.toByte())
     }
 }
+
+/** eARC to an HDMI 2.1 sound system: XGIMI's "Auto" is on, "Off" is off (GmTvManager). */
+object Earc {
+    private fun call(name: String, vararg args: Any): Any? = runCatching {
+        val c = Class.forName("com.xgimi.gmpf.api.GmTvManager")
+        val m = c.getMethod("getInstance").invoke(null)
+        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
+    }.onFailure { Log.w("Earc", "$name failed", it) }.getOrNull()
+
+    fun enabled(): Boolean? = call("getEARCEnableState") as? Boolean
+    fun set(on: Boolean) { call("setEARCEnable", on) }
+}
+
+/**
+ * The two switches under XGIMI's Bluetooth page. Visibility is a global setting that XGIMI's
+ * Bluetooth service watches and applies; absolute volume is a system property only system apps
+ * may write, so it goes through XGIMI's common service (XgimiCommonManager.setSystemProperties).
+ */
+object BluetoothOptions {
+    private const val DISCOVERABLE = "bluetooth_discoverable"
+    private const val DISABLE_ABS_VOLUME = "persist.bluetooth.disableabsvol"
+
+    fun discoverable(context: Context): Boolean =
+        android.provider.Settings.Global.getInt(context.contentResolver, DISCOVERABLE, 1) == 1
+
+    fun setDiscoverable(context: Context, on: Boolean) {
+        runCatching { android.provider.Settings.Global.putInt(context.contentResolver, DISCOVERABLE, if (on) 1 else 0) }
+            .onFailure { Log.w("BluetoothOptions", "can't set visibility", it) }
+    }
+
+    private fun property(name: String): String = runCatching {
+        Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as String
+    }.getOrDefault("")
+
+    fun absoluteVolume(): Boolean = property(DISABLE_ABS_VOLUME) != "true"
+
+    fun setAbsoluteVolume(context: Context, on: Boolean) {
+        XgimiService.bind(context)
+        runCatching {
+            val cls = Class.forName("com.xgimi.api.XgimiCommonManager")
+            val manager = cls.getMethod("getInstance").invoke(null)
+            cls.getMethod("setSystemProperties", String::class.java, String::class.java)
+                .invoke(manager, DISABLE_ABS_VOLUME, (!on).toString())
+        }.onFailure { Log.w("BluetoothOptions", "can't set absolute volume", it) }
+    }
+}
+
+/** Android's own click sound for remote presses (sound_effects_enabled), XGIMI's "Key tone". */
+object KeyTones {
+    fun enabled(context: Context): Boolean =
+        android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SOUND_EFFECTS_ENABLED, 0) == 1
+
+    fun set(context: Context, on: Boolean): Boolean = runCatching {
+        android.provider.Settings.System.putInt(
+            context.contentResolver, android.provider.Settings.System.SOUND_EFFECTS_ENABLED, if (on) 1 else 0,
+        ).also {
+            val audio = context.getSystemService(android.media.AudioManager::class.java)
+            if (on) audio.loadSoundEffects() else audio.unloadSoundEffects()
+        }
+    }.onFailure { Log.w("KeyTones", "can't set", it) }.getOrDefault(false)
+}
+
