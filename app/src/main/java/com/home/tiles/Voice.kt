@@ -132,12 +132,16 @@ class VoiceSession(private val context: Context) {
     private var recording = false
     private var thread: Thread? = null
 
+    /**
+     * [loadModel]: start loading the model right away, so recognition is quick on release. The
+     * voice key passes false and calls [loadModel] only once the key is really held: loading takes
+     * seconds and stalled the panel that a short press opens.
+     */
     @SuppressLint("MissingPermission")
-    fun start() {
+    fun start(loadModel: Boolean = true) {
         recording = true
+        if (loadModel) loadModel()
         thread = Thread {
-            // Load the model while the user speaks, so recognition is quick on release.
-            Thread { VoiceModel.load(context) }.start()
             val size = maxOf(AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), rate / 2)
             val recorder = runCatching {
                 AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
@@ -156,6 +160,10 @@ class VoiceSession(private val context: Context) {
             recorder.stop()
             recorder.release()
         }.apply { start() }
+    }
+
+    fun loadModel() {
+        Thread { VoiceModel.load(context) }.start()
     }
 
     fun cancel() {

@@ -41,6 +41,7 @@ class PanelOverlay : AccessibilityService() {
     private var bubble: TextView? = null
     private val startListening = Runnable {
         listening = true
+        voice?.loadModel()
         Sounds.popup()
         showBubble("🎤  Слушаю…")
     }
@@ -80,7 +81,7 @@ class PanelOverlay : AccessibilityService() {
             return
         }
         voice?.cancel()
-        voice = if (VoiceModel.installed(this)) VoiceSession(this).also { it.start() } else null
+        voice = if (VoiceModel.installed(this)) VoiceSession(this).also { it.start(loadModel = false) } else null
         listening = false
         if (voice != null) handler.postDelayed(startListening, HOLD_MS)
     }
@@ -216,7 +217,7 @@ class PanelOverlay : AccessibilityService() {
 
     companion object {
         /** Holding the voice key this long turns the press into a voice command. */
-        private const val HOLD_MS = 400L
+        private const val HOLD_MS = 1000L
 
         private var instance: PanelOverlay? = null
 
