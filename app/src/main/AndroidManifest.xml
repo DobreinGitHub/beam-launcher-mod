@@ -75,6 +75,16 @@
             </intent-filter>
         </service>
 
+        <!-- Full-screen keystone, size and tilt setup over whatever is running. -->
+        <activity
+            android:name=".KeystoneActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:screenOrientation="landscape"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Tiles" />
+
         <!-- Sleep timer alarms (SleepTimer). -->
         <receiver
             android:name=".SleepTimerReceiver"

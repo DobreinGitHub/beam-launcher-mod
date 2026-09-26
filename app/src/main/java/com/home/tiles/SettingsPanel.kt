@@ -524,7 +524,13 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         }
         PanelPage.Appearance -> AppearancePage()
         PanelPage.Home -> HomePage(onHdmiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_HDMI) } })
-        PanelPage.Keystone -> KeystonePage()
+        PanelPage.Keystone -> KeystonePage(onScreen = {
+            projector {
+                context.startActivity(
+                    android.content.Intent(context, KeystoneActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        })
         PanelPage.Projection -> ProjectionPage(onRotatePage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ROTATE) } })
         PanelPage.Power -> PowerPage(
             onOff = { projector { Power.off(context) } },
@@ -1002,7 +1008,7 @@ object KeystoneEdit {
  * shrunk in XGIMI's digital zoom steps; plus automatic keystone and a reset to no correction.
  */
 @Composable
-private fun KeystonePage() {
+private fun KeystonePage(onScreen: () -> Unit) {
     val context = LocalContext.current
     var corners by remember { mutableStateOf(Keystone.corners()) }
     var zoom by remember { mutableStateOf(Keystone.savedZoom(context)) }
@@ -1016,6 +1022,7 @@ private fun KeystonePage() {
     fun apply(values: List<Int>) {
         if (Keystone.setCorners(values)) corners = Keystone.corners() ?: values
     }
+    ListRow("Настроить на экране", onScreen)
     if (realtime == true) {
         Section("Автокоррекция")
         Toggle("Коррекция при сдвиге", true, Modifier.fillMaxWidth()) {
