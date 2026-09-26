@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
         RemoteButtons.init(this)
         AccessibilityGuard.ensure(this)
         Sounds.init(this)
+        Hdmi.applyBootSource(this)
         setContent {
             if (!Device.isTv) {
                 val dark = LauncherSettings.dark

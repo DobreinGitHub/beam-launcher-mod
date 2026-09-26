@@ -376,3 +376,58 @@ object GameMode {
         call("setGameModeOption", option)
     }
 }
+
+/**
+ * HDMI behaviour: the firmware's "switch to HDMI when plugged in" (SystemManager), and whether a
+ * device on HDMI 1 is connected (GmTvManager), used by Beam's own "start on HDMI" option.
+ */
+object Hdmi {
+    private fun system(name: String, vararg args: Any): Any? = runCatching {
+        val cls = Class.forName("com.xgimi.gmpf.api.SystemManager")
+        val sm = cls.getMethod("getInstance").invoke(null)
+        cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(sm, *args)
+    }.onFailure { Log.w("Hdmi", "$name failed", it) }.getOrNull()
+
+    fun autoSwitch(): Boolean? = system("getHdmiAutoSwitch") as? Boolean
+
+    fun setAutoSwitch(on: Boolean) {
+        system("setHdmiAutoSwitch", on)
+    }
+
+    /** True when something is plugged into HDMI 1 (GmTvManager.getHdmiConnectStatus). */
+    fun connected(): Boolean = runCatching {
+        val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
+        val tv = cls.getMethod("getInstance").invoke(null)
+        cls.getMethod("getHdmiConnectStatus", Byte::class.javaPrimitiveType).invoke(tv, 1.toByte()) as Boolean
+    }.getOrDefault(false)
+
+    /**
+     * Beam's "start on HDMI": the launcher is the first thing to come up after power-on, so on its
+     * first start of a boot it switches to HDMI when that's chosen and a device is connected.
+     */
+    fun applyBootSource(context: Context) {
+        if (!Device.isTv) return
+        val boot = android.provider.Settings.Global.getInt(context.contentResolver, "boot_count", -1)
+        val prefs = context.getSharedPreferences("boot", Context.MODE_PRIVATE)
+        if (prefs.getInt("handledBoot", -2) == boot) return
+        prefs.edit().putInt("handledBoot", boot).apply()
+        if (LauncherSettings.bootSource != BOOT_HDMI) return
+        Thread {
+            // The HDMI device may still be waking up with the projector; give it a few seconds.
+            repeat(10) {
+                if (connected()) {
+                    Xgimi.hdmiInputs(context).firstOrNull()?.let { input ->
+                        android.os.Handler(android.os.Looper.getMainLooper()).post { Xgimi.openInput(context, input) }
+                    }
+                    return@Thread
+                }
+                Thread.sleep(1000)
+            }
+            Log.i("Hdmi", "Start on HDMI: nothing connected, staying home")
+        }.start()
+    }
+
+    const val BOOT_HOME = "home"
+    const val BOOT_HDMI = "hdmi"
+}
+

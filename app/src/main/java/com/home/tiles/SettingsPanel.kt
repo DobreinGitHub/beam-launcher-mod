@@ -922,6 +922,28 @@ private fun AppearancePage() {
     }
 }
 
+/** Where the projector starts, and the firmware's HDMI auto switch. */
+@Composable
+private fun HdmiSection() {
+    var autoSwitch by remember { mutableStateOf(Hdmi.autoSwitch()) }
+    Section("При включении")
+    PairRow {
+        Chip("Главный экран", LauncherSettings.bootSource == Hdmi.BOOT_HOME, Modifier.weight(1f)) {
+            LauncherSettings.bootSource = Hdmi.BOOT_HOME
+        }
+        Chip("HDMI", LauncherSettings.bootSource == Hdmi.BOOT_HDMI, Modifier.weight(1f), note = "если подключено") {
+            LauncherSettings.bootSource = Hdmi.BOOT_HDMI
+        }
+    }
+    autoSwitch?.let { on ->
+        Spacer(Modifier.height(10.dp))
+        Toggle("HDMI при подключении", on, Modifier.fillMaxWidth()) {
+            Hdmi.setAutoSwitch(!on)
+            autoSwitch = Hdmi.autoSwitch() ?: !on
+        }
+    }
+}
+
 @Composable
 private fun HomePage() {
     val context = LocalContext.current
@@ -942,6 +964,7 @@ private fun HomePage() {
             LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
         }
     }
+    if (Device.isTv) HdmiSection()
     Section("Второй ряд")
     PairRow {
         Chip("Авто", LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {

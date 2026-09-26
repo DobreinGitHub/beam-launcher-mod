@@ -105,6 +105,11 @@ class AdbCommandReceiver : BroadcastReceiver() {
         if (intent.hasExtra("game_get") || intent.hasExtra("game_mode")) {
             resultData = GameMode.read()?.let { "mode=${it.mode} option=${it.option}" } ?: "unavailable"
         }
+        // HDMI: --ez hdmi_get true reads auto switch and connection; --ez hdmi_auto BOOL sets auto switch.
+        if (intent.hasExtra("hdmi_auto")) Hdmi.setAutoSwitch(intent.getBooleanExtra("hdmi_auto", true))
+        if (intent.hasExtra("hdmi_get") || intent.hasExtra("hdmi_auto")) {
+            resultData = "autoSwitch=${Hdmi.autoSwitch()} connected=${Hdmi.connected()} boot=${LauncherSettings.bootSource}"
+        }
         intent.getStringExtra("bt_name")?.let { name ->
             @Suppress("DEPRECATION", "MissingPermission")
             val ok = BluetoothAdapter.getDefaultAdapter()?.setName(name) == true
