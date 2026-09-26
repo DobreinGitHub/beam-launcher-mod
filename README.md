@@ -117,3 +117,8 @@ adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es background XMB
 adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es bt_name "XGIMI Play 6"
 adb shell am start -n com.home.tiles/.MicTestActivity --ei seconds 6   # проверка микрофона пульта
 ```
+
+## Лицензия
+
+[MIT](LICENSE). Проект распространяется «как есть», без гарантий: `restore.ps1` меняет системные
+настройки проектора, запускайте его на свой риск.
