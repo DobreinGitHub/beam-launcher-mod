@@ -103,7 +103,7 @@ class AdbCommandReceiver : BroadcastReceiver() {
         // Game mode: --ez game_get true reads mode (0 off, 1 on, 2 auto) and level.
         if (intent.hasExtra("game_mode")) GameMode.setMode(intent.getIntExtra("game_mode", GameMode.AUTO))
         if (intent.hasExtra("game_get") || intent.hasExtra("game_mode")) {
-            resultData = GameMode.read()?.let { "mode=${it.mode} option=${it.option}" } ?: "unavailable"
+            resultData = GameMode.read()?.let { "mode=${it.mode} level=${GameMode.level(context)}" } ?: "unavailable"
         }
         // HDMI: --ez hdmi_get true reads auto switch and connection; --ez hdmi_auto BOOL sets auto switch.
         if (intent.hasExtra("hdmi_auto")) Hdmi.setAutoSwitch(intent.getBooleanExtra("hdmi_auto", true))
@@ -123,10 +123,21 @@ class AdbCommandReceiver : BroadcastReceiver() {
         // Generic read of a gmpf manager getter, for exploring: --es gmpf "DisplayManager.getHumanDetectOnOff"
         intent.getStringExtra("gmpf")?.let { spec ->
             resultData = runCatching {
-                val (cls, method) = spec.split('.', limit = 2)
+                // "Class.method" or "Class.method:1,2" with int arguments.
+                val (cls, call) = spec.split('.', limit = 2)
+                val method = call.substringBefore(':')
+                val args = call.substringAfter(':', "").split(',').filter { it.isNotBlank() }.map { it.trim().toInt() }
                 val c = Class.forName("com.xgimi.gmpf.api.$cls")
                 val m = c.getMethod("getInstance").invoke(null)
-                c.getMethod(method).invoke(m).toString()
+                val target = c.methods.first { it.name == method && it.parameterTypes.size == args.size }
+                val converted = target.parameterTypes.zip(args).map { (type, v) ->
+                    when (type) {
+                        Byte::class.javaPrimitiveType -> v.toByte()
+                        Boolean::class.javaPrimitiveType -> v != 0
+                        else -> v
+                    }
+                }
+                target.invoke(m, *converted.toTypedArray()).toString()
             }.getOrElse { "error ${it.cause ?: it}" }
         }
         intent.getStringExtra("bt_name")?.let { name ->

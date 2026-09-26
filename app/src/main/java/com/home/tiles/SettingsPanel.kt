@@ -575,21 +575,22 @@ private val GameLevels = listOf("Базовый", "Максимальный")
 /** XGIMI's game mode: lower input lag for consoles; it only takes effect with an HDMI signal. */
 @Composable
 private fun GameModeSection() {
+    val context = LocalContext.current
     var state by remember { mutableStateOf(GameMode.read()) }
+    var level by remember { mutableStateOf(GameMode.level(context)) }
     val current = state ?: return
     Section("Игровой режим · для HDMI")
     val index = GameModes.indexOfFirst { it.first == current.mode }.coerceAtLeast(0)
     Selector("Режим", GameModes[index].second, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val mode = GameModes[(index + delta).mod(GameModes.size)].first
         GameMode.setMode(mode)
-        state = GameMode.read() ?: GameMode.State(mode, current.option)
+        state = GameMode.read() ?: GameMode.State(mode)
     }
     // The level (basic / top speed) applies when game mode is forced on.
     if (current.mode == GameMode.ON) {
-        Selector("Уровень", GameLevels.getOrElse(current.option) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
-            val option = (current.option + delta).mod(GameLevels.size)
-            GameMode.setOption(option)
-            state = GameMode.read() ?: GameMode.State(current.mode, option)
+        Selector("Уровень", GameLevels[level], Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+            level = (level + delta).mod(GameLevels.size)
+            GameMode.setLevel(context, level)
         }
     }
 }

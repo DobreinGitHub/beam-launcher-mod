@@ -333,7 +333,7 @@ object GameMode {
     const val ON = 1
     const val AUTO = 2
 
-    class State(val mode: Int, val option: Int)
+    class State(val mode: Int)
 
     private val manager: Pair<Class<*>, Any>? by lazy {
         runCatching {
@@ -354,8 +354,7 @@ object GameMode {
         call("getGameModeProp", prop)
         val type = propClass.getField("type").getInt(prop)
         val state = propClass.getField("state").getInt(prop)
-        val option = propClass.getField("gameModeOpt").getInt(prop)
-        State(if (type == 1) AUTO else if (state == 0) ON else OFF, option)
+        State(if (type == 1) AUTO else if (state == 0) ON else OFF)
     }.onFailure { Log.w("GameMode", "read failed", it) }.getOrNull()
 
     fun setMode(mode: Int) {
@@ -372,9 +371,22 @@ object GameMode {
         }
     }
 
-    fun setOption(option: Int) {
-        call("setGameModeOption", option)
+    /**
+     * Level when game mode is on: 0 basic, 1 top speed. XGIMI's HDMI player sends option 0 / 3
+     * (1 / 2 on high-frame-rate models, which this one isn't: the driver turns 1 into 0). No getter
+     * reports it back, so Beam remembers what it last set.
+     */
+    fun level(context: Context): Int = prefs(context).getInt("level", 0)
+
+    fun setLevel(context: Context, level: Int) {
+        call("setGameModeOption", if (level == 1) TOP_SPEED else STANDARD)
+        prefs(context).edit().putInt("level", level).apply()
     }
+
+    private fun prefs(context: Context) = context.getSharedPreferences("gameMode", Context.MODE_PRIVATE)
+
+    private const val STANDARD = 0
+    private const val TOP_SPEED = 3
 }
 
 /**
