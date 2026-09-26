@@ -1149,7 +1149,9 @@ private fun Toggle(text: String, checked: Boolean, modifier: Modifier, onClick: 
 
 /** The remote's voice key (F5 on the XGIMI remote, unused by the firmware) toggles the panel. */
 fun Modifier.panelKey(onToggle: () -> Unit): Modifier = onPreviewKeyEvent { event ->
-    if (event.nativeKeyEvent.keyCode != AndroidKeyEvent.KEYCODE_F5) return@onPreviewKeyEvent false
+    val code = event.nativeKeyEvent.keyCode
+    val settingsKey = code == PanelOverlay.SETTINGS_KEY && LauncherSettings.settingsKeyPanel
+    if (code != AndroidKeyEvent.KEYCODE_F5 && !settingsKey) return@onPreviewKeyEvent false
     // With the overlay service running it owns the key; a copy that slips through must not
     // open a second panel.
     if (PanelOverlay.running) return@onPreviewKeyEvent true
@@ -1341,7 +1343,12 @@ private fun RemoteButtonsSection() {
         }
     }
 
-    Spacer(Modifier.height(8.dp))
+    Section("Кнопка настроек")
+    Toggle("Открывает панель Beam", LauncherSettings.settingsKeyPanel, Modifier.fillMaxWidth()) {
+        LauncherSettings.settingsKeyPanel = !LauncherSettings.settingsKeyPanel
+    }
+    T("Вместо быстрых настроек XGIMI", 14.sp, color = PanelDim)
+    Section("Кнопки приложений")
     T("Нажмите кнопку на пульте, чтобы перейти к ней. ← → — действие", 14.sp, color = PanelDim)
     for (i in 0..3) {
         Spacer(Modifier.height(12.dp))

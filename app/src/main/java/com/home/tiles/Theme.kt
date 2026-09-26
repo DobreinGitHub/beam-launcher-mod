@@ -17,6 +17,7 @@ object LauncherSettings {
     private val nowPlayingState = mutableStateOf(true)
     private val usbTileState = mutableStateOf(true)
     private val hdmiTileState = mutableStateOf(true)
+    private val settingsKeyPanelState = mutableStateOf(false)
     private val bootSourceState = mutableStateOf(Hdmi.BOOT_HOME)
     private val secondRowState = mutableStateOf(SECOND_ROW_AUTO)
     private val xmbColorState = mutableStateOf(-1)
@@ -34,6 +35,7 @@ object LauncherSettings {
         nowPlayingState.value = prefs.getBoolean("nowPlaying", true)
         usbTileState.value = prefs.getBoolean("usbTile", true)
         hdmiTileState.value = prefs.getBoolean("hdmiTile", true)
+        settingsKeyPanelState.value = prefs.getBoolean("settingsKeyPanel", false)
         bootSourceState.value = prefs.getString("bootSource", Hdmi.BOOT_HOME) ?: Hdmi.BOOT_HOME
         secondRowState.value = prefs.getString("secondRow", SECOND_ROW_AUTO) ?: SECOND_ROW_AUTO
         xmbColorState.value = prefs.getInt("xmbColor", -1)
@@ -69,6 +71,11 @@ object LauncherSettings {
     var bootSource: String
         get() = bootSourceState.value
         set(value) { bootSourceState.value = value; prefs.edit().putString("bootSource", value).apply() }
+
+    /** The remote's settings key opens Beam's panel instead of XGIMI's quick settings. */
+    var settingsKeyPanel: Boolean
+        get() = settingsKeyPanelState.value
+        set(value) { settingsKeyPanelState.value = value; prefs.edit().putBoolean("settingsKeyPanel", value).apply() }
 
     var hdmiTile: Boolean
         get() = hdmiTileState.value
