@@ -17,9 +17,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build launcher and remote-button stubs
         run: ./gradlew :app:assembleRelease :stub:assembleRelease --console=plain
+      # The build is the check; the account's artifact storage quota running out shouldn't fail it.
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: apks
+          retention-days: 7
           path: |
             app/build/outputs/apk/release/*.apk
             stub/build/outputs/apk/*/release/*.apk
