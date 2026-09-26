@@ -293,7 +293,7 @@ private fun ColumnScope.MainPage(
         add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture, subtitle = pictureMode, wide = true))
         // One HDMI port: switch straight to it; with several, number them.
         inputs.forEachIndexed { i, input ->
-            val label = if (inputs.size == 1) "HDMI" else "HDMI ${i + 1}"
+            val label = input.device ?: if (inputs.size == 1) "HDMI" else "HDMI ${i + 1}"
             add(QuickItem(Icons.Rounded.SettingsInputHdmi, label, action = projector { Xgimi.openInput(context, input) }))
         }
         eco?.let { on ->

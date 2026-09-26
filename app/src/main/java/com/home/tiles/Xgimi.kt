@@ -112,14 +112,21 @@ object Xgimi {
         if (!started) Toast.makeText(context, "Недоступно на этом проекторе", Toast.LENGTH_SHORT).show()
     }
 
-    class Input(val label: String, val id: String)
+    /** [device]: the CEC name of what is plugged in, when it gave one. */
+    class Input(val label: String, val id: String, val device: String? = null)
 
+    /**
+     * One entry per HDMI port. A device that introduces itself over HDMI-CEC (e.g. a console) shows
+     * up as a second input whose parent is the port; it names the port's entry instead of doubling it.
+     */
     fun hdmiInputs(context: Context): List<Input> {
         val tv = context.getSystemService(TvInputManager::class.java) ?: return emptyList()
         val hdmi = tv.tvInputList.filter { it.type == TvInputInfo.TYPE_HDMI }
-        return hdmi.mapIndexed { i, info ->
-            val name = info.loadLabel(context).toString().takeIf { it.isNotBlank() && hdmi.size == 1 }
-            Input(name ?: "HDMI ${i + 1}", info.id)
+        val ports = hdmi.filter { it.parentId == null }
+        return ports.mapIndexed { i, port ->
+            val device = hdmi.firstOrNull { it.parentId == port.id }?.loadLabel(context)?.toString()?.takeIf { it.isNotBlank() }
+            val fallback = if (ports.size == 1) "HDMI" else "HDMI ${i + 1}"
+            Input(device ?: fallback, port.id, device)
         }
     }
 

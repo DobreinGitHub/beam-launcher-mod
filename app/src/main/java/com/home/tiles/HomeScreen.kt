@@ -67,7 +67,7 @@ private val RowPad = 14.dp
 internal sealed class RowItem(val key: String, val title: String, val subtitle: String = "") {
     class App(val entry: AppEntry) : RowItem(entry.pkg, entry.label)
     class Usb(val drive: UsbDrive) : RowItem("usb:${drive.key}", "Флешка", drive.label)
-    class Hdmi(val input: Xgimi.Input) : RowItem("hdmi:${input.id}", input.label, "Подключено устройство")
+    class Hdmi(val input: Xgimi.Input) : RowItem("hdmi:${input.id}", input.label, if (input.device != null) "HDMI" else "Подключено устройство")
     class All(count: Int) : RowItem("__all__", "Все приложения", "Приложений: $count")
 }
 
