@@ -414,32 +414,104 @@ object Hdmi {
     }.getOrDefault(false)
 
     /**
-     * Beam's "start on HDMI": the launcher is the first thing to come up after power-on, so on its
-     * first start of a boot it switches to HDMI when that's chosen and a device is connected.
+     * XGIMI's own "boot source" (开机源): the firmware goes straight to HDMI after power-on, before
+     * any launcher starts. Two system properties, as its settings page writes them.
      */
-    fun applyBootSource(context: Context) {
-        val boot = android.provider.Settings.Global.getInt(context.contentResolver, "boot_count", -1)
-        val prefs = context.getSharedPreferences("boot", Context.MODE_PRIVATE)
-        if (prefs.getInt("handledBoot", -2) == boot) return
-        prefs.edit().putInt("handledBoot", boot).apply()
-        if (LauncherSettings.bootSource != BOOT_HDMI) return
+    fun bootToHdmi(): Boolean = XgimiCommon.property(BOOT_SOURCE) == "1"
+
+    fun setBootToHdmi(context: Context, on: Boolean): Boolean {
+        val value = if (on) "1" else "0"
+        return XgimiCommon.setProperty(context, BOOT_SOURCE, value) &&
+            XgimiCommon.setProperty(context, BOOT_ANIMATION_WAIT, value)
+    }
+
+    /**
+     * Beam used to switch to HDMI itself after boot; carries that choice over to the firmware.
+     * Retries in the background: XGIMI's service binds a moment after the launcher starts.
+     */
+    fun migrateBootSource(context: Context) {
+        val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+        if (!prefs.contains("bootSource")) return
+        val hdmi = prefs.getString("bootSource", null) == "hdmi"
         Thread {
-            // The HDMI device may still be waking up with the projector; give it a few seconds.
-            repeat(10) {
-                if (connected()) {
-                    Xgimi.hdmiInputs(context).firstOrNull()?.let { input ->
-                        android.os.Handler(android.os.Looper.getMainLooper()).post { Xgimi.openInput(context, input) }
-                    }
+            repeat(20) {
+                if (!hdmi || setBootToHdmi(context, true)) {
+                    prefs.edit().remove("bootSource").apply()
                     return@Thread
                 }
                 Thread.sleep(1000)
             }
-            Log.i("Hdmi", "Start on HDMI: nothing connected, staying home")
         }.start()
     }
 
-    const val BOOT_HOME = "home"
-    const val BOOT_HDMI = "hdmi"
+    private const val BOOT_SOURCE = "persist.sys.hdmi.bootsource"
+    private const val BOOT_ANIMATION_WAIT = "persist.sys.bootanim.alwayswait"
+}
+
+/**
+ * XGIMI's common service (com.xgimi.api.XgimiCommonManager) runs as system: it writes system
+ * properties apps can't, and holds the HDMI-CEC switches.
+ */
+object XgimiCommon {
+    fun property(name: String): String = runCatching {
+        Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as String
+    }.getOrDefault("")
+
+    /** False when XGIMI's service isn't bound yet (or refused). */
+    fun setProperty(context: Context, name: String, value: String): Boolean =
+        invoke(context, "setSystemProperties", name, value).isSuccess
+
+    fun call(context: Context, name: String, vararg args: Any): Any? = invoke(context, name, *args).getOrNull()
+
+    private fun invoke(context: Context, name: String, vararg args: Any): Result<Any?> {
+        XgimiService.bind(context)
+        return runCatching {
+            val cls = Class.forName("com.xgimi.api.XgimiCommonManager")
+            val manager = cls.getMethod("getInstance").invoke(null)
+            cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(manager, *args)
+        }.onFailure { Log.w("XgimiCommon", "$name failed: ${it.cause ?: it}") }
+    }
+}
+
+/**
+ * HDMI-CEC as XGIMI's "CEC control" page switches it: control of HDMI devices (needed for ARC),
+ * and "HDMI controls the projector" (a device turning on wakes the projector, and off with it).
+ */
+object Cec {
+    fun control(context: Context): Boolean? = XgimiCommon.call(context, "isHdmiCecControlEnabled") as? Boolean
+
+    fun setControl(context: Context, on: Boolean) {
+        XgimiCommon.call(context, "setHdmiCecControlEnabled", on)
+        // Turning control off also turns the wake-up off, like XGIMI's page does.
+        if (!on) setWakeUp(context, false)
+    }
+
+    fun wakeUp(): Boolean? = tv("getCecWakeUpState") as? Boolean
+
+    fun setWakeUp(context: Context, on: Boolean) {
+        tv("setCecWakeUp", on)
+        XgimiCommon.call(context, "setHdmiCecAutoDeviceOffEnabled", on)
+        XgimiCommon.call(context, "setHdmiCecAutoWakeupEnabled", on)
+        if (on) XgimiCommon.call(context, "setHdmiCecControlEnabled", true)
+    }
+
+    private fun tv(name: String, vararg args: Any): Any? = runCatching {
+        val c = Class.forName("com.xgimi.gmpf.api.GmTvManager")
+        val m = c.getMethod("getInstance").invoke(null)
+        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
+    }.onFailure { Log.w("Cec", "$name failed", it) }.getOrNull()
+}
+
+/** The chime at power-on (SystemManager.enablePowerOnMusic). */
+object BootMusic {
+    private fun call(name: String, vararg args: Any): Any? = runCatching {
+        val c = Class.forName("com.xgimi.gmpf.api.SystemManager")
+        val m = c.getMethod("getInstance").invoke(null)
+        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
+    }.onFailure { Log.w("BootMusic", "$name failed", it) }.getOrNull()
+
+    fun enabled(): Boolean? = call("isPowerOnMusicEnabled") as? Boolean
+    fun set(on: Boolean) { call("enablePowerOnMusic", on) }
 }
 
 
@@ -541,20 +613,10 @@ object BluetoothOptions {
             .onFailure { Log.w("BluetoothOptions", "can't set visibility", it) }
     }
 
-    private fun property(name: String): String = runCatching {
-        Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, name) as String
-    }.getOrDefault("")
-
-    fun absoluteVolume(): Boolean = property(DISABLE_ABS_VOLUME) != "true"
+    fun absoluteVolume(): Boolean = XgimiCommon.property(DISABLE_ABS_VOLUME) != "true"
 
     fun setAbsoluteVolume(context: Context, on: Boolean) {
-        XgimiService.bind(context)
-        runCatching {
-            val cls = Class.forName("com.xgimi.api.XgimiCommonManager")
-            val manager = cls.getMethod("getInstance").invoke(null)
-            cls.getMethod("setSystemProperties", String::class.java, String::class.java)
-                .invoke(manager, DISABLE_ABS_VOLUME, (!on).toString())
-        }.onFailure { Log.w("BluetoothOptions", "can't set absolute volume", it) }
+        XgimiCommon.setProperty(context, DISABLE_ABS_VOLUME, (!on).toString())
     }
 }
 

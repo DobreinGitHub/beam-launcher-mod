@@ -1,5 +1,6 @@
 package com.home.tiles
 
+import android.content.Context
 import android.media.AudioManager
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
@@ -506,6 +507,14 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
                     if (KeyTones.set(context, !keyTones)) keyTones = KeyTones.enabled(context)
                 }
             }
+            var bootMusic by remember { mutableStateOf(BootMusic.enabled()) }
+            bootMusic?.let { on ->
+                Spacer(Modifier.height(10.dp))
+                Toggle("Мелодия при включении", on, Modifier.fillMaxWidth()) {
+                    BootMusic.set(!on)
+                    bootMusic = BootMusic.enabled() ?: !on
+                }
+            }
         }
         PanelPage.Appearance -> AppearancePage()
         PanelPage.Home -> HomePage(onHdmiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_HDMI) } })
@@ -518,6 +527,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
             ListRow("Коррекция, фокус, сброс") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_CORRECTION) } }
             ListRow("Звуковой выход") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_SOUND_OUTPUT) } }
             ListRow("Все настройки") { projector { context.openSettings() } }
+            AboutSection()
         }
     }
 }
@@ -870,6 +880,53 @@ private fun EarcToggle() {
     }
 }
 
+/** Model, firmware and the like, read once when the page opens. */
+@Composable
+private fun AboutSection() {
+    val context = LocalContext.current
+    val rows by produceState(emptyList<Pair<String, String>>()) {
+        value = withContext(Dispatchers.IO) { aboutRows(context) }
+    }
+    if (rows.isEmpty()) return
+    Section("О проекторе")
+    Column(Modifier.fillMaxWidth().background(CardBg, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
+        rows.forEach { (label, value) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+                T(label, 15.sp, color = PanelDim)
+                Spacer(Modifier.weight(1f))
+                T(value, 15.sp, color = PanelText)
+            }
+        }
+    }
+}
+
+private fun aboutRows(context: Context): List<Pair<String, String>> {
+    fun prop(name: String) = XgimiCommon.property(name).takeIf { it.isNotBlank() }
+    val memory = android.app.ActivityManager.MemoryInfo().also {
+        context.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(it)
+    }
+    val storage = android.os.StatFs(android.os.Environment.getDataDirectory().path)
+    val uptime = android.os.SystemClock.elapsedRealtime() / 60_000
+    val ip = runCatching {
+        java.net.NetworkInterface.getNetworkInterfaces().toList()
+            .flatMap { it.inetAddresses.toList() }
+            .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }?.hostAddress
+    }.getOrNull()
+    val beam = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+    fun gb(bytes: Long) = String.format(Locale.US, "%.1f", bytes / 1e9)
+    return listOfNotNull(
+        prop("ro.boot.xgimi.modelname")?.let { "Модель" to "XGIMI · $it" },
+        prop("ro.build.version.incremental")?.let { "Прошивка" to it },
+        "Android" to android.os.Build.VERSION.RELEASE,
+        prop("ro.boot.serialno")?.let { "Серийный номер" to it },
+        ip?.let { "IP-адрес" to it },
+        "Работает" to if (uptime >= 60) "${uptime / 60} ч ${uptime % 60} мин" else "$uptime мин",
+        "Свободно памяти" to "${memory.availMem / 1_048_576} из ${memory.totalMem / 1_048_576} МБ",
+        "Свободно места" to "${gb(storage.availableBytes)} из ${gb(storage.totalBytes)} ГБ",
+        beam?.let { "Beam" to it },
+    )
+}
+
 /** XGIMI's sound modes: AI, movie, music, sport, karaoke. */
 @Composable
 private fun SoundModeSection() {
@@ -948,14 +1005,20 @@ private fun ScreensaverPage(onScenes: () -> Unit) {
 /** Where the projector starts, the firmware's HDMI auto switch, and a link to its HDMI page (CEC). */
 @Composable
 private fun HdmiSection(onHdmiPage: () -> Unit) {
+    val context = LocalContext.current
     var autoSwitch by remember { mutableStateOf(Hdmi.autoSwitch()) }
+    var bootHdmi by remember { mutableStateOf(Hdmi.bootToHdmi()) }
+    var cec by remember { mutableStateOf(Cec.control(context)) }
+    var cecWake by remember { mutableStateOf(Cec.wakeUp()) }
     Section("При включении")
     PairRow {
-        Chip("Главный экран", LauncherSettings.bootSource == Hdmi.BOOT_HOME, Modifier.weight(1f)) {
-            LauncherSettings.bootSource = Hdmi.BOOT_HOME
+        Chip("Главный экран", !bootHdmi, Modifier.weight(1f)) {
+            Hdmi.setBootToHdmi(context, false)
+            bootHdmi = Hdmi.bootToHdmi()
         }
-        Chip("HDMI", LauncherSettings.bootSource == Hdmi.BOOT_HDMI, Modifier.weight(1f), note = "если подключено") {
-            LauncherSettings.bootSource = Hdmi.BOOT_HDMI
+        Chip("HDMI", bootHdmi, Modifier.weight(1f), note = "если подключено") {
+            Hdmi.setBootToHdmi(context, true)
+            bootHdmi = Hdmi.bootToHdmi()
         }
     }
     autoSwitch?.let { on ->
@@ -965,8 +1028,25 @@ private fun HdmiSection(onHdmiPage: () -> Unit) {
             autoSwitch = Hdmi.autoSwitch() ?: !on
         }
     }
+    cec?.let { on ->
+        Section("HDMI‑CEC")
+        Toggle("Управление устройствами", on, Modifier.fillMaxWidth()) {
+            Cec.setControl(context, !on)
+            cec = Cec.control(context) ?: !on
+            cecWake = Cec.wakeUp()
+        }
+        T("Нужно для ARC и пульта проектора на консоли", 14.sp, color = PanelDim)
+        if (on) cecWake?.let { wake ->
+            Spacer(Modifier.height(10.dp))
+            Toggle("HDMI включает проектор", wake, Modifier.fillMaxWidth()) {
+                Cec.setWakeUp(context, !wake)
+                cecWake = Cec.wakeUp() ?: !wake
+            }
+            T("Консоль включает и выключает проектор", 14.sp, color = PanelDim)
+        }
+    }
     Spacer(Modifier.height(10.dp))
-    ListRow("HDMI‑CEC и другие настройки HDMI", onHdmiPage)
+    ListRow("Другие настройки HDMI", onHdmiPage)
 }
 
 @Composable

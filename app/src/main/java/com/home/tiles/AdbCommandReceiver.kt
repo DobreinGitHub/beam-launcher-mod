@@ -107,8 +107,9 @@ class AdbCommandReceiver : BroadcastReceiver() {
         }
         // HDMI: --ez hdmi_get true reads auto switch and connection; --ez hdmi_auto BOOL sets auto switch.
         if (intent.hasExtra("hdmi_auto")) Hdmi.setAutoSwitch(intent.getBooleanExtra("hdmi_auto", true))
-        if (intent.hasExtra("hdmi_get") || intent.hasExtra("hdmi_auto")) {
-            resultData = "autoSwitch=${Hdmi.autoSwitch()} connected=${Hdmi.connected()} boot=${LauncherSettings.bootSource} " +
+        if (intent.hasExtra("boot_hdmi")) Hdmi.setBootToHdmi(context, intent.getBooleanExtra("boot_hdmi", false))
+        if (intent.hasExtra("hdmi_get") || intent.hasExtra("hdmi_auto") || intent.hasExtra("boot_hdmi")) {
+            resultData = "autoSwitch=${Hdmi.autoSwitch()} connected=${Hdmi.connected()} bootHdmi=${Hdmi.bootToHdmi()} cec=${Cec.control(context)} cecWake=${Cec.wakeUp()} " +
                 "inputs=" + Xgimi.hdmiInputs(context).joinToString { "${it.label}|${it.device}|${it.id}" }
         }
         // Sensors: --ez eye_protection BOOL (test), then read all three.

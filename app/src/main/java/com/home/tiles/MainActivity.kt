@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         RemoteButtons.init(this)
         AccessibilityGuard.ensure(this)
         Sounds.init(this)
-        Hdmi.applyBootSource(this)
+        Hdmi.migrateBootSource(this)
         setContent {
             LauncherApp(repo, apps.value, resumeTick.intValue, PanelRequests.count.intValue, onChanged = ::reload)
         }
