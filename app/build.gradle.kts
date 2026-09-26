@@ -14,8 +14,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1"
-        // The projector is 32-bit ARM; keeps Vosk/JNA native libraries to the one ABI.
-        ndk { abiFilters += "armeabi-v7a" }
+        // Keeps Vosk/JNA native libraries to ARM: 32-bit for the projector, 64-bit for tablets
+        // whose CPUs no longer run 32-bit code.
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
     }
 
     buildTypes {

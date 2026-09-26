@@ -4,23 +4,43 @@
   Safe to run repeatedly; steps whose app is missing are skipped.
 
   Usage (PowerShell):
-    .\tools\restore.ps1                      # projector at the default address
-    .\tools\restore.ps1 -Device 192.168.1.50 # another address
-    .\tools\restore.ps1 -Reboot              # reboot at the end (needed for the language)
+    .\tools\restore.ps1 -Device 192.168.1.50         # projector's IP (port 5555 is added if missing)
+    .\tools\restore.ps1 -Device 192.168.1.50 -Reboot # reboot at the end (needed for the language)
+  -Device and -Adb default to DEVICE and ADB from local.env (KEY=value lines, git-ignored) or the
+  environment; adb itself defaults to the one on PATH.
 
   Put extra APKs to install (SmartTube, LeanKey, ...) into tools\apks\.
   Split bundles (.apks/.apkm) are not handled here; install those by hand.
   Turn the VPN off first, otherwise adb cannot reach the projector.
 #>
 param(
-    [string]$Device = "192.168.1.76",
-    [string]$Adb = "C:\adb\adb.exe",
+    [string]$Device,
+    [string]$Adb,
     [switch]$Reboot
 )
 
 $ErrorActionPreference = "Continue"
-$Serial = "${Device}:5555"
 $Root = Split-Path -Parent $PSScriptRoot
+$LocalEnv = @{}
+$envFile = Join-Path $Root "local.env"
+if (Test-Path $envFile) {
+    Get-Content $envFile | Where-Object { $_ -match '^\s*([A-Za-z_]+)\s*=\s*(.*?)\s*$' } | ForEach-Object {
+        $LocalEnv[$Matches[1]] = $Matches[2].Trim('"')
+    }
+}
+if (-not $Device) { $Device = if ($LocalEnv.DEVICE) { $LocalEnv.DEVICE } else { $env:DEVICE } }
+if (-not $Adb) { $Adb = if ($LocalEnv.ADB) { $LocalEnv.ADB } else { $env:ADB } }
+# The full path: a bare "adb" would call the Adb function below instead of the program.
+if (-not $Adb) { $Adb = (Get-Command adb -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source }
+if (-not $Adb) {
+    Write-Host "adb не найден: добавьте его в PATH или укажите -Adb C:\путь\adb.exe (или ADB в local.env)" -ForegroundColor Red
+    exit 1
+}
+if (-not $Device) {
+    Write-Host "Укажите IP проектора: .\tools\restore.ps1 -Device 192.168.1.50 (или DEVICE в local.env)" -ForegroundColor Red
+    exit 1
+}
+$Serial = if ($Device -match ":") { $Device } else { "${Device}:5555" }
 $script:Failures = 0
 
 function Adb {
@@ -60,8 +80,8 @@ if ((Adb shell echo ok) -ne "ok") {
 
 Write-Host "`n1. Установка приложений" -ForegroundColor Cyan
 Step "Лаунчер Beam" {
-    $apk = Join-Path $Root "app\build\outputs\apk\tv\release\app-tv-release.apk"
-    if (-not (Test-Path $apk)) { throw "нет $apk — сначала соберите: ./gradlew :app:assembleTvRelease :stub:assembleRelease" }
+    $apk = Join-Path $Root "app\build\outputs\apk\release\app-release.apk"
+    if (-not (Test-Path $apk)) { throw "нет $apk — сначала соберите: ./gradlew :app:assembleRelease :stub:assembleRelease" }
     Expect (Adb install -r $apk) "Success"
 }
 Get-ChildItem (Join-Path $Root "stub\build\outputs\apk") -Recurse -Filter *.apk -ErrorAction SilentlyContinue | ForEach-Object {
