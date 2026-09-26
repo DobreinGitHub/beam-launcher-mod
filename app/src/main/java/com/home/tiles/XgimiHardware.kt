@@ -256,3 +256,69 @@ object PictureAdjust {
     }
 }
 
+
+/**
+ * Paired Bluetooth devices and connect/disconnect, through XGIMI's Bluetooth service
+ * (com.xgimi.bluetooth.XDBluetoothManager, on the firmware's boot class path): the plain Android
+ * API can't connect audio devices without system privileges.
+ */
+object XgimiBluetooth {
+    class Device(val name: String, val address: String, val type: Int, val status: Int, internal val item: Any) {
+        val connected get() = status == STATUS_CONNECTED
+        val connecting get() = status == STATUS_CONNECTING
+        /** Speakers and headphones (A2DP); the remote and phones are listed but not audio. */
+        val audio get() = type == TYPE_A2DP || type == TYPE_HEADSET
+        val remote get() = type == TYPE_REMOTE
+    }
+
+    private var manager: Pair<Class<*>, Any>? = null
+
+    private fun manager(context: Context): Pair<Class<*>, Any>? {
+        manager?.let { return it }
+        return runCatching {
+            val cls = Class.forName("com.xgimi.bluetooth.XDBluetoothManager")
+            (cls to cls.getConstructor(Context::class.java).newInstance(context.applicationContext)!!).also { manager = it }
+        }.onFailure { Log.w("XgimiBluetooth", "XDBluetoothManager unavailable", it) }.getOrNull()
+    }
+
+    private val constants: Map<String, Int> by lazy {
+        runCatching {
+            val cls = Class.forName("com.xgimi.bluetooth.XDBluetoothDeviceItem")
+            cls.fields.filter { it.type == Int::class.javaPrimitiveType && java.lang.reflect.Modifier.isStatic(it.modifiers) }
+                .associate { it.name to it.getInt(null) }
+        }.getOrDefault(emptyMap())
+    }
+    private val STATUS_CONNECTED get() = constants["CONNECT_STATUS_CONNECTED"] ?: -1
+    private val STATUS_CONNECTING get() = constants["CONNECT_STATUS_CONNECTING"] ?: -1
+    private val TYPE_A2DP get() = constants["BTYPE_A2DP"] ?: -1
+    private val TYPE_HEADSET get() = constants["BTYPE_HEADSET"] ?: -1
+    private val TYPE_REMOTE get() = constants["BTYPE_REMOTE_CONTROL_HID"] ?: -1
+
+    /** Paired devices with their connection state. Blocking binder call. */
+    fun devices(context: Context): List<Device> {
+        val (cls, m) = manager(context) ?: return emptyList()
+        return runCatching {
+            @Suppress("UNCHECKED_CAST")
+            val items = cls.getMethod("getBondDevices").invoke(m) as? List<Any> ?: emptyList()
+            items.map { item ->
+                val c = item.javaClass
+                fun str(f: String) = runCatching { c.getField(f).get(item) as? String }.getOrNull()
+                    ?: runCatching { c.getDeclaredField(f).apply { isAccessible = true }.get(item) as? String }.getOrNull().orEmpty()
+                fun int(f: String) = runCatching { c.getField(f).getInt(item) }.getOrNull()
+                    ?: runCatching { c.getDeclaredField(f).apply { isAccessible = true }.getInt(item) }.getOrDefault(-1)
+                Device(str("BName"), str("BAddress"), int("BType"), int("BStatus"), item)
+            }
+        }.onFailure { Log.w("XgimiBluetooth", "getBondDevices failed", it) }.getOrDefault(emptyList())
+    }
+
+    fun connect(context: Context, device: Device): Boolean = call(context, "connectDevice", device)
+
+    fun disconnect(context: Context, device: Device): Boolean = call(context, "disConnectDevice", device)
+
+    private fun call(context: Context, name: String, device: Device): Boolean {
+        val (cls, m) = manager(context) ?: return false
+        return runCatching {
+            cls.methods.first { it.name == name && it.parameterTypes.size == 1 }.invoke(m, device.item) as? Boolean ?: false
+        }.onFailure { Log.w("XgimiBluetooth", "$name failed", it) }.getOrDefault(false)
+    }
+}

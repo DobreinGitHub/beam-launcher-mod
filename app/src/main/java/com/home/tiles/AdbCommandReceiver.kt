@@ -86,6 +86,20 @@ class AdbCommandReceiver : BroadcastReceiver() {
         if (intent.hasExtra("voice_status")) resultData = "installed=${VoiceModel.installed(context)}"
         // --es voice_test "фраза": run a command as if it had been spoken.
         intent.getStringExtra("voice_test")?.let { resultData = VoiceCommands.run(context, it) ?: "no match" }
+        // Bluetooth: --ez bt_list true lists paired devices; --es bt_connect / bt_disconnect NAME.
+        if (intent.hasExtra("bt_list")) {
+            resultData = XgimiBluetooth.devices(context).joinToString("; ") {
+                "${it.name} type=${it.type} status=${it.status} audio=${it.audio} connected=${it.connected}"
+            }
+        }
+        intent.getStringExtra("bt_connect")?.let { name ->
+            val device = XgimiBluetooth.devices(context).firstOrNull { it.name == name }
+            resultData = "connect=${device?.let { XgimiBluetooth.connect(context, it) }}"
+        }
+        intent.getStringExtra("bt_disconnect")?.let { name ->
+            val device = XgimiBluetooth.devices(context).firstOrNull { it.name == name }
+            resultData = "disconnect=${device?.let { XgimiBluetooth.disconnect(context, it) }}"
+        }
         intent.getStringExtra("bt_name")?.let { name ->
             @Suppress("DEPRECATION", "MissingPermission")
             val ok = BluetoothAdapter.getDefaultAdapter()?.setName(name) == true

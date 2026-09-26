@@ -151,6 +151,7 @@ private enum class PanelPage(val title: String) {
     Home("Главный экран"),
     Remote("Кнопки пульта"),
     Xgimi("Настройки XGIMI"),
+    Bluetooth("Bluetooth"),
 }
 
 /** Our quick settings, styled after the Google TV panel; slides in from the right. */
@@ -278,6 +279,10 @@ private fun ColumnScope.MainPage(
     val inputs = remember { if (Device.isTv) Xgimi.hdmiInputs(context) else emptyList() }
     var eco by remember { mutableStateOf(if (Device.isTv) Eco.enabled() else null) }
     val soundOutput = remember { if (Device.isTv) SoundOutput.output()?.let(::soundOutputName) else null }
+    // Name of the connected speaker/headphones, shown under the Bluetooth tile.
+    val bluetoothAudio by produceState<String?>(null) {
+        if (Device.isTv) value = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name }
+    }
     val pictureMode = remember {
         if (Device.isTv) PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first } else null
     }
@@ -293,7 +298,7 @@ private fun ColumnScope.MainPage(
             add(QuickItem(Icons.Rounded.CenterFocusStrong, "Автофокус", action = projector { Xgimi.autoFocus(context) }, wide = true))
             add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { Xgimi.autoKeystone(context) }, wide = true))
             add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }, wide = true))
-            add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) }, wide = true))
+            add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", PanelPage.Bluetooth, subtitle = bluetoothAudio, wide = true))
             add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput, wide = true))
             add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture, subtitle = pictureMode, wide = true))
             // One HDMI port: switch straight to it; with several, number them.
@@ -589,6 +594,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         PanelPage.Appearance -> AppearancePage()
         PanelPage.Home -> HomePage()
         PanelPage.Remote -> RemoteButtonsSection()
+        PanelPage.Bluetooth -> BluetoothPage(onXgimiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) } })
         PanelPage.Xgimi -> {
             Section("Разделы настроек проектора")
             ListRow("Звуковой выход") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_SOUND_OUTPUT) } }
@@ -802,6 +808,61 @@ private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
             Chip("Отмена", false, Modifier.weight(1f), onClick = onCancel)
         }
     }
+}
+
+/**
+ * Paired Bluetooth devices; a click connects or disconnects one (e.g. switching sound between a
+ * speaker and the projector). Refreshed every two seconds while open, since connecting takes a
+ * moment and XGIMI's calls don't report the outcome.
+ */
+@Composable
+private fun BluetoothPage(onXgimiPage: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var devices by remember { mutableStateOf<List<XgimiBluetooth.Device>?>(null) }
+    // Addresses we just asked to (dis)connect, shown as "…" until the state changes.
+    var pending by remember { mutableStateOf(emptyMap<String, Boolean>()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val list = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context) }
+            devices = list
+            pending = pending.filter { (address, wantConnected) ->
+                list.firstOrNull { it.address == address }?.connected != wantConnected
+            }
+            delay(2000)
+        }
+    }
+    val list = devices
+    Section("Устройства")
+    when {
+        list == null -> T("Загрузка…", 14.sp, color = PanelDim)
+        list.none { !it.remote } -> T("Нет сопряжённых устройств", 14.sp, color = PanelDim)
+        else -> list.filter { !it.remote }.forEach { device ->
+            val waiting = device.address in pending
+            val state = when {
+                waiting && pending.getValue(device.address) -> "Подключение…"
+                waiting -> "Отключение…"
+                device.connecting -> "Подключение…"
+                device.connected -> "Подключено"
+                else -> "Не подключено"
+            }
+            Chip(
+                device.name.ifBlank { device.address },
+                device.connected,
+                Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                note = if (device.audio) "$state · колонка/наушники" else state,
+            ) {
+                if (waiting) return@Chip
+                val connect = !device.connected
+                pending = pending + (device.address to connect)
+                scope.launch(Dispatchers.IO) {
+                    if (connect) XgimiBluetooth.connect(context, device) else XgimiBluetooth.disconnect(context, device)
+                }
+            }
+        }
+    }
+    Section("Ещё")
+    ListRow("Добавить устройство", onXgimiPage)
 }
 
 @Composable
