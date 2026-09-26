@@ -130,10 +130,19 @@ object Xgimi {
         }
     }
 
+    /**
+     * Through XGIMI's HDMI player, as its own source list does. A plain ACTION_VIEW of the same
+     * URI resolves to the stock AOSP Live TV app, which shows only a black screen here.
+     */
     fun openInput(context: Context, input: Input) {
-        val intent = Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(input.id))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(intent) }
+        val uri = TvContract.buildChannelUriForPassthroughInput(input.id)
+        val xgimi = Intent(HDMI_PLAYER_ACTION, uri).setPackage(HDMI_PLAYER).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val plain = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(xgimi) }
+            .recoverCatching { context.startActivity(plain) }
             .onFailure { Toast.makeText(context, "Не удалось переключить вход", Toast.LENGTH_SHORT).show() }
     }
+
+    private const val HDMI_PLAYER = "com.xgimi.xhplayer"
+    private const val HDMI_PLAYER_ACTION = "com.xgimi.action.hdmiPlayer"
 }
