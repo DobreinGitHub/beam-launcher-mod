@@ -7,6 +7,7 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
@@ -85,10 +86,16 @@ class PanelOverlay : AccessibilityService() {
      * broadcast goes out a few times.
      */
     private fun closeStockQuickSettings() {
-        val close = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS).putExtra("reason", "beam")
-        for (delay in longArrayOf(150, 400, 800, 1300)) {
-            handler.postDelayed({ @Suppress("DEPRECATION") sendBroadcast(close) }, delay)
-        }
+        closeStockUntil = SystemClock.uptimeMillis() + 1500
+        for (delay in longArrayOf(60, 150, 300, 500, 800, 1200)) handler.postDelayed(::sendCloseDialogs, delay)
+    }
+
+    /** While [closeStockUntil]: any window appearing is most likely XGIMI's quick settings. */
+    private var closeStockUntil = 0L
+
+    private fun sendCloseDialogs() {
+        @Suppress("DEPRECATION")
+        sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS).putExtra("reason", "beam"))
     }
 
     /**
@@ -215,7 +222,12 @@ class PanelOverlay : AccessibilityService() {
         owner = null
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Close the stock quick settings the moment their window shows up, not at the next timer.
+        if (event != null && SystemClock.uptimeMillis() < closeStockUntil &&
+            (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED || event.packageName == STOCK_SETTINGS)
+        ) sendCloseDialogs()
+    }
 
     override fun onInterrupt() {}
 
@@ -242,6 +254,7 @@ class PanelOverlay : AccessibilityService() {
 
         /** The remote's gear key; XGIMI's system UI opens its quick settings on it. */
         const val SETTINGS_KEY = KeyEvent.KEYCODE_MOVE_HOME
+        private const val STOCK_SETTINGS = "com.android.newsettings"
 
         private var instance: PanelOverlay? = null
 
