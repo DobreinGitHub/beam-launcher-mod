@@ -100,6 +100,11 @@ class AdbCommandReceiver : BroadcastReceiver() {
             val device = XgimiBluetooth.devices(context).firstOrNull { it.name == name }
             resultData = "disconnect=${device?.let { XgimiBluetooth.disconnect(context, it) }}"
         }
+        // Game mode: --ez game_get true reads mode (0 off, 1 on, 2 auto) and level.
+        if (intent.hasExtra("game_mode")) GameMode.setMode(intent.getIntExtra("game_mode", GameMode.AUTO))
+        if (intent.hasExtra("game_get") || intent.hasExtra("game_mode")) {
+            resultData = GameMode.read()?.let { "mode=${it.mode} option=${it.option}" } ?: "unavailable"
+        }
         intent.getStringExtra("bt_name")?.let { name ->
             @Suppress("DEPRECATION", "MissingPermission")
             val ok = BluetoothAdapter.getDefaultAdapter()?.setName(name) == true

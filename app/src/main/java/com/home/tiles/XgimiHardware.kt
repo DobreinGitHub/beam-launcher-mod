@@ -322,3 +322,57 @@ object XgimiBluetooth {
         }.onFailure { Log.w("XgimiBluetooth", "$name failed", it) }.getOrDefault(false)
     }
 }
+
+/**
+ * Game mode (lower input lag), as XGIMI's picture page sets it through com.xgimi.gmpf.api
+ * DisplayManager: auto = type 1; on = type 0 + state 0; off = type 0 + state 1. The level (basic /
+ * top speed) is the "game mode option". XGIMI only allows it with an HDMI signal.
+ */
+object GameMode {
+    const val OFF = 0
+    const val ON = 1
+    const val AUTO = 2
+
+    class State(val mode: Int, val option: Int)
+
+    private val manager: Pair<Class<*>, Any>? by lazy {
+        runCatching {
+            val cls = Class.forName("com.xgimi.gmpf.api.DisplayManager")
+            cls to cls.getMethod("getInstance").invoke(null)!!
+        }.getOrNull()
+    }
+
+    private fun call(name: String, vararg args: Any): Any? {
+        val (cls, dm) = manager ?: return null
+        return runCatching { cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(dm, *args) }
+            .onFailure { Log.w("GameMode", "$name failed", it) }.getOrNull()
+    }
+
+    fun read(): State? = runCatching {
+        val propClass = Class.forName("com.xgimi.gmpf.rp.GameModeProp")
+        val prop = propClass.getConstructor().newInstance()
+        call("getGameModeProp", prop)
+        val type = propClass.getField("type").getInt(prop)
+        val state = propClass.getField("state").getInt(prop)
+        val option = propClass.getField("gameModeOpt").getInt(prop)
+        State(if (type == 1) AUTO else if (state == 0) ON else OFF, option)
+    }.onFailure { Log.w("GameMode", "read failed", it) }.getOrNull()
+
+    fun setMode(mode: Int) {
+        when (mode) {
+            AUTO -> call("setGameModeType", 1)
+            ON -> {
+                call("setGameModeType", 0)
+                call("setGameModeState", 0)
+            }
+            else -> {
+                call("setGameModeType", 0)
+                call("setGameModeState", 1)
+            }
+        }
+    }
+
+    fun setOption(option: Int) {
+        call("setGameModeOption", option)
+    }
+}
