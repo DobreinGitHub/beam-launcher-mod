@@ -6,6 +6,7 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -30,6 +31,9 @@ class PanelOverlay : AccessibilityService() {
     private var view: ComposeView? = null
     private var owner: OverlayOwner? = null
     private val handler = Handler(Looper.getMainLooper())
+    // One WindowManager for adding and removing the overlay windows.
+    private val windows by lazy { getSystemService(WindowManager::class.java) }
+    private var panelParams: WindowManager.LayoutParams? = null
 
     // Voice key: a short press toggles the panel, holding it speaks a command.
     private var voice: VoiceSession? = null
@@ -138,14 +142,14 @@ class PanelOverlay : AccessibilityService() {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             y = (48 * density).toInt()
         }
-        runCatching { getSystemService(WindowManager::class.java).addView(label, params) }
+        runCatching { windows.addView(label, params) }
         bubble = label
     }
 
     private fun hideBubble() {
         val label = bubble ?: return
         bubble = null
-        runCatching { getSystemService(WindowManager::class.java).removeView(label) }
+        runCatching { windows.removeViewImmediate(label) }
     }
 
     private fun showPanel() {
@@ -162,16 +166,29 @@ class PanelOverlay : AccessibilityService() {
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
-        )
-        getSystemService(WindowManager::class.java).addView(composeView, params)
+        ).apply { windowAnimations = 0 }
+        windows.addView(composeView, params)
         owner.resume()
         view = composeView
+        panelParams = params
     }
 
+    /**
+     * Removes the panel window. It must never outlive the panel: an empty, surface-less overlay
+     * window once stayed registered with the window manager and kept the input focus, so the remote
+     * controlled nothing until a reboot. It's made non-focusable first, then removed immediately.
+     */
     private fun hidePanel() {
         val composeView = view ?: return
         view = null
-        runCatching { getSystemService(WindowManager::class.java).removeView(composeView) }
+        panelParams?.let { params ->
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            runCatching { windows.updateViewLayout(composeView, params) }
+        }
+        panelParams = null
+        runCatching { windows.removeViewImmediate(composeView) }
+            .onFailure { Log.w("PanelOverlay", "Panel window removal failed", it) }
         owner?.destroy()
         owner = null
     }
@@ -180,11 +197,20 @@ class PanelOverlay : AccessibilityService() {
 
     override fun onInterrupt() {}
 
+    // The system is tearing the service down (e.g. AccessibilityGuard restarting it): close the
+    // panel while its window token is still valid, so the window can't be left behind.
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        hideBubble()
+        hidePanel()
+        if (instance === this) instance = null
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
         voice?.cancel()
         hideBubble()
         hidePanel()
-        instance = null
+        if (instance === this) instance = null
         super.onDestroy()
     }
 
