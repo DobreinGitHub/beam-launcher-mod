@@ -786,7 +786,7 @@ private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
 
 /** Search for new devices; OK on one pairs it (speakers then connect by themselves). */
 @Composable
-private fun NewDevicesSection() {
+private fun NewDevicesSection(paired: List<XgimiBluetooth.Device>?) {
     val context = LocalContext.current
     val scanning = BluetoothScan.scanning.value
     Section(if (scanning) "Новые устройства · поиск…" else "Новые устройства")
@@ -798,15 +798,16 @@ private fun NewDevicesSection() {
         val state = BluetoothScan.pairing[device.address]
         Chip(
             device.name,
-            state == "Сопряжено",
+            state == BluetoothScan.PAIRED,
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
             note = listOfNotNull(state ?: "OK — подключить", device.kind).joinToString(" · "),
         ) {
-            if (state != "Сопряжение…") BluetoothScan.pair(device.address)
+            if (state != BluetoothScan.PAIRING) BluetoothScan.pair(context, device.address)
         }
     }
-    BluetoothScan.pairing.filterValues { it == "Сопряжено" }.keys.forEach { address ->
-        if (BluetoothScan.found.none { it.address == address }) {
+    // Until XGIMI's list (refreshed every two seconds) picks the new device up.
+    BluetoothScan.pairing.filterValues { it == BluetoothScan.PAIRED }.keys.forEach { address ->
+        if (paired != null && paired.none { it.address == address }) {
             T("Сопряжено: $address — появится в списке выше", 14.sp, color = PanelDim)
         }
     }
@@ -867,7 +868,7 @@ private fun BluetoothPage(onXgimiPage: () -> Unit) {
             }
         }
     }
-    NewDevicesSection()
+    NewDevicesSection(list)
     var visible by remember { mutableStateOf(BluetoothOptions.discoverable(context)) }
     var absolute by remember { mutableStateOf(BluetoothOptions.absoluteVolume()) }
     Section("Настройки")
