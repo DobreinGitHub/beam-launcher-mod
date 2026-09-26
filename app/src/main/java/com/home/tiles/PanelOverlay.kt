@@ -70,6 +70,13 @@ class PanelOverlay : AccessibilityService() {
         val firstDown = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
         // The four shortcut keys never get here: the firmware consumes them before accessibility
         // services see them (see the stub module).
+        KeystoneActivity.volumeKeys?.let { resize ->
+            val up = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP
+            if (up || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                if (event.action == KeyEvent.ACTION_DOWN) handler.post { resize(up) }
+                return true
+            }
+        }
         if (event.keyCode == SETTINGS_KEY && LauncherSettings.settingsKeyPanel) {
             if (firstDown) handler.post {
                 if (view == null) showPanel() else hidePanel()

@@ -46,6 +46,18 @@ class KeystoneActivity : ComponentActivity() {
         setContent { Screen(STEPS[step.intValue], zoom.intValue, message.value) }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Android TV handles volume keys in the window manager before any app; Beam's
+        // accessibility service sees them first and hands them over while this screen is up.
+        volumeKeys = { up -> changeZoom(if (up) -1 else 1, announce = STEPS[step.intValue] != Step.SIZE) }
+    }
+
+    override fun onPause() {
+        volumeKeys = null
+        super.onPause()
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val current = STEPS[step.intValue]
         val fast = event.repeatCount > 0
@@ -56,6 +68,9 @@ class KeystoneActivity : ComponentActivity() {
                     Sounds.navigate()
                 }
             }
+            // Volume keys resize the picture on any step (and leave the sound alone).
+            KeyEvent.KEYCODE_VOLUME_UP -> changeZoom(-1, announce = current != Step.SIZE)
+            KeyEvent.KEYCODE_VOLUME_DOWN -> changeZoom(1, announce = current != Step.SIZE)
             KeyEvent.KEYCODE_DPAD_LEFT -> adjust(current, -1, 0, fast)
             KeyEvent.KEYCODE_DPAD_RIGHT -> adjust(current, 1, 0, fast)
             KeyEvent.KEYCODE_DPAD_UP -> adjust(current, 0, -1, fast)
@@ -68,16 +83,8 @@ class KeystoneActivity : ComponentActivity() {
     private fun adjust(target: Step, dx: Int, dy: Int, fast: Boolean) {
         val pixels = if (fast) 12 else 4
         when (target) {
-            Step.SIZE -> {
-                // Right or up makes the picture bigger.
-                val delta = if (dx > 0 || dy < 0) -1 else 1
-                val next = (zoom.intValue + delta).coerceIn(0, Keystone.MAX_ZOOM)
-                if (next != zoom.intValue && Keystone.setZoom(next)) {
-                    zoom.intValue = next
-                    Keystone.saveZoom(this, next)
-                    corners = Keystone.corners() ?: corners
-                }
-            }
+            // Right or up makes the picture bigger.
+            Step.SIZE -> changeZoom(if (dx > 0 || dy < 0) -1 else 1, announce = false)
             Step.TILT -> if (dx != 0) Projection.tilt(clockwise = dx > 0).also { corners = Keystone.corners() ?: corners }
             else -> {
                 val values = corners?.toMutableList() ?: return
@@ -96,6 +103,17 @@ class KeystoneActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** [delta] in shrink steps: -1 bigger, +1 smaller. */
+    private fun changeZoom(delta: Int, announce: Boolean) {
+        val next = (zoom.intValue + delta).coerceIn(0, Keystone.MAX_ZOOM)
+        if (next != zoom.intValue && Keystone.setZoom(next)) {
+            zoom.intValue = next
+            Keystone.saveZoom(this, next)
+            corners = Keystone.corners() ?: corners
+        }
+        if (announce) message.value = "Размер ${sizePercent(zoom.intValue)}%"
     }
 
     private fun apply(values: List<Int>) {
@@ -117,8 +135,15 @@ class KeystoneActivity : ComponentActivity() {
 
     companion object {
         private val STEPS = Step.entries
+
+        /** Set while the screen is in front: volume up (true) or down resizes the picture. */
+        @Volatile
+        var volumeKeys: ((up: Boolean) -> Unit)? = null
     }
 }
+
+/** Rough size for a zoom step: 32 steps take the picture down to about half. */
+private fun sizePercent(zoom: Int) = 100 - zoom * 50 / Keystone.MAX_ZOOM
 
 private val Blue = Color(0xFF2469D6)
 private val Line = Color(0x66FFFFFF)
@@ -158,7 +183,7 @@ private fun Screen(step: KeystoneActivity.Step, zoom: Int, message: String?) {
             T(step.hint, 18.sp, color = Color(0xFFD3E3FD))
             if (step == KeystoneActivity.Step.SIZE) {
                 Spacer(Modifier.height(6.dp))
-                T("${100 - zoom * 50 / Keystone.MAX_ZOOM}%", 22.sp, color = Mark)
+                T("${sizePercent(zoom)}%", 22.sp, color = Mark)
             }
         }
         Column(
@@ -169,7 +194,7 @@ private fun Screen(step: KeystoneActivity.Step, zoom: Int, message: String?) {
                 T(it, 16.sp, color = Mark)
                 Spacer(Modifier.height(8.dp))
             }
-            T("OK — дальше   ·   Назад — готово", 18.sp, color = Color.White)
+            T("OK — дальше   ·   Громкость — размер   ·   Назад — готово", 18.sp, color = Color.White)
         }
     }
 }
