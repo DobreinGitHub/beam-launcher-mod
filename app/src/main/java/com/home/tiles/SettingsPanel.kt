@@ -1347,7 +1347,7 @@ private fun RemoteButtonsSection() {
     Toggle("Открывает панель Beam", LauncherSettings.settingsKeyPanel, Modifier.fillMaxWidth()) {
         LauncherSettings.settingsKeyPanel = !LauncherSettings.settingsKeyPanel
     }
-    T("Вместо быстрых настроек XGIMI", 14.sp, color = PanelDim)
+    T("Вместо быстрых настроек XGIMI (они на миг мелькнут и закроются)", 14.sp, color = PanelDim)
     Section("Кнопки приложений")
     T("Нажмите кнопку на пульте, чтобы перейти к ней. ← → — действие", 14.sp, color = PanelDim)
     for (i in 0..3) {

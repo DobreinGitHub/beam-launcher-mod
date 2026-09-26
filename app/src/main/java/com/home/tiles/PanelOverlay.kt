@@ -1,6 +1,7 @@
 package com.home.tiles
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -60,8 +61,10 @@ class PanelOverlay : AccessibilityService() {
         // The four shortcut keys never get here: the firmware consumes them before accessibility
         // services see them (see the stub module).
         if (event.keyCode == SETTINGS_KEY && LauncherSettings.settingsKeyPanel) {
-            // Swallowing it keeps XGIMI's quick settings closed; ours toggles instead.
-            if (firstDown) handler.post { if (view == null) showPanel() else hidePanel() }
+            if (firstDown) handler.post {
+                if (view == null) showPanel() else hidePanel()
+                closeStockQuickSettings()
+            }
             return true
         }
         if (event.keyCode != KeyEvent.KEYCODE_F5) return false
@@ -73,6 +76,19 @@ class PanelOverlay : AccessibilityService() {
             event.action == KeyEvent.ACTION_UP -> handler.post(::voiceKeyUp)
         }
         return true
+    }
+
+    /**
+     * XGIMI's window manager starts its quick settings on the settings key before accessibility
+     * services can swallow it, and the component can't be disabled over adb. Its window closes on
+     * CLOSE_SYSTEM_DIALOGS (any reason but its own), and appears a moment after the key, so the
+     * broadcast goes out a few times.
+     */
+    private fun closeStockQuickSettings() {
+        val close = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS).putExtra("reason", "beam")
+        for (delay in longArrayOf(150, 400, 800, 1300)) {
+            handler.postDelayed({ @Suppress("DEPRECATION") sendBroadcast(close) }, delay)
+        }
     }
 
     /**
