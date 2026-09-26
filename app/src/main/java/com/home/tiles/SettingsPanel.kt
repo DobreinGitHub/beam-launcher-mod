@@ -586,6 +586,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
             Section("Громкость")
             VolumeSlider(Modifier.fillMaxWidth())
             if (Device.isTv && SoundOutput.available) SoundOutputSection()
+            if (Device.isTv) SoundModeSection()
             Section("Интерфейс")
             Toggle("Звуки навигации", LauncherSettings.sounds, Modifier.fillMaxWidth()) {
                 LauncherSettings.sounds = !LauncherSettings.sounds
@@ -917,6 +918,26 @@ private fun SensorToggles() {
             Sensors.setEyeProtection(!on)
             eyes = Sensors.eyeProtection() ?: !on
         }
+    }
+}
+
+/** XGIMI's sound modes: AI, movie, music, sport, karaoke. */
+@Composable
+private fun SoundModeSection() {
+    var current by remember { mutableStateOf(SoundMode.current()) }
+    if (current == null) return
+    Section("Звуковой режим")
+    SoundMode.modes.chunked(2).forEach { pair ->
+        PairRow {
+            pair.forEach { (mode, label) ->
+                Chip(label, current == mode, Modifier.weight(1f)) {
+                    SoundMode.set(mode)
+                    current = SoundMode.current() ?: mode
+                }
+            }
+            if (pair.size == 1) Spacer(Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(10.dp))
     }
 }
 

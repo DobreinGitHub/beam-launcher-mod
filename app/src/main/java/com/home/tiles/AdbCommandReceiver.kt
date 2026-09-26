@@ -115,6 +115,10 @@ class AdbCommandReceiver : BroadcastReceiver() {
         if (intent.hasExtra("sensors_get") || intent.hasExtra("eye_protection")) {
             resultData = "realtimeKeystone=${Sensors.realtimeKeystone()} motionFocus=${Sensors.motionFocus()} eyes=${Sensors.eyeProtection()}"
         }
+        if (intent.hasExtra("sound_mode")) {
+            SoundMode.set(intent.getIntExtra("sound_mode", 3))
+            resultData = "soundMode=${SoundMode.current()}"
+        }
         // Generic read of a gmpf manager getter, for exploring: --es gmpf "DisplayManager.getHumanDetectOnOff"
         intent.getStringExtra("gmpf")?.let { spec ->
             resultData = runCatching {

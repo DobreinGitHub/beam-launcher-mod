@@ -454,3 +454,20 @@ object Sensors {
     fun eyeProtection(): Boolean? = call("DisplayManager", "getHumanDetectOnOff") as? Boolean
     fun setEyeProtection(on: Boolean) { call("DisplayManager", "setHumanDetectOnOff", on) }
 }
+
+/** XGIMI's sound modes (GmAudioManager.set/getSoundeffect), numbered as its settings page sets them. */
+object SoundMode {
+    val modes = listOf(3 to "AI", 1 to "Кино", 2 to "Музыка", 12 to "Спорт", 4 to "Караоке")
+
+    private fun call(name: String, vararg args: Any): Any? = runCatching {
+        val c = Class.forName("com.xgimi.gmpf.api.GmAudioManager")
+        val m = c.getMethod("getInstance").invoke(null)
+        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
+    }.onFailure { Log.w("SoundMode", "$name failed", it) }.getOrNull()
+
+    fun current(): Int? = (call("getSoundeffect") as? Number)?.toInt()
+
+    fun set(mode: Int) {
+        call("setSoundeffect", mode.toByte())
+    }
+}
