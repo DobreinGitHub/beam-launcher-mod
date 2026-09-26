@@ -682,3 +682,70 @@ object Projection {
     }
 }
 
+/**
+ * Manual keystone and digital zoom (DisplayManager). Corners are DLP pixels on the 1920x1080 chip,
+ * kept in a 9x9 grid of which 4-point mode uses [0][0] top-left, [0][1] top-right, [1][0]
+ * bottom-left and [1][1] bottom-right. Zoom steps shrink the picture (0 = full size).
+ */
+object Keystone {
+    const val WIDTH = 1920
+    const val HEIGHT = 1080
+
+    private val manager: Pair<Class<*>, Any>? by lazy {
+        runCatching {
+            val c = Class.forName("com.xgimi.gmpf.api.DisplayManager")
+            c to c.getMethod("getInstance").invoke(null)!!
+        }.getOrNull()
+    }
+
+    private val coordsClass by lazy { runCatching { Class.forName("com.xgimi.gmpf.rp.KeyStoneFullCoordinates") }.getOrNull() }
+
+    /** x0,y0 .. x3,y3 for TL, TR, BL, BR; null if unavailable. */
+    fun corners(): List<Int>? = runCatching {
+        val (cls, dm) = manager ?: return null
+        val full = coordsClass!!.getConstructor().newInstance()
+        cls.getMethod("getCorrectKeystone", coordsClass).invoke(dm, full)
+        @Suppress("UNCHECKED_CAST")
+        val grid = coordsClass!!.getField("coordinates").get(full) as Array<Array<Any>>
+        listOf(grid[0][0], grid[0][1], grid[1][0], grid[1][1]).flatMap { p ->
+            listOf((p.javaClass.getField("x").get(p) as Short).toInt(), (p.javaClass.getField("y").get(p) as Short).toInt())
+        }
+    }.onFailure { Log.w("Keystone", "read failed", it) }.getOrNull()
+
+    fun setCorners(values: List<Int>): Boolean = runCatching {
+        require(values.size == 8)
+        val (cls, dm) = manager ?: return false
+        val full = coordsClass!!.getConstructor().newInstance()
+        cls.getMethod("getCorrectKeystone", coordsClass).invoke(dm, full)
+        @Suppress("UNCHECKED_CAST")
+        val grid = coordsClass!!.getField("coordinates").get(full) as Array<Array<Any>>
+        listOf(grid[0][0], grid[0][1], grid[1][0], grid[1][1]).forEachIndexed { i, p ->
+            p.javaClass.getField("x").set(p, values[i * 2].coerceIn(0, WIDTH - 1).toShort())
+            p.javaClass.getField("y").set(p, values[i * 2 + 1].coerceIn(0, HEIGHT - 1).toShort())
+        }
+        cls.getMethod("correctKeystone", coordsClass).invoke(dm, full)
+        true
+    }.onFailure { Log.w("Keystone", "write failed", it) }.getOrDefault(false)
+
+    /** XGIMI's digital zoom range on this model (ZoomStepRange.zoomOutDigtalMaxNum). */
+    const val MAX_ZOOM = 32
+
+    /** The zoom step Beam last set; the firmware's getter doesn't report it back. */
+    fun savedZoom(context: Context): Int = context.getSharedPreferences("keystone", Context.MODE_PRIVATE).getInt("zoom", 0)
+
+    fun saveZoom(context: Context, step: Int) {
+        context.getSharedPreferences("keystone", Context.MODE_PRIVATE).edit().putInt("zoom", step).apply()
+    }
+
+    fun zoom(): Int? = runCatching {
+        val (cls, dm) = manager ?: return null
+        (cls.getMethod("getCurrentZoomStep", Int::class.javaPrimitiveType).invoke(dm, 0) as Number).toInt()
+    }.getOrNull()
+
+    fun setZoom(step: Int): Boolean = runCatching {
+        val (cls, dm) = manager ?: return false
+        cls.getMethod("setDigitalZoomStep", Int::class.javaPrimitiveType).invoke(dm, step)
+        true
+    }.onFailure { Log.w("Keystone", "zoom failed", it) }.getOrDefault(false)
+}
+

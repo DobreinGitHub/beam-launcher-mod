@@ -150,6 +150,7 @@ private enum class PanelPage(val title: String) {
     Screensaver("Заставка"),
     Power("Питание"),
     Projection("Проекция"),
+    Keystone("Трапеция и размер"),
 }
 
 /** Our quick settings, styled after the Google TV panel; slides in from the right. */
@@ -210,13 +211,17 @@ fun PanelScreen(onDismiss: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(TvScrim)
+            // No dimming while a corner is moved: the picture's edges must be seen.
+            .background(if (KeystoneEdit.active.value != null) NoScrim else TvScrim)
             .arrowSoundTracker()
             .panelKey(onDismiss)
             // The overlay window has no back dispatcher, so Back is handled here for both hosts.
             .onPreviewKeyEvent { event ->
                 if (event.nativeKeyEvent.keyCode != AndroidKeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
-                if (event.type == KeyEventType.KeyUp) back()
+                // Back first ends moving a keystone corner.
+                if (event.type == KeyEventType.KeyUp) {
+                    if (KeystoneEdit.active.value != null) KeystoneEdit.active.value = null else back()
+                }
                 true
             }
             // Touch: a tap beside the panel closes it.
@@ -306,8 +311,7 @@ private fun ColumnScope.MainPage(
         add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))
         add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", PanelPage.Power, active = SleepTimer.endsAt.longValue > 0))
         add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
-        add(QuickItem(Icons.Rounded.Crop, "Ручная трапеция", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_KEYSTONE) }))
-        add(QuickItem(Icons.Rounded.ZoomOutMap, "Зум и сдвиг", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ZOOM) }))
+        add(QuickItem(Icons.Rounded.Crop, "Трапеция и размер", PanelPage.Keystone))
         add(QuickItem(Icons.Rounded.ScreenRotation, "Проекция", PanelPage.Projection))
         add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
         add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
@@ -520,6 +524,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         }
         PanelPage.Appearance -> AppearancePage()
         PanelPage.Home -> HomePage(onHdmiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_HDMI) } })
+        PanelPage.Keystone -> KeystonePage()
         PanelPage.Projection -> ProjectionPage(onRotatePage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ROTATE) } })
         PanelPage.Power -> PowerPage(
             onOff = { projector { Power.off(context) } },
@@ -984,6 +989,131 @@ private fun AppearancePage() {
         Chip("Крупные", LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = true }
     }
 }
+
+private val NoScrim = Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+
+/** Which keystone control is taking the arrow keys, if any (see [ArrowPad]). */
+object KeystoneEdit {
+    val active = mutableStateOf<String?>(null)
+}
+
+/**
+ * Manual keystone: each corner moved with the arrows, the whole picture shifted, its size
+ * shrunk in XGIMI's digital zoom steps; plus automatic keystone and a reset to no correction.
+ */
+@Composable
+private fun KeystonePage() {
+    val context = LocalContext.current
+    var corners by remember { mutableStateOf(Keystone.corners()) }
+    var zoom by remember { mutableStateOf(Keystone.savedZoom(context)) }
+    var realtime by remember { mutableStateOf(Sensors.realtimeKeystone()) }
+    DisposableEffect(Unit) { onDispose { KeystoneEdit.active.value = null } }
+    val current = corners
+    if (current == null) {
+        T("Трапеция недоступна", 14.sp, color = PanelDim)
+        return
+    }
+    fun apply(values: List<Int>) {
+        if (Keystone.setCorners(values)) corners = Keystone.corners() ?: values
+    }
+    if (realtime == true) {
+        Section("Автокоррекция")
+        Toggle("Коррекция при сдвиге", true, Modifier.fillMaxWidth()) {
+            Sensors.setRealtimeKeystone(false)
+            realtime = Sensors.realtimeKeystone() ?: false
+        }
+        T("Выключите, иначе сдвиг проектора собьёт ручную настройку", 14.sp, color = PanelDim)
+    }
+    Section("Углы · OK, затем стрелки")
+    listOf("↖  Левый верхний", "↗  Правый верхний", "↙  Левый нижний", "↘  Правый нижний").forEachIndexed { i, label ->
+        ArrowPad("corner$i", label, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { dx, dy ->
+            val values = current.toMutableList()
+            values[i * 2] += dx
+            values[i * 2 + 1] += dy
+            apply(values)
+        }
+    }
+    Section("Размер и положение")
+    Selector("Размер", "${100 - zoom * 50 / Keystone.MAX_ZOOM}%", Modifier.fillMaxWidth().padding(bottom = 8.dp)) { step ->
+        // Right makes it bigger (fewer shrink steps).
+        val next = (zoom - step).coerceIn(0, Keystone.MAX_ZOOM)
+        if (next != zoom && Keystone.setZoom(next)) {
+            zoom = next
+            Keystone.saveZoom(context, next)
+            corners = Keystone.corners() ?: corners
+        }
+    }
+    ArrowPad("shift", "✥  Сдвиг картинки", Modifier.fillMaxWidth()) { dx, dy ->
+        val moved = current.mapIndexed { i, v -> v + if (i % 2 == 0) dx else dy }
+        val inside = moved.chunked(2).all { (x, y) -> x in 0 until Keystone.WIDTH && y in 0 until Keystone.HEIGHT }
+        if (inside) apply(moved)
+    }
+    T("Сдвиг работает, когда картинка уменьшена", 14.sp, color = PanelDim)
+    Section("Сброс")
+    ListRow("Автотрапеция") {
+        Keystone.saveZoom(context, 0)
+        zoom = 0
+        Xgimi.autoKeystone(context)
+    }
+    ListRow("Без коррекции") {
+        Keystone.setZoom(0)
+        Keystone.saveZoom(context, 0)
+        zoom = 0
+        apply(listOf(0, 0, Keystone.WIDTH - 1, 0, 0, Keystone.HEIGHT - 1, Keystone.WIDTH - 1, Keystone.HEIGHT - 1))
+    }
+}
+
+/**
+ * A row that, after OK, takes the four arrows (a held key moves faster) until OK or Back.
+ * [id] ties it to [KeystoneEdit] so only one is active and the panel can end it on Back.
+ */
+@Composable
+private fun ArrowPad(id: String, label: String, modifier: Modifier, onMove: (dx: Int, dy: Int) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val active = KeystoneEdit.active.value == id
+    Row(
+        modifier
+            .height(56.dp)
+            .background(
+                when {
+                    active -> Accent
+                    focused -> FocusBg
+                    else -> CardBg
+                },
+                RoundedCornerShape(16.dp),
+            )
+            .onPreviewKeyEvent { event ->
+                val native = event.nativeKeyEvent
+                if (!active || native.keyCode !in ARROWS) return@onPreviewKeyEvent false
+                if (event.type == KeyEventType.KeyDown) {
+                    val step = if (native.repeatCount > 0) 12 else 4
+                    when (native.keyCode) {
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> onMove(-step, 0)
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> onMove(step, 0)
+                        AndroidKeyEvent.KEYCODE_DPAD_UP -> onMove(0, -step)
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> onMove(0, step)
+                    }
+                }
+                true
+            }
+            .onFocusChanged {
+                focused = it.isFocused
+                if (!it.isFocused && active) KeystoneEdit.active.value = null
+            }
+            .panelControl({ }, { KeystoneEdit.active.value = if (active) null else id })
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val color = if (active) OnText else if (focused) FocusText else PanelText
+        T(label, 16.sp, Modifier.weight(1f), color = color)
+        T(if (active) "стрелки · OK" else "OK", 14.sp, color = if (active || focused) color else PanelDim)
+    }
+}
+
+private val ARROWS = setOf(
+    AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
+    AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN,
+)
 
 /** Table, ceiling or automatic mounting, rear projection, and a fine tilt of the picture. */
 @Composable

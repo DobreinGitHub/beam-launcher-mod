@@ -122,6 +122,11 @@ class AdbCommandReceiver : BroadcastReceiver() {
             resultData = "soundMode=${SoundMode.current()}"
         }
         // Generic read of a gmpf manager getter, for exploring: --es gmpf "DisplayManager.getHumanDetectOnOff"
+        // Keystone and zoom state, read only: --ez kst_get true
+        if (intent.hasExtra("kst_get")) resultData = KeystoneProbe.dump()
+        // --es kst_set "x0,y0,x1,y1,x2,y2,x3,y3" (TL, TR, BL, BR); --ei zoom_set N
+        intent.getStringExtra("kst_set")?.let { resultData = Keystone.setCorners(it.split(',').map { v -> v.trim().toInt() }).toString() }
+        if (intent.hasExtra("zoom_set")) resultData = Keystone.setZoom(intent.getIntExtra("zoom_set", 0)).toString()
         intent.getStringExtra("gmpf")?.let { spec ->
             resultData = runCatching {
                 // "Class.method" or "Class.method:1,2" with int arguments.
@@ -149,3 +154,42 @@ class AdbCommandReceiver : BroadcastReceiver() {
         }
     }
 }
+
+/** Dumps XGIMI's keystone corners and zoom limits for the adb hook. */
+private object KeystoneProbe {
+    private fun describe(obj: Any?): String = when (obj) {
+        null -> "null"
+        is Array<*> -> obj.joinToString(prefix = "[", postfix = "]") { describe(it) }
+        is Number, is Boolean, is String -> obj.toString()
+        else -> obj.javaClass.fields.filter { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
+            .joinToString(prefix = "{", postfix = "}") { "${it.name}=${describe(it.get(obj))}" }
+    }
+
+    fun dump(): String {
+        val out = StringBuilder()
+        val dm = runCatching {
+            val c = Class.forName("com.xgimi.gmpf.api.DisplayManager")
+            c to c.getMethod("getInstance").invoke(null)
+        }.getOrNull() ?: return "no DisplayManager"
+        val (cls, m) = dm
+        fun call(name: String, vararg args: Any): Any? = runCatching {
+            cls.methods.first { it.name == name && it.parameterTypes.size == args.size &&
+                (args.isEmpty() || it.parameterTypes[0].isInstance(args[0]) || it.parameterTypes[0].isPrimitive) }
+                .invoke(m, *args)
+        }.getOrElse { "err ${it.cause ?: it}" }
+        fun filled(className: String, method: String): String = runCatching {
+            val o = Class.forName("com.xgimi.gmpf.rp.$className").getConstructor().newInstance()
+            val r = cls.getMethod(method, o.javaClass).invoke(m, o)
+            "${describe(o)}${if (r != null) " -> $r" else ""}"
+        }.getOrElse { "err ${it.cause ?: it}" }
+        out.append("full=").append(filled("KeyStoneFullCoordinates", "getCorrectKeystone")).append(';')
+        out.append("offset=").append(filled("KeyStoneFullCoordinatesOffset", "getCorrectKeystonePointOffset")).append(';')
+        out.append("range=").append(filled("ZoomStepRange", "getZoomStepRange")).append(';')
+        out.append("kstB=").append(call("getCorrectKeystone")).append(" mode=").append(call("getCurrentKeystoneMode"))
+            .append(" adjust=").append(call("getKstAdjustType")).append(" zoomFactor=").append(call("getScreenZoomfactor"))
+            .append(" allZoom=").append(describe(call("getAllZoomStep")))
+            .append(" cur0=").append(call("getCurrentZoomStep", 0)).append(" cur1=").append(call("getCurrentZoomStep", 1))
+        return out.toString()
+    }
+}
+
