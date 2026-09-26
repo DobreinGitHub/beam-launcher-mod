@@ -1,6 +1,13 @@
 package com.home.tiles
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,12 +57,43 @@ class KeystoneActivity : ComponentActivity() {
         super.onResume()
         // Android TV handles volume keys in the window manager before any app; Beam's
         // accessibility service sees them first and hands them over while this screen is up.
-        volumeKeys = { up -> changeZoom(if (up) -1 else 1, announce = STEPS[step.intValue] != Step.SIZE) }
+        // The firmware still changes the volume as well, before anyone can stop it; the level is
+        // put back right after, and whenever it changes while this screen is up.
+        val audio = getSystemService(AudioManager::class.java)
+        val volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        keptVolume = volume
+        volumeKeys = { up ->
+            changeZoom(if (up) -1 else 1, announce = STEPS[step.intValue] != Step.SIZE)
+            restoreVolume()
+        }
+        registerReceiver(volumeChanged, IntentFilter(VOLUME_CHANGED))
     }
 
     override fun onPause() {
         volumeKeys = null
+        runCatching { unregisterReceiver(volumeChanged) }
+        handler.removeCallbacksAndMessages(null)
         super.onPause()
+    }
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var keptVolume = -1
+
+    private val volumeChanged = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.getIntExtra(EXTRA_STREAM, -1) == AudioManager.STREAM_MUSIC) restoreVolume()
+        }
+    }
+
+    private fun restoreVolume() {
+        val audio = getSystemService(AudioManager::class.java)
+        for (delay in longArrayOf(0, 150, 400)) {
+            handler.postDelayed({
+                if (keptVolume >= 0 && audio.getStreamVolume(AudioManager.STREAM_MUSIC) != keptVolume) {
+                    audio.setStreamVolume(AudioManager.STREAM_MUSIC, keptVolume, 0)
+                }
+            }, delay)
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -135,6 +173,9 @@ class KeystoneActivity : ComponentActivity() {
 
     companion object {
         private val STEPS = Step.entries
+
+        private const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
+        private const val EXTRA_STREAM = "android.media.EXTRA_VOLUME_STREAM_TYPE"
 
         /** Set while the screen is in front: volume up (true) or down resizes the picture. */
         @Volatile
