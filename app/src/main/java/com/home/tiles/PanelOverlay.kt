@@ -55,6 +55,15 @@ class PanelOverlay : AccessibilityService() {
         RemoteButtons.init(this)
         Sounds.init(this)
         XgimiService.bind(this)
+        SleepTimer.init(this)
+        // Turned off early: the sleep timer must not fire right after the next power-on.
+        registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF))
+    }
+
+    private val screenOff = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            SleepTimer.cancel(context)
+        }
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -241,6 +250,7 @@ class PanelOverlay : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(screenOff) }
         voice?.cancel()
         hideBubble()
         hidePanel()

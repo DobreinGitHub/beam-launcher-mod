@@ -148,6 +148,7 @@ private enum class PanelPage(val title: String) {
     Xgimi("Настройки XGIMI"),
     Bluetooth("Bluetooth"),
     Screensaver("Заставка"),
+    Power("Питание"),
 }
 
 /** Our quick settings, styled after the Google TV panel; slides in from the right. */
@@ -302,7 +303,7 @@ private fun ColumnScope.MainPage(
             add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = { if (Eco.set(!on)) eco = Eco.enabled() }))
         }
         add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))
-        add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", action = projector { Xgimi.powerMenu(context) }))
+        add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", PanelPage.Power, active = SleepTimer.endsAt.longValue > 0))
         add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
         add(QuickItem(Icons.Rounded.Crop, "Ручная трапеция", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_KEYSTONE) }))
         add(QuickItem(Icons.Rounded.ZoomOutMap, "Зум и сдвиг", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ZOOM) }))
@@ -518,6 +519,10 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         }
         PanelPage.Appearance -> AppearancePage()
         PanelPage.Home -> HomePage(onHdmiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_HDMI) } })
+        PanelPage.Power -> PowerPage(
+            onOff = { projector { Power.off(context) } },
+            onXgimiMenu = { projector { Xgimi.powerMenu(context) } },
+        )
         PanelPage.Screensaver -> ScreensaverPage(onScenes = { projector { context.launchPackage(Xgimi.SCREENSAVER_APP) } })
         PanelPage.Remote -> RemoteButtonsSection()
         PanelPage.Bluetooth -> BluetoothPage(onXgimiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) } })
@@ -976,6 +981,43 @@ private fun AppearancePage() {
         Chip("Обычные", !LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = false }
         Chip("Крупные", LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = true }
     }
+}
+
+/** Power off now, or later with the sleep timer; XGIMI's own menu for restart and the rest. */
+@Composable
+private fun PowerPage(onOff: () -> Unit, onXgimiMenu: () -> Unit) {
+    val context = LocalContext.current
+    val end = SleepTimer.endsAt.longValue
+    // Ticks the remaining time while the page is open.
+    val now by produceState(System.currentTimeMillis(), end) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(15_000)
+        }
+    }
+    Section("Сейчас")
+    ListRow("Выключить проектор", onOff)
+    Section(if (end > 0) "Таймер сна · осталось ${SleepTimer.minutesLeft(now)} мин" else "Таймер сна")
+    val choices = listOf(0) + SleepTimer.options
+    choices.chunked(2).forEach { pair ->
+        PairRow {
+            pair.forEach { minutes ->
+                val label = if (minutes == 0) "Выкл" else if (minutes % 60 == 0) "${minutes / 60} ч" else "$minutes мин"
+                // The running timer's own chip is the one ticked; a new choice restarts it.
+                val selected = if (minutes == 0) end == 0L else end > 0 && SleepTimer.lastMinutes(context) == minutes
+                Chip(label, selected, Modifier.weight(1f)) {
+                    if (minutes == 0) SleepTimer.cancel(context) else SleepTimer.start(context, minutes)
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+    }
+    if (end > 0) {
+        val at = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(end))
+        T("Выключится в $at, за минуту предупредит", 14.sp, color = PanelDim)
+    }
+    Section("Ещё")
+    ListRow("Перезагрузка (меню XGIMI)", onXgimiMenu)
 }
 
 /**
