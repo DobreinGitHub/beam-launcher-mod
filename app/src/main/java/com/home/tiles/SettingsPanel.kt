@@ -149,6 +149,7 @@ private enum class PanelPage(val title: String) {
     Bluetooth("Bluetooth"),
     Screensaver("Заставка"),
     Power("Питание"),
+    Projection("Проекция"),
 }
 
 /** Our quick settings, styled after the Google TV panel; slides in from the right. */
@@ -307,7 +308,7 @@ private fun ColumnScope.MainPage(
         add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
         add(QuickItem(Icons.Rounded.Crop, "Ручная трапеция", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_KEYSTONE) }))
         add(QuickItem(Icons.Rounded.ZoomOutMap, "Зум и сдвиг", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ZOOM) }))
-        add(QuickItem(Icons.Rounded.ScreenRotation, "Поворот экрана", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ROTATE) }))
+        add(QuickItem(Icons.Rounded.ScreenRotation, "Проекция", PanelPage.Projection))
         add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
         add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
         add(QuickItem(Icons.Rounded.SettingsRemote, "Кнопки пульта", PanelPage.Remote))
@@ -519,6 +520,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         }
         PanelPage.Appearance -> AppearancePage()
         PanelPage.Home -> HomePage(onHdmiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_HDMI) } })
+        PanelPage.Projection -> ProjectionPage(onRotatePage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ROTATE) } })
         PanelPage.Power -> PowerPage(
             onOff = { projector { Power.off(context) } },
             onXgimiMenu = { projector { Xgimi.powerMenu(context) } },
@@ -981,6 +983,34 @@ private fun AppearancePage() {
         Chip("Обычные", !LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = false }
         Chip("Крупные", LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = true }
     }
+}
+
+/** Table, ceiling or automatic mounting, rear projection, and a fine tilt of the picture. */
+@Composable
+private fun ProjectionPage(onRotatePage: () -> Unit) {
+    var mount by remember { mutableStateOf(Projection.mount()) }
+    var rear by remember { mutableStateOf(Projection.rear()) }
+    mount?.let { current ->
+        Section("Установка")
+        listOf(Projection.AUTO to "Авто", Projection.TABLE to "На столе", Projection.CEILING to "На потолке").forEach { (value, label) ->
+            Chip(label, current == value, Modifier.fillMaxWidth().padding(bottom = 8.dp), note = if (value == Projection.AUTO) "по датчику положения" else null) {
+                Projection.setMount(value)
+                mount = Projection.mount() ?: value
+            }
+        }
+    }
+    rear?.let { on ->
+        Spacer(Modifier.height(2.dp))
+        Toggle("Обратная проекция", on, Modifier.fillMaxWidth()) {
+            Projection.setRear(!on)
+            rear = Projection.rear() ?: !on
+        }
+        T("Для экрана на просвет: проектор за экраном", 14.sp, color = PanelDim)
+    }
+    Section("Наклон картинки")
+    Selector("Выровнять", "по 0,5°", Modifier.fillMaxWidth()) { step -> Projection.tilt(clockwise = step > 0) }
+    Spacer(Modifier.height(10.dp))
+    ListRow("Поворот (экран XGIMI)", onRotatePage)
 }
 
 /** Power off now, or later with the sleep timer; XGIMI's own menu for restart and the rest. */

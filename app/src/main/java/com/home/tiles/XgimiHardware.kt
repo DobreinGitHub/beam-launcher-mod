@@ -635,3 +635,50 @@ object KeyTones {
     }.onFailure { Log.w("KeyTones", "can't set", it) }.getOrDefault(false)
 }
 
+/**
+ * How the projector is mounted, as XGIMI's "projection mode" page sets it: automatic (flips by
+ * the tilt sensor), table or ceiling, plus rear projection. The put mode is 0 table, 1 ceiling,
+ * +2 for rear. The tilt (level) is nudged in 0.5° steps like its rotation page.
+ */
+object Projection {
+    const val AUTO = -1
+    const val TABLE = 0
+    const val CEILING = 1
+    private const val REAR = 2
+
+    private fun call(cls: String, name: String, vararg args: Any): Any? = runCatching {
+        val c = Class.forName("com.xgimi.gmpf.api.$cls")
+        val m = c.getMethod("getInstance").invoke(null)
+        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
+    }.onFailure { Log.w("Projection", "$cls.$name failed", it) }.getOrNull()
+
+    private fun putMode(): Int? = (call("DisplayManager", "getProjectorPutMode") as? Number)?.toInt()
+    private fun setPutMode(mode: Int) { call("DisplayManager", "setProjectorPutMode", mode.toByte()) }
+
+    /** [AUTO], [TABLE] or [CEILING]; null when unavailable. */
+    fun mount(): Int? {
+        val auto = call("MotionDetectionManager", "getAutoReverse") as? Boolean ?: return null
+        val mode = putMode() ?: return null
+        return if (auto) AUTO else mode and 1
+    }
+
+    fun setMount(mount: Int) {
+        call("MotionDetectionManager", "setAutoReverse", mount == AUTO)
+        if (mount == AUTO) return
+        val rear = (putMode() ?: 0) and REAR
+        setPutMode(mount or rear)
+    }
+
+    fun rear(): Boolean? = putMode()?.let { it and REAR != 0 }
+
+    fun setRear(on: Boolean) {
+        val mode = putMode() ?: return
+        setPutMode(if (on) mode or REAR else mode and REAR.inv())
+    }
+
+    /** Nudges the picture's tilt half a degree clockwise (true) or back. */
+    fun tilt(clockwise: Boolean) {
+        call("SystemManager", "setScreenRotation", if (clockwise) 5 else 6, 0.5f)
+    }
+}
+
