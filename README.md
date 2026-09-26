@@ -110,6 +110,11 @@ cp local.env.example local.env   # впишите IP проектора (и пу
 
 `local.env` в git не попадает. Его читают и `deploy.sh`, и `tools/restore.ps1`.
 
+### Как Beam управляет проектором
+
+Какие сервисы, классы и настройки прошивки XGIMI вызывает Beam и что в ней не работает так, как
+ожидается: [docs/xgimi-firmware.md](docs/xgimi-firmware.md).
+
 ### Команды для отладки
 
 ```sh
