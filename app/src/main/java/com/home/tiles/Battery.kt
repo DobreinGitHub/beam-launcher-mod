@@ -1,10 +1,5 @@
 package com.home.tiles
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.BatteryManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,28 +21,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 class BatteryInfo(val percent: Int, val charging: Boolean)
-
-/** Null on devices without a battery (e.g. mains-only projectors). */
-private fun Intent.toBatteryInfo(): BatteryInfo? {
-    if (!getBooleanExtra(BatteryManager.EXTRA_PRESENT, false)) return null
-    val level = getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-    val scale = getIntExtra(BatteryManager.EXTRA_SCALE, 100)
-    if (level < 0 || scale <= 0) return null
-    val status = getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-    val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
-    return BatteryInfo(level * 100 / scale, charging)
-}
 
 /**
  * The XGIMI projector's Android battery service is a stub ("not present", always 100%); the real
@@ -62,28 +44,12 @@ private fun readXgimiBattery(): BatteryInfo? = runCatching {
     if (level in 0..100) BatteryInfo(level, charging = adapter) else null
 }.onFailure { android.util.Log.w("Battery", "XGIMI battery unavailable", it) }.getOrNull()
 
+/** No change broadcasts from the XGIMI side, so poll; a battery drains slowly. */
 @Composable
-private fun rememberBattery(): State<BatteryInfo?> {
-    val context = LocalContext.current.applicationContext
-    if (Device.isTv) {
-        // No change broadcasts from the XGIMI side, so poll; a battery drains slowly.
-        return produceState(readXgimiBattery()) {
-            while (true) {
-                delay(60_000)
-                value = withContext(Dispatchers.IO) { readXgimiBattery() }
-            }
-        }
-    }
-    return produceState<BatteryInfo?>(null, context) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context, intent: Intent) { value = intent.toBatteryInfo() }
-        }
-        // Sticky broadcast: registering returns the current state right away.
-        val sticky = ContextCompat.registerReceiver(
-            context, receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-        value = sticky?.toBatteryInfo()
-        awaitDispose { context.unregisterReceiver(receiver) }
+private fun rememberBattery(): State<BatteryInfo?> = produceState(readXgimiBattery()) {
+    while (true) {
+        delay(60_000)
+        value = withContext(Dispatchers.IO) { readXgimiBattery() }
     }
 }
 

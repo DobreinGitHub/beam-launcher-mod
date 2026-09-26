@@ -7,15 +7,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,7 +29,6 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.TabletAndroid
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,10 +50,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -116,9 +105,6 @@ fun HomeScreen(
         is RowItem.All -> onOpenAll
     }
     fun longClickFor(item: RowItem): () -> Unit = { if (item is RowItem.App) onOptions(item.entry) }
-    // A tablet held upright gets a grid; the Switch-style row needs a wide screen.
-    val portrait = !Device.isTv &&
-        LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
     var selected by remember { mutableIntStateOf(0) }
@@ -138,37 +124,18 @@ fun HomeScreen(
 
     Column(Modifier.fillMaxSize()) {
         // Switch layout: equal tiles in a normally scrolling row.
-        val classic = !portrait && LauncherSettings.layout == LAYOUT_CLASSIC
+        val classic = LauncherSettings.layout == LAYOUT_CLASSIC
         // With a channel row below there is no spare height to lift into.
         val lift = if (secondRow != null) 0.dp else RowLift
         TopBar(onOpenAll, onOpenPanel)
 
-        if (portrait) {
-            PortraitGrid(repo, items, Modifier.weight(1f), ::clickFor, ::longClickFor)
-        } else if (classic) {
+        if (classic) {
             ClassicHome(repo, items, resumeTick, secondRow, Modifier.weight(1f).padding(bottom = lift), ::clickFor, ::longClickFor)
         } else Column(Modifier.weight(1f).fillMaxWidth().padding(bottom = lift), verticalArrangement = Arrangement.Center) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(bigTile + RowPad * 2)
-                    // Touch: swiping moves the selection one tile per tile-width dragged.
-                    .pointerInput(items.size) {
-                        var drag = 0f
-                        detectHorizontalDragGestures(onDragEnd = { drag = 0f }) { change, dx ->
-                            change.consume()
-                            drag += dx
-                            val step = (smallTile + Gap).toPx()
-                            while (drag <= -step) {
-                                if (selected < items.lastIndex) selected++
-                                drag += step
-                            }
-                            while (drag >= step) {
-                                if (selected > 0) selected--
-                                drag -= step
-                            }
-                        }
-                    },
+                    .height(bigTile + RowPad * 2),
             ) {
                 // Not a lazy list: the whole strip slides so the selected tile always sits at StartPad
                 // (every tile before it is small), instead of fighting focus bring-into-view scrolling.
@@ -199,7 +166,7 @@ fun HomeScreen(
 
                 // Title sits to the right of the big tile, above the small ones.
                 val item = items.getOrNull(selected)
-                val titleAlpha by animateFloatAsState(if (rowFocused || !Device.isTv) 1f else 0f, tween(150), label = "title")
+                val titleAlpha by animateFloatAsState(if (rowFocused) 1f else 0f, tween(150), label = "title")
                 Column(
                     Modifier
                         .padding(start = StartPad + bigTile + Gap + 4.dp, top = RowPad + 6.dp, end = 48.dp)
@@ -232,39 +199,6 @@ internal fun RowItemArt(repo: AppRepository, item: RowItem) {
     }
 }
 
-/** Tablet held upright: every tile in a scrolling grid, labels underneath. */
-@Composable
-private fun PortraitGrid(
-    repo: AppRepository,
-    items: List<RowItem>,
-    modifier: Modifier,
-    clickFor: (RowItem) -> () -> Unit,
-    longClickFor: (RowItem) -> () -> Unit,
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(150.dp),
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 36.dp, end = 36.dp, top = 12.dp, bottom = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(26.dp),
-        verticalArrangement = Arrangement.spacedBy(26.dp),
-    ) {
-        items(items, key = { it.key }) { item ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(1f)) {
-                    Tile(
-                        size = maxWidth,
-                        highlighted = false,
-                        onClick = clickFor(item),
-                        onLongClick = longClickFor(item),
-                    ) { RowItemArt(repo, item) }
-                }
-                Spacer(Modifier.height(10.dp))
-                T(item.title, 16.sp, Modifier.fillMaxWidth(), align = TextAlign.Center)
-            }
-        }
-    }
-}
-
 @Composable
 private fun RowTile(
     index: Int,
@@ -284,8 +218,7 @@ private fun RowTile(
     val alpha by animateFloatAsState(if (index < selected) 0f else 1f, tween(160), label = "fade")
     Tile(
         size = size,
-        // Without a remote there is no focus, so the selected tile always carries the frame.
-        highlighted = isSelected && (rowFocused || !Device.isTv),
+        highlighted = isSelected && rowFocused,
         modifier = modifier
             .graphicsLayer { this.alpha = alpha }
             .onFocusChanged { if (it.isFocused) onFocused() },
@@ -331,9 +264,7 @@ internal fun ActionButtons(onOpenAll: () -> Unit, onOpenPanel: () -> Unit, modif
         listOf(RUSTORE_TV, RUSTORE).firstOrNull { context.isInstalled(it) }?.let { store ->
             RoundButton(Icons.Rounded.ShoppingBag, Color(0xFFF5A623), "RuStore") { context.launchPackage(store) }
         }
-        if (Device.isTv) {
-            RoundButton(Icons.Rounded.Tune, Color(0xFF2EB85C), "Быстрые настройки") { context.openQuickPanel() }
-        }
+        RoundButton(Icons.Rounded.Tune, Color(0xFF2EB85C), "Быстрые настройки") { context.openQuickPanel() }
         RoundButton(Icons.Rounded.Settings, Color(0xFF8A8A8A), "Настройки") { context.openSettings() }
         RoundButton(Icons.Rounded.Palette, Color(0xFF8E44AD), "Оформление", onOpenPanel)
     }

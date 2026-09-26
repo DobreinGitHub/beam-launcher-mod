@@ -14,25 +14,8 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1"
-    }
-
-    // tv: the XGIMI projector (remote, firmware integrations). tablet: touch, any orientation.
-    flavorDimensions += "device"
-    productFlavors {
-        create("tv") {
-            dimension = "device"
-            buildConfigField("boolean", "TV", "true")
-            manifestPlaceholders["orientation"] = "landscape"
-            // The projector is 32-bit ARM; keeps Vosk/JNA native libraries to the one ABI.
-            ndk { abiFilters += "armeabi-v7a" }
-        }
-        create("tablet") {
-            dimension = "device"
-            applicationIdSuffix = ".tablet"
-            buildConfigField("boolean", "TV", "false")
-            manifestPlaceholders["orientation"] = "unspecified"
-            ndk { abiFilters += "arm64-v8a" }
-        }
+        // The projector is 32-bit ARM; keeps Vosk/JNA native libraries to the one ABI.
+        ndk { abiFilters += "armeabi-v7a" }
     }
 
     buildTypes {
@@ -53,7 +36,6 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
     lint {
         checkReleaseBuilds = false

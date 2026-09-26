@@ -8,13 +8,9 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.SystemBarStyle
-import androidx.activity.enableEdgeToEdge
-import android.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,17 +42,6 @@ class MainActivity : ComponentActivity() {
         Sounds.init(this)
         Hdmi.applyBootSource(this)
         setContent {
-            if (!Device.isTv) {
-                val dark = LauncherSettings.dark
-                LaunchedEffect(dark) {
-                    val style = if (dark) {
-                        SystemBarStyle.dark(Color.TRANSPARENT)
-                    } else {
-                        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                    }
-                    enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
-                }
-            }
             LauncherApp(repo, apps.value, resumeTick.intValue, PanelRequests.count.intValue, onChanged = ::reload)
         }
         val filter = IntentFilter().apply {
@@ -135,8 +120,7 @@ private fun LauncherApp(
 
     Box(Modifier.fillMaxSize().background(Colors.backgroundBrush()).arrowSoundTracker().panelKey { panelOpen = !panelOpen }) {
         if (Colors.isXmb) XmbBackground()
-        // The background runs under the tablet's system bars; the content stays clear of them.
-        Box(if (Device.isTv) Modifier else Modifier.systemBarsPadding()) {
+        Box {
         when (screen) {
             Screen.Home -> HomeScreen(
                 repo, apps, resumeTick,

@@ -406,7 +406,6 @@ object Hdmi {
      * first start of a boot it switches to HDMI when that's chosen and a device is connected.
      */
     fun applyBootSource(context: Context) {
-        if (!Device.isTv) return
         val boot = android.provider.Settings.Global.getInt(context.contentResolver, "boot_count", -1)
         val prefs = context.getSharedPreferences("boot", Context.MODE_PRIVATE)
         if (prefs.getInt("handledBoot", -2) == boot) return

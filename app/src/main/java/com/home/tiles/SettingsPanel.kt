@@ -59,7 +59,6 @@ import androidx.compose.material.icons.rounded.CropFree
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.FilterCenterFocus
 import androidx.compose.material.icons.rounded.Landscape
-import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.ScreenRotation
@@ -99,7 +98,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.unit.dp
@@ -113,21 +111,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-// Google TV quick-settings palette: dark sheet, dark cards, light-blue focus with dark text.
-// Tablet: Google TV quick settings (dark sheet, dark cards, light-blue focus with dark text).
-// Projector: XGIMI's own panel (no sheet over the evenly dimmed picture, see-through grey tiles,
-// saturated blue focus with white text).
-private val PanelBg get() = if (Device.isTv) Color.Transparent else Color(0xFF1F2227)
-private val CardBg get() = if (Device.isTv) Color(0x38FFFFFF) else Color(0xFF2E3238)
-private val FocusBg get() = if (Device.isTv) Color(0xFF3B7CF5) else Color(0xFFD3E3FD)
-private val FocusText get() = if (Device.isTv) Color.White else Color(0xFF0B1D36)
+// XGIMI's own panel: no sheet over the evenly dimmed picture, see-through grey tiles,
+// saturated blue focus with white text.
+private val CardBg = Color(0x38FFFFFF)
+private val FocusBg = Color(0xFF3B7CF5)
+private val FocusText = Color.White
 /** Filled part of a focused slider or switch, drawn on [FocusBg]. */
-private val FocusFill get() = if (Device.isTv) Color.White else Color(0xFF0B57D0)
+private val FocusFill = Color.White
 private val Accent = Color(0xFF8AB4F8)
 /** Text on a tile that is switched on (light [Accent] fill). */
 private val OnText = Color(0xFF0B1D36)
@@ -213,10 +207,7 @@ fun PanelScreen(onDismiss: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(
-                if (Device.isTv) TvScrim
-                else Brush.horizontalGradient(listOf(Color.Transparent, Color(0x99000000))),
-            )
+            .background(TvScrim)
             .arrowSoundTracker()
             .panelKey(onDismiss)
             // The overlay window has no back dispatcher, so Back is handled here for both hosts.
@@ -235,15 +226,14 @@ fun PanelScreen(onDismiss: () -> Unit) {
         ) {
             Column(
                 Modifier
-                    .padding(if (Device.isTv) 12.dp else 16.dp)
-                    // Projector: tiles the size of XGIMI's panel (352dp of tiles, 80dp squares).
-                    .width(if (Device.isTv) 392.dp else 400.dp)
+                    .padding(12.dp)
+                    // Tiles the size of XGIMI's panel (352dp of tiles, 80dp squares).
+                    .width(392.dp)
                     .fillMaxHeight()
-                    .background(PanelBg, RoundedCornerShape(28.dp))
                     // Taps on the panel itself must not reach the close-on-tap backdrop.
                     .pointerInput(Unit) { detectTapGestures { } }
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = if (Device.isTv) 16.dp else 22.dp),
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
             ) {
                 val current = page
                 if (current == null) {
@@ -265,7 +255,7 @@ private class QuickItem(
     val active: Boolean? = null,
     /** A second line under the label, e.g. the current sound output. */
     val subtitle: String? = null,
-    /** On the projector: a double-width tile with its label, instead of a square icon tile. */
+    /** A double-width tile with its label, instead of a square icon tile. */
     val wide: Boolean = false,
 )
 
@@ -277,15 +267,15 @@ private fun ColumnScope.MainPage(
     open: (PanelPage) -> Unit,
 ) {
     val context = LocalContext.current
-    val inputs = remember { if (Device.isTv) Xgimi.hdmiInputs(context) else emptyList() }
-    var eco by remember { mutableStateOf(if (Device.isTv) Eco.enabled() else null) }
-    val soundOutput = remember { if (Device.isTv) SoundOutput.output()?.let(::soundOutputName) else null }
+    val inputs = remember { Xgimi.hdmiInputs(context) }
+    var eco by remember { mutableStateOf(Eco.enabled()) }
+    val soundOutput = remember { SoundOutput.output()?.let(::soundOutputName) }
     // Name of the connected speaker/headphones, shown under the Bluetooth tile.
     val bluetoothAudio by produceState<String?>(null) {
-        if (Device.isTv) value = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name }
+        value = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name }
     }
     val pictureMode = remember {
-        if (Device.isTv) PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first } else null
+        PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first }
     }
     // Projector actions close the panel first so it doesn't cover the picture (keystone photographs it).
     fun projector(action: () -> Unit): () -> Unit = {
@@ -293,47 +283,39 @@ private fun ColumnScope.MainPage(
         action()
     }
     val items = buildList {
-        if (Device.isTv) {
-            // Everyday actions first as wide labelled tiles, then setup and settings as square
-            // icon tiles that show their name only when focused (like XGIMI's own panel).
-            add(QuickItem(Icons.Rounded.CenterFocusStrong, "Автофокус", action = projector { Xgimi.autoFocus(context) }, wide = true))
-            add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { Xgimi.autoKeystone(context) }, wide = true))
-            add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }, wide = true))
-            add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", PanelPage.Bluetooth, subtitle = bluetoothAudio, wide = true))
-            add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput, wide = true))
-            add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture, subtitle = pictureMode, wide = true))
-            // One HDMI port: switch straight to it; with several, number them.
-            inputs.forEachIndexed { i, input ->
-                val label = if (inputs.size == 1) "HDMI" else "HDMI ${i + 1}"
-                add(QuickItem(Icons.Rounded.SettingsInputHdmi, label, action = projector { Xgimi.openInput(context, input) }))
-            }
-            eco?.let { on ->
-                // Stays open: the change is visible behind the panel.
-                add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = { if (Eco.set(!on)) eco = Eco.enabled() }))
-            }
-            add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))
-            add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", action = projector { Xgimi.powerMenu(context) }))
-            add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
-            add(QuickItem(Icons.Rounded.Crop, "Ручная трапеция", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_KEYSTONE) }))
-            add(QuickItem(Icons.Rounded.ZoomOutMap, "Зум и сдвиг", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ZOOM) }))
-            add(QuickItem(Icons.Rounded.ScreenRotation, "Поворот экрана", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ROTATE) }))
-            add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
-            add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
-            add(QuickItem(Icons.Rounded.SettingsRemote, "Кнопки пульта", PanelPage.Remote))
-            add(QuickItem(Icons.Rounded.SettingsApplications, "XGIMI", PanelPage.Xgimi))
-        } else {
-            add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound))
-            add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
-            add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
+        // Everyday actions first as wide labelled tiles, then setup and settings as square
+        // icon tiles that show their name only when focused (like XGIMI's own panel).
+        add(QuickItem(Icons.Rounded.CenterFocusStrong, "Автофокус", action = projector { Xgimi.autoFocus(context) }, wide = true))
+        add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { Xgimi.autoKeystone(context) }, wide = true))
+        add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }, wide = true))
+        add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", PanelPage.Bluetooth, subtitle = bluetoothAudio, wide = true))
+        add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput, wide = true))
+        add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture, subtitle = pictureMode, wide = true))
+        // One HDMI port: switch straight to it; with several, number them.
+        inputs.forEachIndexed { i, input ->
+            val label = if (inputs.size == 1) "HDMI" else "HDMI ${i + 1}"
+            add(QuickItem(Icons.Rounded.SettingsInputHdmi, label, action = projector { Xgimi.openInput(context, input) }))
         }
+        eco?.let { on ->
+            // Stays open: the change is visible behind the panel.
+            add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = { if (Eco.set(!on)) eco = Eco.enabled() }))
+        }
+        add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))
+        add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", action = projector { Xgimi.powerMenu(context) }))
+        add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
+        add(QuickItem(Icons.Rounded.Crop, "Ручная трапеция", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_KEYSTONE) }))
+        add(QuickItem(Icons.Rounded.ZoomOutMap, "Зум и сдвиг", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ZOOM) }))
+        add(QuickItem(Icons.Rounded.ScreenRotation, "Поворот экрана", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_ROTATE) }))
+        add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
+        add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
+        add(QuickItem(Icons.Rounded.SettingsRemote, "Кнопки пульта", PanelPage.Remote))
+        add(QuickItem(Icons.Rounded.SettingsApplications, "XGIMI", PanelPage.Xgimi))
     }
 
-    // The projector fits every tile on one screen: a 4-unit grid of wide (2 units) and square
-    // (1 unit) tiles, no tip card. The tablet keeps two big tiles per row.
-    val compact = Device.isTv
-    val units = if (compact) 4 else 2
-    val gap = if (compact) 10.dp else 12.dp
-    fun span(item: QuickItem) = if (compact && item.wide) 2 else 1
+    // Every tile fits on one screen: a 4-unit grid of wide (2 units) and square (1 unit) tiles.
+    val units = 4
+    val gap = 10.dp
+    fun span(item: QuickItem) = if (item.wide) 2 else 1
     val rows = buildList {
         var row = mutableListOf<QuickItem>()
         for (item in items) {
@@ -346,11 +328,9 @@ private fun ColumnScope.MainPage(
         if (row.isNotEmpty()) add(row)
     }
     PanelHeader(onSettings = projector { context.openSettings() })
-    Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
-    if (Device.isTv) {
-        BrightnessSlider(Modifier.fillMaxWidth().height(48.dp))
-        Spacer(Modifier.height(10.dp))
-    }
+    Spacer(Modifier.height(12.dp))
+    BrightnessSlider(Modifier.fillMaxWidth().height(48.dp))
+    Spacer(Modifier.height(10.dp))
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val unit = (maxWidth - gap * (units - 1)) / units
         Column(verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -370,19 +350,11 @@ private fun ColumnScope.MainPage(
                             val target = item.page
                             if (target != null) open(target) else item.action?.invoke()
                         }
-                        when {
-                            !compact -> QuickTile(item, modifier, onClick)
-                            item.wide -> WideTile(item, modifier, onClick)
-                            else -> IconTile(item, modifier, onClick)
-                        }
+                        if (item.wide) WideTile(item, modifier, onClick) else IconTile(item, modifier, onClick)
                     }
                 }
             }
         }
-    }
-    if (!compact) {
-        Spacer(Modifier.height(24.dp))
-        TipCard()
     }
 }
 
@@ -404,36 +376,6 @@ private fun PanelHeader(onSettings: () -> Unit) {
         BatteryIndicator(20.sp, PanelText)
         Spacer(Modifier.width(8.dp))
         RoundIcon(Icons.Rounded.Settings, onSettings)
-    }
-}
-
-/** Google TV style tile: icon and label on a dark card, light-blue when focused. */
-@Composable
-private fun QuickTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val on = item.active == true
-    val fg = tileText(focused, on)
-    Column(
-        modifier
-            .height(96.dp)
-            .background(
-                when {
-                    focused -> FocusBg
-                    on -> Accent
-                    else -> CardBg
-                },
-                RoundedCornerShape(20.dp),
-            )
-            .panelControl({ focused = it }, onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Image(item.icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(fg))
-        Column {
-            T(item.label, 16.sp, color = fg)
-            item.active?.let { T(if (it) "Вкл." else "Выкл.", 13.sp, color = if (focused || it) fg else PanelDim) }
-            item.subtitle?.let { T(it, 13.sp, color = if (focused) FocusText else PanelDim) }
-        }
     }
 }
 
@@ -532,41 +474,6 @@ private fun RoundIcon(icon: ImageVector, onClick: () -> Unit) {
     }
 }
 
-/** "Tip of the day" card at the bottom, like Google TV's. */
-@Composable
-private fun TipCard() {
-    val tips = if (Device.isTv) TvTips else TabletTips
-    val tip = tips[Calendar.getInstance().get(Calendar.DAY_OF_YEAR) % tips.size]
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
-            .padding(18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        T("Совет дня", 15.sp, color = PanelDim)
-        Spacer(Modifier.height(12.dp))
-        Image(Icons.Rounded.Lightbulb, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(PanelText))
-        Spacer(Modifier.height(8.dp))
-        BasicText(
-            tip,
-            style = TextStyle(color = PanelText, fontSize = 16.sp, textAlign = TextAlign.Center),
-        )
-    }
-}
-
-private val TvTips = listOf(
-    "Голосовая кнопка пульта открывает эту панель из любого приложения",
-    "Удерживайте OK на плитке, чтобы закрепить, скрыть или удалить приложение",
-    "Кнопки пульта с китайскими сервисами можно назначить в «Кнопки пульта»",
-    "Режим изображения меняется сразу — панель можно не закрывать",
-)
-private val TabletTips = listOf(
-    "Удерживайте плитку, чтобы закрепить, скрыть или удалить приложение",
-    "Поверните планшет вертикально — плитки выстроятся сеткой",
-    "Фон XMB меняет цвет каждый месяц, как на PS3",
-)
-
 @Composable
 private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismiss: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -585,14 +492,14 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         PanelPage.Sound -> {
             Section("Громкость")
             VolumeSlider(Modifier.fillMaxWidth())
-            if (Device.isTv && SoundOutput.available) SoundOutputSection()
-            if (Device.isTv) SoundModeSection()
-            if (Device.isTv) EarcToggle()
+            if (SoundOutput.available) SoundOutputSection()
+            SoundModeSection()
+            EarcToggle()
             Section("Интерфейс")
             Toggle("Звуки навигации", LauncherSettings.sounds, Modifier.fillMaxWidth()) {
                 LauncherSettings.sounds = !LauncherSettings.sounds
             }
-            if (Device.isTv && ScreensaverTimeout.canWrite(context)) {
+            if (ScreensaverTimeout.canWrite(context)) {
                 var keyTones by remember { mutableStateOf(KeyTones.enabled(context)) }
                 Spacer(Modifier.height(10.dp))
                 Toggle("Системный звук нажатий", keyTones, Modifier.fillMaxWidth()) {
@@ -650,7 +557,7 @@ private fun PicturePage(onXgimiPage: () -> Unit) {
             )
         }
     }
-    if (Device.isTv) GameModeSection()
+    GameModeSection()
     Section("Пользовательский режим")
     if (current == CUSTOM_PICTURE) {
         CustomPictureControls()
@@ -1075,13 +982,11 @@ private fun HomePage(onHdmiPage: () -> Unit) {
     Toggle("Плитка флешки", LauncherSettings.usbTile, Modifier.fillMaxWidth()) {
         LauncherSettings.usbTile = !LauncherSettings.usbTile
     }
-    if (Device.isTv) {
-        Spacer(Modifier.height(10.dp))
-        Toggle("Плитка HDMI", LauncherSettings.hdmiTile, Modifier.fillMaxWidth()) {
-            LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
-        }
+    Spacer(Modifier.height(10.dp))
+    Toggle("Плитка HDMI", LauncherSettings.hdmiTile, Modifier.fillMaxWidth()) {
+        LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
     }
-    if (Device.isTv) HdmiSection(onHdmiPage)
+    HdmiSection(onHdmiPage)
     Section("Второй ряд")
     PairRow {
         Chip("Авто", LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {
