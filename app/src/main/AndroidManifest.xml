@@ -22,6 +22,10 @@
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
+    <!-- App op granted over adb: the screensaver delay (screen_off_timeout). -->
+    <uses-permission
+        android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <uses-feature
         android:name="android.software.leanback"

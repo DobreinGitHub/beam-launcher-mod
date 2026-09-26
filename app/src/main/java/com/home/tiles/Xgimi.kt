@@ -97,6 +97,10 @@ object Xgimi {
     const val PAGE_WIFI = "Settings://com.xgimi.settings.net/wifi"
     const val PAGE_KEYSTONE = "Settings://com.xgimi.settings.picture/keyStone"
     const val PAGE_ROTATE = "Settings://com.xgimi.settings.picture/rotate"
+    /** HDMI source page: CEC, boot source, plug-and-play. */
+    const val PAGE_HDMI = "Settings://com.xgimi.settings.signalSource/"
+    /** Full settings on "Picture correction": focus, reset picture, correction settings. */
+    const val PAGE_CORRECTION = "Settings://com.xgimi.settings/projection_screen"
 
     /** "Any Door" (任意门): XGIMI's ambient scenes, also used as the screensaver. */
     const val SCREENSAVER_APP = "com.xgimi.atmosphere"

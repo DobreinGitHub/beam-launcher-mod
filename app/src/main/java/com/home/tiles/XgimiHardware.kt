@@ -453,6 +453,35 @@ object Sensors {
 
     fun eyeProtection(): Boolean? = call("DisplayManager", "getHumanDetectOnOff") as? Boolean
     fun setEyeProtection(on: Boolean) { call("DisplayManager", "setHumanDetectOnOff", on) }
+
+    /** Auto keystone right after power-on ("开机自动校正"). */
+    fun bootKeystone(): Boolean? = call("GmFactoryManager", "getPowerOnAKFlag") as? Boolean
+    fun setBootKeystone(on: Boolean) { call("GmFactoryManager", "savePowerOnAKFlag", on) }
+}
+
+/**
+ * Idle time before XGIMI's screensaver starts: the plain screen_off_timeout, with the values its
+ * settings page offers ("never" is Int.MAX_VALUE). Writing it needs the WRITE_SETTINGS app op,
+ * granted over adb (tools/restore.ps1).
+ */
+object ScreensaverTimeout {
+    val options = listOf(
+        Int.MAX_VALUE to "Никогда",
+        60_000 to "1 мин",
+        300_000 to "5 мин",
+        600_000 to "10 мин",
+        1_800_000 to "30 мин",
+        3_600_000 to "1 час",
+    )
+
+    fun current(context: Context): Int =
+        android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_OFF_TIMEOUT, 300_000)
+
+    fun canWrite(context: Context) = android.provider.Settings.System.canWrite(context)
+
+    fun set(context: Context, value: Int): Boolean = runCatching {
+        android.provider.Settings.System.putInt(context.contentResolver, android.provider.Settings.System.SCREEN_OFF_TIMEOUT, value)
+    }.onFailure { Log.w("Screensaver", "can't set timeout", it) }.getOrDefault(false)
 }
 
 /** XGIMI's sound modes (GmAudioManager.set/getSoundeffect), numbered as its settings page sets them. */

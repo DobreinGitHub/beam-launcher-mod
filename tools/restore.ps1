@@ -121,6 +121,7 @@ Step "Каналы приложений (второй ряд)" {
 Step "Системные настройки (восстановление спец. возможностей)" {
     Adb shell pm grant com.home.tiles android.permission.WRITE_SECURE_SETTINGS | Out-Null
 }
+Step "Время до заставки (screen_off_timeout)" { Adb shell appops set com.home.tiles WRITE_SETTINGS allow | Out-Null }
 Step "Домашний экран" {
     Expect (Adb shell cmd package set-home-activity com.home.tiles/.MainActivity) "Success"
 }

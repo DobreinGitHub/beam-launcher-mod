@@ -152,6 +152,7 @@ private enum class PanelPage(val title: String) {
     Remote("Кнопки пульта"),
     Xgimi("Настройки XGIMI"),
     Bluetooth("Bluetooth"),
+    Screensaver("Заставка"),
 }
 
 /** Our quick settings, styled after the Google TV panel; slides in from the right. */
@@ -310,8 +311,7 @@ private fun ColumnScope.MainPage(
                 // Stays open: the change is visible behind the panel.
                 add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = { if (Eco.set(!on)) eco = Eco.enabled() }))
             }
-            // XGIMI's "Any Door" scenes, the app behind the default screensaver.
-            add(QuickItem(Icons.Rounded.Landscape, "Заставки", action = projector { context.launchPackage(Xgimi.SCREENSAVER_APP) }))
+            add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))
             add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", action = projector { Xgimi.powerMenu(context) }))
             add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
             add(QuickItem(Icons.Rounded.Crop, "Ручная трапеция", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_KEYSTONE) }))
@@ -593,12 +593,14 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
             }
         }
         PanelPage.Appearance -> AppearancePage()
-        PanelPage.Home -> HomePage()
+        PanelPage.Home -> HomePage(onHdmiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_HDMI) } })
+        PanelPage.Screensaver -> ScreensaverPage(onScenes = { projector { context.launchPackage(Xgimi.SCREENSAVER_APP) } })
         PanelPage.Remote -> RemoteButtonsSection()
         PanelPage.Bluetooth -> BluetoothPage(onXgimiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) } })
         PanelPage.Xgimi -> {
             SensorToggles()
             Section("Разделы настроек проектора")
+            ListRow("Коррекция, фокус, сброс") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_CORRECTION) } }
             ListRow("Звуковой выход") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_SOUND_OUTPUT) } }
             ListRow("Все настройки") { projector { context.openSettings() } }
         }
@@ -899,8 +901,15 @@ private fun SensorToggles() {
     var realtime by remember { mutableStateOf(Sensors.realtimeKeystone()) }
     var motionFocus by remember { mutableStateOf(Sensors.motionFocus()) }
     var eyes by remember { mutableStateOf(Sensors.eyeProtection()) }
-    if (realtime == null && motionFocus == null && eyes == null) return
+    var bootKeystone by remember { mutableStateOf(Sensors.bootKeystone()) }
+    if (realtime == null && motionFocus == null && eyes == null && bootKeystone == null) return
     Section("Датчики")
+    bootKeystone?.let { on ->
+        Toggle("Коррекция при включении", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Sensors.setBootKeystone(!on)
+            bootKeystone = Sensors.bootKeystone() ?: !on
+        }
+    }
     realtime?.let { on ->
         Toggle("Коррекция при сдвиге", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             Sensors.setRealtimeKeystone(!on)
@@ -972,9 +981,33 @@ private fun AppearancePage() {
     }
 }
 
-/** Where the projector starts, and the firmware's HDMI auto switch. */
+/**
+ * XGIMI's screensaver: how long the projector waits before starting it, and its "Any Door"
+ * scenes app, where the scene itself is chosen.
+ */
 @Composable
-private fun HdmiSection() {
+private fun ScreensaverPage(onScenes: () -> Unit) {
+    val context = LocalContext.current
+    var timeout by remember { mutableStateOf(ScreensaverTimeout.current(context)) }
+    val options = ScreensaverTimeout.options
+    Section("Включать через")
+    if (ScreensaverTimeout.canWrite(context)) {
+        // Unknown values (set elsewhere) show as the nearest longer option.
+        val index = options.indices.filter { options[it].first >= timeout }.minBy { options[it].first }
+        Selector("Бездействие", options[index].second, Modifier.fillMaxWidth()) { step ->
+            val next = options[(index + step).coerceIn(0, options.lastIndex)].first
+            if (ScreensaverTimeout.set(context, next)) timeout = ScreensaverTimeout.current(context)
+        }
+    } else {
+        T("Нет разрешения менять время (appops WRITE_SETTINGS)", 14.sp, color = PanelDim)
+    }
+    Section("Сцены")
+    ListRow("Выбрать заставку", onScenes)
+}
+
+/** Where the projector starts, the firmware's HDMI auto switch, and a link to its HDMI page (CEC). */
+@Composable
+private fun HdmiSection(onHdmiPage: () -> Unit) {
     var autoSwitch by remember { mutableStateOf(Hdmi.autoSwitch()) }
     Section("При включении")
     PairRow {
@@ -992,10 +1025,12 @@ private fun HdmiSection() {
             autoSwitch = Hdmi.autoSwitch() ?: !on
         }
     }
+    Spacer(Modifier.height(10.dp))
+    ListRow("HDMI‑CEC и другие настройки HDMI", onHdmiPage)
 }
 
 @Composable
-private fun HomePage() {
+private fun HomePage(onHdmiPage: () -> Unit) {
     val context = LocalContext.current
     val channels by produceState(emptyList<TvChannel>()) {
         value = withContext(Dispatchers.IO) { queryTvChannels(context).filter { it.items.isNotEmpty() } }
@@ -1014,7 +1049,7 @@ private fun HomePage() {
             LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
         }
     }
-    if (Device.isTv) HdmiSection()
+    if (Device.isTv) HdmiSection(onHdmiPage)
     Section("Второй ряд")
     PairRow {
         Chip("Авто", LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {
