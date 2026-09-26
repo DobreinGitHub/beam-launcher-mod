@@ -784,6 +784,37 @@ private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
     }
 }
 
+/** Search for new devices; OK on one pairs it (speakers then connect by themselves). */
+@Composable
+private fun NewDevicesSection() {
+    val context = LocalContext.current
+    val scanning = BluetoothScan.scanning.value
+    Section(if (scanning) "Новые устройства · поиск…" else "Новые устройства")
+    ListRow(if (scanning) "Остановить поиск" else "Искать устройства") {
+        if (scanning) BluetoothScan.stop(context) else BluetoothScan.start(context)
+    }
+    Spacer(Modifier.height(8.dp))
+    BluetoothScan.found.forEach { device ->
+        val state = BluetoothScan.pairing[device.address]
+        Chip(
+            device.name,
+            state == "Сопряжено",
+            Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            note = listOfNotNull(state ?: "OK — подключить", device.kind).joinToString(" · "),
+        ) {
+            if (state != "Сопряжение…") BluetoothScan.pair(device.address)
+        }
+    }
+    BluetoothScan.pairing.filterValues { it == "Сопряжено" }.keys.forEach { address ->
+        if (BluetoothScan.found.none { it.address == address }) {
+            T("Сопряжено: $address — появится в списке выше", 14.sp, color = PanelDim)
+        }
+    }
+    if (!scanning && BluetoothScan.found.isEmpty()) {
+        T("Переведите колонку или наушники в режим сопряжения и нажмите «Искать»", 14.sp, color = PanelDim)
+    }
+}
+
 /**
  * Paired Bluetooth devices; a click connects or disconnects one (e.g. switching sound between a
  * speaker and the projector). Refreshed every two seconds while open, since connecting takes a
@@ -792,6 +823,7 @@ private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
 @Composable
 private fun BluetoothPage(onXgimiPage: () -> Unit) {
     val context = LocalContext.current
+    DisposableEffect(Unit) { onDispose { BluetoothScan.stop(context) } }
     val scope = rememberCoroutineScope()
     var devices by remember { mutableStateOf<List<XgimiBluetooth.Device>?>(null) }
     // Addresses we just asked to (dis)connect, shown as "…" until the state changes.
@@ -835,6 +867,7 @@ private fun BluetoothPage(onXgimiPage: () -> Unit) {
             }
         }
     }
+    NewDevicesSection()
     var visible by remember { mutableStateOf(BluetoothOptions.discoverable(context)) }
     var absolute by remember { mutableStateOf(BluetoothOptions.absoluteVolume()) }
     Section("Настройки")
@@ -847,7 +880,7 @@ private fun BluetoothPage(onXgimiPage: () -> Unit) {
         absolute = BluetoothOptions.absoluteVolume()
     }
     Section("Ещё")
-    ListRow("Добавить устройство", onXgimiPage)
+    ListRow("Настройки Bluetooth XGIMI", onXgimiPage)
 }
 
 /** XGIMI's sensor switches: keystone when moved, refocus on tilt, eye protection. */
