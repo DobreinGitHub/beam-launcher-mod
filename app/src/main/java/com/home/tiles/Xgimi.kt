@@ -5,6 +5,9 @@ import android.content.Intent
 import android.media.tv.TvContract
 import android.media.tv.TvInputInfo
 import android.media.tv.TvInputManager
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 
 /**
@@ -111,10 +114,34 @@ object Xgimi {
 
     private const val SETTINGS_PKG = "com.android.newsettings"
 
+    /**
+     * Starts one of XGIMI's services. When it can't be started, the message says why (and the log
+     * has the details): no such service here, Android refusing a background start, or no access.
+     */
     private fun startService(context: Context, intent: Intent) {
-        val started = runCatching { context.startService(intent) != null }.getOrDefault(false)
-        if (!started) Toast.makeText(context, "Недоступно на этом проекторе", Toast.LENGTH_SHORT).show()
+        val problem = try {
+            if (context.startService(intent) != null) null else "Недоступно на этом проекторе"
+        } catch (e: IllegalStateException) {
+            // Android 8+: an app that isn't in the foreground may not start services.
+            Log.w(TAG, "${intent.action}: background start refused", e)
+            "Сейчас нельзя: Android не даёт запускать службы из фона"
+        } catch (e: SecurityException) {
+            Log.w(TAG, "${intent.action}: no access", e)
+            "Нет доступа к службе XGIMI"
+        } catch (e: Exception) {
+            Log.w(TAG, "${intent.action} failed", e)
+            "Не удалось выполнить команду"
+        }
+        if (problem != null) toast(context, problem)
     }
+
+    /** A toast from any thread: it needs the main thread's looper. */
+    private fun toast(context: Context, text: String) {
+        val app = context.applicationContext
+        Handler(Looper.getMainLooper()).post { Toast.makeText(app, text, Toast.LENGTH_SHORT).show() }
+    }
+
+    private const val TAG = "Xgimi"
 
     /** [device]: the CEC name of what is plugged in, when it gave one. */
     class Input(val label: String, val id: String, val device: String? = null)
@@ -144,7 +171,10 @@ object Xgimi {
         val plain = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { context.startActivity(xgimi) }
             .recoverCatching { context.startActivity(plain) }
-            .onFailure { Toast.makeText(context, "Не удалось переключить вход", Toast.LENGTH_SHORT).show() }
+            .onFailure {
+                Log.w(TAG, "Could not open HDMI input ${input.id}", it)
+                toast(context, "Не удалось переключить вход")
+            }
     }
 
     private const val HDMI_PLAYER = "com.xgimi.xhplayer"
