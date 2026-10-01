@@ -142,6 +142,7 @@ Step "Системные настройки (восстановление спе
     Adb shell pm grant com.home.tiles android.permission.WRITE_SECURE_SETTINGS | Out-Null
 }
 Step "Поиск Bluetooth-устройств (местоположение)" { Adb shell pm grant com.home.tiles android.permission.ACCESS_FINE_LOCATION | Out-Null }
+Step "Микрофон пульта (голосовая кнопка)" { Adb shell pm grant com.home.tiles android.permission.RECORD_AUDIO | Out-Null }
 Step "Время до заставки (screen_off_timeout)" { Adb shell appops set com.home.tiles WRITE_SETTINGS allow | Out-Null }
 Step "Домашний экран" {
     Expect (Adb shell cmd package set-home-activity com.home.tiles/.MainActivity) "Success"

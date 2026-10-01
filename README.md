@@ -83,9 +83,21 @@ adb uninstall com.hunantv.license
 
 ### Голосовая модель
 
-Модель Vosk (~45 МБ) не входит в APK. Beam скачивает её при первом использовании голосовой кнопки
-с `alphacephei.com`. Без интернета на проекторе её можно залить через adb, как описано в
-`VoiceModelProvider` (`app/src/main/java/com/home/tiles/Voice.kt`).
+Модель Vosk (~45 МБ) не входит в APK и сама не скачивается: без неё голосовая кнопка только
+открывает панель. Поставьте её по adb один раз (нужно разрешение микрофона, `restore.ps1` его выдаёт):
+
+```sh
+# проектор скачивает модель сам (только https; для проверки добавьте --es voice_sha256 <SHA-256 архива>):
+adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver \
+    --es voice_url https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+# или залейте файл с компьютера (см. `VoiceModelProvider` в `Voice.kt`):
+adb exec-in "content write --uri content://com.home.tiles.voicemodel/model.zip" < vosk-model-small-ru-0.22.zip
+adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --ez voice_install true
+```
+
+Проверка: `--ez voice_status true`. Чтобы кнопки микрофона в других приложениях (например, SmartTube)
+тоже использовали Beam, назначьте его системным распознавателем (по желанию):
+`adb shell settings put secure voice_recognition_service com.home.tiles/com.home.tiles.VoskRecognitionService`.
 
 ## Сборка
 

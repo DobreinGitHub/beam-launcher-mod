@@ -32,6 +32,9 @@ object VoiceModel {
 
     @Volatile
     private var model: Model? = null
+
+    /** Recognitions running right now; the model is never closed under them. */
+    private var users = 0
     private val unload = Runnable { release() }
     private val handler = Handler(Looper.getMainLooper())
 
@@ -47,6 +50,20 @@ object VoiceModel {
             .also { model = it }
     }
 
+    /**
+     * Runs [block] with the loaded model, which stays open until it returns (the unload timer
+     * waits for it: closing a Vosk model under a running recognizer crashes the process).
+     * Blocking; null if the model isn't installed or failed to load.
+     */
+    fun <T> withModel(context: Context, block: (Model) -> T): T? {
+        val loaded = synchronized(this) { load(context)?.also { users++ } } ?: return null
+        try {
+            return block(loaded)
+        } finally {
+            synchronized(this) { users-- }
+        }
+    }
+
     /** Frees the model a minute after the last use. */
     fun releaseLater() {
         handler.removeCallbacks(unload)
@@ -55,6 +72,10 @@ object VoiceModel {
 
     @Synchronized
     private fun release() {
+        if (users > 0) {
+            handler.postDelayed(unload, 60_000)
+            return
+        }
         model?.close()
         model = null
         Log.i("Voice", "Model unloaded")
@@ -168,18 +189,30 @@ class VoiceSession(private val context: Context) {
                 AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
             }.getOrNull()
             if (recorder == null || recorder.state != AudioRecord.STATE_INITIALIZED) {
-                Log.w("Voice", "Microphone unavailable")
+                Log.w("Voice", "Microphone unavailable (is RECORD_AUDIO granted?)")
+                recorder?.release()
                 recording = false
                 return@Thread
             }
-            recorder.startRecording()
-            val buffer = ShortArray(rate / 10)
-            while (recording) {
-                val n = recorder.read(buffer, 0, buffer.size)
-                if (n > 0) synchronized(chunks) { chunks += buffer.copyOf(n) }
+            try {
+                recorder.startRecording()
+                val buffer = ShortArray(rate / 10)
+                while (recording) {
+                    val n = recorder.read(buffer, 0, buffer.size)
+                    if (n < 0) {
+                        // An error code (dead object, bad state): don't spin on it.
+                        Log.w("Voice", "Microphone read failed: $n")
+                        break
+                    }
+                    if (n > 0) synchronized(chunks) { chunks += buffer.copyOf(n) }
+                }
+            } catch (e: IllegalStateException) {
+                Log.w("Voice", "Microphone could not start", e)
+            } finally {
+                recording = false
+                runCatching { recorder.stop() }
+                recorder.release()
             }
-            recorder.stop()
-            recorder.release()
         }.apply { start() }
     }
 
@@ -228,17 +261,20 @@ class VoiceSession(private val context: Context) {
     }
 
     private fun recognize(samples: List<ShortArray>, grammar: String?): String {
-        val model = VoiceModel.load(context) ?: return ""
-        val recognizer = if (grammar != null) Recognizer(model, rate.toFloat(), grammar) else Recognizer(model, rate.toFloat())
-        val text = recognizer.use { r ->
-            samples.forEach { r.acceptWaveForm(it, it.size) }
-            JSONObject(r.finalResult).optString("text")
-        }
-        // A stray leading "а"/"и" (click remains, hesitation) would break "найди …" and searches.
-        return text.trim().split(' ').dropWhile { it in fillers }.joinToString(" ")
+        val text = VoiceModel.withModel(context) { model ->
+            val recognizer = if (grammar != null) Recognizer(model, rate.toFloat(), grammar) else Recognizer(model, rate.toFloat())
+            recognizer.use { r ->
+                samples.forEach { r.acceptWaveForm(it, it.size) }
+                JSONObject(r.finalResult).optString("text")
+            }
+        } ?: return ""
+        // A stray leading "а"/"и" (click remains, hesitation) would break "найди …" and searches;
+        // "[unk]" is what the grammar mode puts for anything it doesn't know.
+        return text.trim().split(' ').filter { it != UNKNOWN }.dropWhile { it in fillers }.joinToString(" ")
     }
 
     private val fillers = setOf("а", "и", "э", "ну")
+    private val UNKNOWN = "[unk]"
 
     companion object {
         const val NO_MODEL = "\u0000no-model"
@@ -336,16 +372,21 @@ object VoiceCommands {
         )
     }
 
-    /** Runs the command for a recognised phrase; returns what to show, or null if nothing matched. */
+    /**
+     * Runs the command for a recognised phrase; returns what to show: null only if no command
+     * matched, a failure message if one matched but couldn't run.
+     */
     fun run(context: Context, text: String): String? {
         searchQuery(text)?.let { query ->
-            return runCatching { search(context, query); "Поиск: $query" }.getOrNull()
+            return runCatching { search(context, query); "Поиск: $query" }
+                .onFailure { Log.w("Voice", "Search \"$query\" failed", it) }
+                .getOrElse { "Не удалось открыть поиск (SmartTube установлен?)" }
         }
         val phrase = text.trim()
         val command = commands.firstOrNull { phrase in it.phrases } ?: return null
         return runCatching { command.run(context) }
             .onFailure { Log.w("Voice", "Command \"$phrase\" failed", it) }
-            .getOrNull()
+            .getOrElse { "Не удалось выполнить: «$phrase»" }
     }
 }
 
@@ -375,6 +416,9 @@ class VoskRecognitionService : android.speech.RecognitionService() {
             listener.error(android.speech.SpeechRecognizer.ERROR_CLIENT)
             return
         }
+        // A request that was never cancelled must not keep recording behind the new one.
+        session?.cancel()
+        handler.removeCallbacks(timeout)
         callback = listener
         session = VoiceSession(this).also { it.start() }
         listener.readyForSpeech(android.os.Bundle())
