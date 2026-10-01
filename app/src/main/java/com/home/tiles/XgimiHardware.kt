@@ -6,36 +6,19 @@ import java.lang.reflect.Proxy
 
 /**
  * The projector's light-source brightness, as XGIMI's own settings drive it: level 0..10 through
- * com.xgimi.gmpf.api.DisplayManager in the com.xgimi.api platform library (reflection, because it
- * only exists on XGIMI firmware). Null/false when unavailable.
+ * com.xgimi.gmpf.api.DisplayManager in the com.xgimi.api platform library (see [Gmpf]; it only
+ * exists on XGIMI firmware). Null/false when unavailable.
  */
 object Lumens {
     const val MAX = 10
+    private const val DISPLAY = "DisplayManager"
 
-    private val manager: Pair<Class<*>, Any>? by lazy {
-        runCatching {
-            val cls = Class.forName("com.xgimi.gmpf.api.DisplayManager")
-            cls to cls.getMethod("getInstance").invoke(null)!!
-        }.onFailure { Log.w("Lumens", "DisplayManager unavailable", it) }.getOrNull()
-    }
+    fun level(): Int? = Gmpf.int(DISPLAY, "getDlpLumensLevel")
 
-    private fun call(name: String, vararg args: Any): Any? {
-        val (cls, dm) = manager ?: return null
-        return runCatching {
-            val method = cls.methods.first { it.name == name && it.parameterTypes.size == args.size }
-            method.invoke(dm, *args)
-        }.onFailure { Log.w("Lumens", "$name failed", it) }.getOrNull()
-    }
+    fun mode(): Int? = Gmpf.int(DISPLAY, "getDlpLumensMode")
 
-    fun level(): Int? = (call("getDlpLumensLevel") as? Number)?.toInt()
-
-    fun mode(): Int? = (call("getDlpLumensMode") as? Number)?.toInt()
-
-    fun setLevel(level: Int): Boolean {
-        if (manager == null) return false
-        call("setDlpLumensLevel", level.coerceIn(0, MAX).toByte())
-        return true
-    }
+    /** False if the firmware didn't take it (or isn't XGIMI's). */
+    fun setLevel(level: Int): Boolean = Gmpf.ok(DISPLAY, "setDlpLumensLevel", level.coerceIn(0, MAX))
 }
 
 /**
@@ -43,41 +26,24 @@ object Lumens {
  * mode of the current input; it numbers AI picture 10 where the settings app sends 16.
  */
 object PictureMode {
-    fun current(): Int? = runCatching {
-        val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
-        val tv = cls.getMethod("getInstance").invoke(null)
-        val source = cls.getMethod("getCurrentInputSource").invoke(tv) as Int
-        val mode = cls.getMethod("getPictureMode", Int::class.javaPrimitiveType).invoke(tv, source) as Int
-        if (mode == 10) 16 else mode
-    }.onFailure { Log.w("PictureMode", "Could not read picture mode", it) }.getOrNull()
+    fun current(): Int? {
+        val source = Gmpf.int("GmTvManager", "getCurrentInputSource") ?: return null
+        val mode = Gmpf.int("GmTvManager", "getPictureMode", source) ?: return null
+        return if (mode == 10) 16 else mode
+    }
 
     /**
      * Switches the mode the way XGIMI's settings app does internally (MstPictureManager, same
      * numbers). Needs [XgimiService.bind]; false if the service isn't bound yet.
      */
-    fun set(mode: Int): Boolean = runCatching {
-        val cls = Class.forName("com.xgimi.video.MstPictureManager")
-        val pm = cls.getMethod("getInstance").invoke(null)
-        cls.getMethod("setPictureMode", Int::class.javaPrimitiveType).invoke(pm, mode)
-    }.onFailure { Log.w("PictureMode", "setPictureMode failed", it) }.isSuccess
+    fun set(mode: Int): Boolean = Gmpf.ok(MST_PICTURE, "setPictureMode", mode)
 }
 
 /** XGIMI eco mode (dimmer, quieter), via com.xgimi.gmpf.api.SystemManager like the stock panel. */
 object Eco {
-    private val manager: Pair<Class<*>, Any>? by lazy {
-        runCatching {
-            val cls = Class.forName("com.xgimi.gmpf.api.SystemManager")
-            cls to cls.getMethod("getInstance").invoke(null)!!
-        }.onFailure { Log.w("Eco", "SystemManager unavailable", it) }.getOrNull()
-    }
+    fun enabled(): Boolean? = Gmpf.bool("SystemManager", "getEcoState")
 
-    fun enabled(): Boolean? = manager?.let { (cls, sm) ->
-        runCatching { cls.getMethod("getEcoState").invoke(sm) as Boolean }.getOrNull()
-    }
-
-    fun set(on: Boolean): Boolean = manager?.let { (cls, sm) ->
-        runCatching { cls.getMethod("setEcoState", Boolean::class.javaPrimitiveType).invoke(sm, on) }.isSuccess
-    } ?: false
+    fun set(on: Boolean): Boolean = Gmpf.ok("SystemManager", "setEcoState", on)
 }
 
 
@@ -91,30 +57,18 @@ object SoundOutput {
     const val ARC = 2
     const val BLUETOOTH = 3
 
-    private val manager: Pair<Class<*>, Any>? by lazy {
-        runCatching {
-            val cls = Class.forName("com.xgimi.gmpf.api.GmAudioManager")
-            cls to cls.getMethod("getInstance").invoke(null)!!
-        }.onFailure { Log.w("SoundOutput", "GmAudioManager unavailable", it) }.getOrNull()
-    }
+    private const val AUDIO = "GmAudioManager"
 
-    private fun call(name: String, vararg args: Any): Any? {
-        val (cls, am) = manager ?: return null
-        return runCatching {
-            cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(am, *args)
-        }.onFailure { Log.w("SoundOutput", "$name failed", it) }.getOrNull()
-    }
+    val available get() = Gmpf.available(AUDIO)
 
-    val available get() = manager != null
+    fun auto(): Boolean? = Gmpf.int(AUDIO, "getAudioDeviceSwitchMode")?.let { it == 0 }
 
-    fun auto(): Boolean? = (call("getAudioDeviceSwitchMode") as? Number)?.let { it.toInt() == 0 }
+    fun output(): Int? = Gmpf.int(AUDIO, "getAudioOutput")
 
-    fun output(): Int? = (call("getAudioOutput") as? Number)?.toInt()
-
-    fun connected(device: Int): Boolean = call("isAudioDeviceConnected", device.toByte()) == true
+    fun connected(device: Int): Boolean = Gmpf.bool(AUDIO, "isAudioDeviceConnected", device) == true
 
     fun setAuto(on: Boolean) {
-        call("setAudioDeviceSwitchMode", (if (on) 0 else 1).toByte())
+        Gmpf.call(AUDIO, "setAudioDeviceSwitchMode", if (on) 0 else 1)
     }
 
     /** Binds XGIMI's service, which [setOutput] needs; see [XgimiService.bind]. */
@@ -126,14 +80,14 @@ object SoundOutput {
      * GmAudioManager.setAudioOutput only switches the amplifier, so a Bluetooth speaker kept playing.
      */
     fun setOutput(device: Int) {
-        val routed = runCatching {
-            val cls = Class.forName("com.xgimi.api.XgimiAudioManager")
-            val xam = cls.getMethod("getInstance").invoke(null)
-            cls.getMethod("setAudioDeviceOn", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).invoke(xam, device, 0)
-        }.onFailure { Log.w("SoundOutput", "setAudioDeviceOn failed", it) }.isSuccess
-        if (!routed) call("setAudioOutput", device.toByte())
+        if (!Gmpf.ok("com.xgimi.api.XgimiAudioManager", "setAudioDeviceOn", device, 0)) {
+            Gmpf.call(AUDIO, "setAudioOutput", device)
+        }
     }
 }
+
+/** The picture parameters live in this manager, which needs [XgimiService.bind]. */
+private const val MST_PICTURE = "com.xgimi.video.MstPictureManager"
 
 /**
  * Parts of com.xgimi.api (XgimiAudioManager, MstPictureManager) talk to com.xgimi.xgimiservice,
@@ -181,79 +135,45 @@ object PictureAdjust {
     const val SHARPNESS = 3
     const val HUE = 4
 
-    private fun manager(): Pair<Class<*>, Any>? = runCatching {
-        val cls = Class.forName("com.xgimi.video.MstPictureManager")
-        cls to cls.getMethod("getInstance").invoke(null)!!
-    }.onFailure { Log.w("PictureAdjust", "MstPictureManager unavailable", it) }.getOrNull()
+    private const val TV = "GmTvManager"
 
-    fun get(item: Int): Int? = manager()?.let { (cls, pm) ->
-        runCatching { cls.getMethod("getPictureItem", Int::class.javaPrimitiveType).invoke(pm, item) as Int }.getOrNull()
-    }
+    fun get(item: Int): Int? = Gmpf.int(MST_PICTURE, "getPictureItem", item)
 
-    fun set(item: Int, value: Int) {
-        manager()?.let { (cls, pm) ->
-            runCatching {
-                cls.getMethod("setPictureItem", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).invoke(pm, item, value)
-            }.onFailure { Log.w("PictureAdjust", "setPictureItem failed", it) }
-        }
-    }
-
-    private fun mst(name: String, vararg args: Any): Any? = manager()?.let { (cls, pm) ->
-        runCatching { cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(pm, *args) }
-            .onFailure { Log.w("PictureAdjust", "$name failed", it) }.getOrNull()
-    }
+    fun set(item: Int, value: Int): Boolean = Gmpf.ok(MST_PICTURE, "setPictureItem", item, value)
 
     /** GmTvManager calls that take the input first, like XGIMI's picture page makes them. */
-    private fun tv(name: String, vararg args: Any): Any? = runCatching {
-        val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
-        val tv = cls.getMethod("getInstance").invoke(null)
-        val source = cls.getMethod("getCurrentInputSource").invoke(tv) as Int
-        val all = arrayOf<Any>(source, *args)
-        cls.methods.first { it.name == name && it.parameterTypes.size == all.size }.invoke(tv, *all)
-    }.onFailure { Log.w("PictureAdjust", "$name failed", it) }.getOrNull()
+    private fun tv(name: String, vararg args: Any?): Result<Any?> {
+        val source = Gmpf.int(TV, "getCurrentInputSource") ?: return Result.failure(IllegalStateException("no input source"))
+        return Gmpf.call(TV, name, source, *args)
+    }
+
+    private fun tvInt(name: String): Int? = (tv(name).getOrNull() as? Number)?.toInt()
 
     /** Noise reduction: 0 off, 1 low, 2 medium, 3 high, 4 auto. */
-    fun noiseReduction(): Int? = mst("getNoiseReduction") as? Int
-    fun setNoiseReduction(level: Int) { mst("setNoiseReduction", level) }
+    fun noiseReduction(): Int? = Gmpf.int(MST_PICTURE, "getNoiseReduction")
+    fun setNoiseReduction(level: Int) { Gmpf.call(MST_PICTURE, "setNoiseReduction", level) }
 
     /** Motion compensation (MEMC): 0 off, 1 low, 2 medium, 3 high. */
-    fun motion(): Int? = mst("getMfcLevel") as? Int
-    fun setMotion(level: Int) { mst("setMfcLevel", level) }
+    fun motion(): Int? = Gmpf.int(MST_PICTURE, "getMfcLevel")
+    fun setMotion(level: Int) { Gmpf.call(MST_PICTURE, "setMfcLevel", level) }
 
     /** Gamma index: 0 = 1.8 ... 4 = 2.2 ... 8 = 2.6. */
-    fun gamma(): Int? = tv("getTvGammaLevel") as? Int
+    fun gamma(): Int? = tvInt("getTvGammaLevel")
     fun setGamma(level: Int) { tv("setTvGammaLevel", level) }
 
-    fun dynamicContrast(): Boolean? = tv("getTvDynamicContrastEnable") as? Boolean
+    fun dynamicContrast(): Boolean? = tv("getTvDynamicContrastEnable").getOrNull() as? Boolean
     fun setDynamicContrast(on: Boolean) { tv("setTvDynamicContrastEnable", on) }
 
     /** Local contrast: 0 off, 1 low, 2 medium, 3 high. */
-    fun localContrast(): Int? = tv("getUcdLevel") as? Int
+    fun localContrast(): Int? = tvInt("getUcdLevel")
     fun setLocalContrast(level: Int) { tv("setUcdLevel", level) }
 
-    fun hdr(): Boolean? = runCatching {
-        val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
-        cls.getMethod("getHdrEnable").invoke(cls.getMethod("getInstance").invoke(null)) as Boolean
-    }.getOrNull()
-
-    fun setHdr(on: Boolean) {
-        runCatching {
-            val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
-            cls.getMethod("setHdrEnable", Boolean::class.javaPrimitiveType).invoke(cls.getMethod("getInstance").invoke(null), on)
-        }.onFailure { Log.w("PictureAdjust", "setHdrEnable failed", it) }
-    }
+    fun hdr(): Boolean? = Gmpf.bool(TV, "getHdrEnable")
+    fun setHdr(on: Boolean) { Gmpf.call(TV, "setHdrEnable", on) }
 
     /** 0 cool, 1 natural, 2 warm (MstPictureManager.COLOR_TEMP_*). */
-    fun colorTemp(): Int? = manager()?.let { (cls, pm) ->
-        runCatching { cls.getMethod("getColorTemp").invoke(pm) as Int }.getOrNull()
-    }
-
-    fun setColorTemp(value: Int) {
-        manager()?.let { (cls, pm) ->
-            runCatching { cls.getMethod("setColorTemp", Int::class.javaPrimitiveType).invoke(pm, value) }
-                .onFailure { Log.w("PictureAdjust", "setColorTemp failed", it) }
-        }
-    }
+    fun colorTemp(): Int? = Gmpf.int(MST_PICTURE, "getColorTemp")
+    fun setColorTemp(value: Int) { Gmpf.call(MST_PICTURE, "setColorTemp", value) }
 }
 
 
@@ -271,13 +191,16 @@ object XgimiBluetooth {
         val remote get() = type == TYPE_REMOTE
     }
 
-    private var manager: Pair<Class<*>, Any>? = null
+    @Volatile
+    private var manager: Any? = null
 
-    private fun manager(context: Context): Pair<Class<*>, Any>? {
+    @Synchronized
+    private fun manager(context: Context): Any? {
         manager?.let { return it }
         return runCatching {
-            val cls = Class.forName("com.xgimi.bluetooth.XDBluetoothManager")
-            (cls to cls.getConstructor(Context::class.java).newInstance(context.applicationContext)!!).also { manager = it }
+            Class.forName("com.xgimi.bluetooth.XDBluetoothManager")
+                .getConstructor(Context::class.java).newInstance(context.applicationContext)!!
+                .also { manager = it }
         }.onFailure { Log.w("XgimiBluetooth", "XDBluetoothManager unavailable", it) }.getOrNull()
     }
 
@@ -296,10 +219,10 @@ object XgimiBluetooth {
 
     /** Paired devices with their connection state. Blocking binder call. */
     fun devices(context: Context): List<Device> {
-        val (cls, m) = manager(context) ?: return emptyList()
+        val m = manager(context) ?: return emptyList()
         return runCatching {
             @Suppress("UNCHECKED_CAST")
-            val items = cls.getMethod("getBondDevices").invoke(m) as? List<Any> ?: emptyList()
+            val items = Gmpf.invoke(m, "getBondDevices").getOrThrow() as? List<Any> ?: emptyList()
             items.map { item ->
                 val c = item.javaClass
                 fun str(f: String) = runCatching { c.getField(f).get(item) as? String }.getOrNull()
@@ -316,10 +239,8 @@ object XgimiBluetooth {
     fun disconnect(context: Context, device: Device): Boolean = call(context, "disConnectDevice", device)
 
     private fun call(context: Context, name: String, device: Device): Boolean {
-        val (cls, m) = manager(context) ?: return false
-        return runCatching {
-            cls.methods.first { it.name == name && it.parameterTypes.size == 1 }.invoke(m, device.item) as? Boolean ?: false
-        }.onFailure { Log.w("XgimiBluetooth", "$name failed", it) }.getOrDefault(false)
+        val m = manager(context) ?: return false
+        return Gmpf.invoke(m, name, device.item).getOrNull() as? Boolean ?: false
     }
 }
 
@@ -335,40 +256,22 @@ object GameMode {
 
     class State(val mode: Int)
 
-    private val manager: Pair<Class<*>, Any>? by lazy {
-        runCatching {
-            val cls = Class.forName("com.xgimi.gmpf.api.DisplayManager")
-            cls to cls.getMethod("getInstance").invoke(null)!!
-        }.getOrNull()
-    }
-
-    private fun call(name: String, vararg args: Any): Any? {
-        val (cls, dm) = manager ?: return null
-        return runCatching { cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(dm, *args) }
-            .onFailure { Log.w("GameMode", "$name failed", it) }.getOrNull()
-    }
+    private const val DISPLAY = "DisplayManager"
 
     fun read(): State? = runCatching {
         val propClass = Class.forName("com.xgimi.gmpf.rp.GameModeProp")
         val prop = propClass.getConstructor().newInstance()
-        call("getGameModeProp", prop)
+        Gmpf.call(DISPLAY, "getGameModeProp", prop).getOrThrow()
         val type = propClass.getField("type").getInt(prop)
         val state = propClass.getField("state").getInt(prop)
         State(if (type == 1) AUTO else if (state == 0) ON else OFF)
     }.onFailure { Log.w("GameMode", "read failed", it) }.getOrNull()
 
-    fun setMode(mode: Int) {
-        when (mode) {
-            AUTO -> call("setGameModeType", 1)
-            ON -> {
-                call("setGameModeType", 0)
-                call("setGameModeState", 0)
-            }
-            else -> {
-                call("setGameModeType", 0)
-                call("setGameModeState", 1)
-            }
-        }
+    /** False if any step was refused. */
+    fun setMode(mode: Int): Boolean = when (mode) {
+        AUTO -> Gmpf.ok(DISPLAY, "setGameModeType", 1)
+        ON -> Gmpf.ok(DISPLAY, "setGameModeType", 0) && Gmpf.ok(DISPLAY, "setGameModeState", 0)
+        else -> Gmpf.ok(DISPLAY, "setGameModeType", 0) && Gmpf.ok(DISPLAY, "setGameModeState", 1)
     }
 
     /**
@@ -378,9 +281,10 @@ object GameMode {
      */
     fun level(context: Context): Int = prefs(context).getInt("level", 0)
 
-    fun setLevel(context: Context, level: Int) {
-        call("setGameModeOption", if (level == 1) TOP_SPEED else STANDARD)
-        prefs(context).edit().putInt("level", level).apply()
+    fun setLevel(context: Context, level: Int): Boolean {
+        val ok = Gmpf.ok(DISPLAY, "setGameModeOption", if (level == 1) TOP_SPEED else STANDARD)
+        if (ok) prefs(context).edit().putInt("level", level).apply()
+        return ok
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences("gameMode", Context.MODE_PRIVATE)
@@ -394,24 +298,14 @@ object GameMode {
  * device on HDMI 1 is connected (GmTvManager), used by Beam's own "start on HDMI" option.
  */
 object Hdmi {
-    private fun system(name: String, vararg args: Any): Any? = runCatching {
-        val cls = Class.forName("com.xgimi.gmpf.api.SystemManager")
-        val sm = cls.getMethod("getInstance").invoke(null)
-        cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(sm, *args)
-    }.onFailure { Log.w("Hdmi", "$name failed", it) }.getOrNull()
-
-    fun autoSwitch(): Boolean? = system("getHdmiAutoSwitch") as? Boolean
+    fun autoSwitch(): Boolean? = Gmpf.bool("SystemManager", "getHdmiAutoSwitch")
 
     fun setAutoSwitch(on: Boolean) {
-        system("setHdmiAutoSwitch", on)
+        Gmpf.call("SystemManager", "setHdmiAutoSwitch", on)
     }
 
     /** True when something is plugged into HDMI 1 (GmTvManager.getHdmiConnectStatus). */
-    fun connected(): Boolean = runCatching {
-        val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
-        val tv = cls.getMethod("getInstance").invoke(null)
-        cls.getMethod("getHdmiConnectStatus", Byte::class.javaPrimitiveType).invoke(tv, 1.toByte()) as Boolean
-    }.getOrDefault(false)
+    fun connected(): Boolean = Gmpf.bool("GmTvManager", "getHdmiConnectStatus", 1) == true
 
     /**
      * XGIMI's own "boot source" (开机源): the firmware goes straight to HDMI after power-on, before
@@ -465,11 +359,7 @@ object XgimiCommon {
 
     private fun invoke(context: Context, name: String, vararg args: Any): Result<Any?> {
         XgimiService.bind(context)
-        return runCatching {
-            val cls = Class.forName("com.xgimi.api.XgimiCommonManager")
-            val manager = cls.getMethod("getInstance").invoke(null)
-            cls.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(manager, *args)
-        }.onFailure { Log.w("XgimiCommon", "$name failed: ${it.cause ?: it}") }
+        return Gmpf.call("com.xgimi.api.XgimiCommonManager", name, *args)
     }
 }
 
@@ -486,32 +376,20 @@ object Cec {
         if (!on) setWakeUp(context, false)
     }
 
-    fun wakeUp(): Boolean? = tv("getCecWakeUpState") as? Boolean
+    fun wakeUp(): Boolean? = Gmpf.bool("GmTvManager", "getCecWakeUpState")
 
     fun setWakeUp(context: Context, on: Boolean) {
-        tv("setCecWakeUp", on)
+        Gmpf.call("GmTvManager", "setCecWakeUp", on)
         XgimiCommon.call(context, "setHdmiCecAutoDeviceOffEnabled", on)
         XgimiCommon.call(context, "setHdmiCecAutoWakeupEnabled", on)
         if (on) XgimiCommon.call(context, "setHdmiCecControlEnabled", true)
     }
-
-    private fun tv(name: String, vararg args: Any): Any? = runCatching {
-        val c = Class.forName("com.xgimi.gmpf.api.GmTvManager")
-        val m = c.getMethod("getInstance").invoke(null)
-        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
-    }.onFailure { Log.w("Cec", "$name failed", it) }.getOrNull()
 }
 
 /** The chime at power-on (SystemManager.enablePowerOnMusic). */
 object BootMusic {
-    private fun call(name: String, vararg args: Any): Any? = runCatching {
-        val c = Class.forName("com.xgimi.gmpf.api.SystemManager")
-        val m = c.getMethod("getInstance").invoke(null)
-        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
-    }.onFailure { Log.w("BootMusic", "$name failed", it) }.getOrNull()
-
-    fun enabled(): Boolean? = call("isPowerOnMusicEnabled") as? Boolean
-    fun set(on: Boolean) { call("enablePowerOnMusic", on) }
+    fun enabled(): Boolean? = Gmpf.bool("SystemManager", "isPowerOnMusicEnabled")
+    fun set(on: Boolean) { Gmpf.call("SystemManager", "enablePowerOnMusic", on) }
 }
 
 
@@ -522,24 +400,22 @@ object BootMusic {
  * (DisplayManager.setHumanDetectOnOff).
  */
 object Sensors {
-    private fun call(cls: String, name: String, vararg args: Any): Any? = runCatching {
-        val c = Class.forName("com.xgimi.gmpf.api.$cls")
-        val m = c.getMethod("getInstance").invoke(null)
-        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
-    }.onFailure { Log.w("Sensors", "$cls.$name failed", it) }.getOrNull()
+    private const val MOTION = "MotionDetectionManager"
+    private const val DISPLAY = "DisplayManager"
+    private const val FACTORY = "GmFactoryManager"
 
-    fun realtimeKeystone(): Boolean? = call("MotionDetectionManager", "getAccTriggerAK") as? Boolean
-    fun setRealtimeKeystone(on: Boolean) { call("MotionDetectionManager", "setAccTriggerAK", on) }
+    fun realtimeKeystone(): Boolean? = Gmpf.bool(MOTION, "getAccTriggerAK")
+    fun setRealtimeKeystone(on: Boolean) { Gmpf.call(MOTION, "setAccTriggerAK", on) }
 
-    fun motionFocus(): Boolean? = call("MotionDetectionManager", "getAngTriggerAF") as? Boolean
-    fun setMotionFocus(on: Boolean) { call("MotionDetectionManager", "setAngTriggerAF", on) }
+    fun motionFocus(): Boolean? = Gmpf.bool(MOTION, "getAngTriggerAF")
+    fun setMotionFocus(on: Boolean) { Gmpf.call(MOTION, "setAngTriggerAF", on) }
 
-    fun eyeProtection(): Boolean? = call("DisplayManager", "getHumanDetectOnOff") as? Boolean
-    fun setEyeProtection(on: Boolean) { call("DisplayManager", "setHumanDetectOnOff", on) }
+    fun eyeProtection(): Boolean? = Gmpf.bool(DISPLAY, "getHumanDetectOnOff")
+    fun setEyeProtection(on: Boolean) { Gmpf.call(DISPLAY, "setHumanDetectOnOff", on) }
 
     /** Auto keystone right after power-on ("开机自动校正"). */
-    fun bootKeystone(): Boolean? = call("GmFactoryManager", "getPowerOnAKFlag") as? Boolean
-    fun setBootKeystone(on: Boolean) { call("GmFactoryManager", "savePowerOnAKFlag", on) }
+    fun bootKeystone(): Boolean? = Gmpf.bool(FACTORY, "getPowerOnAKFlag")
+    fun setBootKeystone(on: Boolean) { Gmpf.call(FACTORY, "savePowerOnAKFlag", on) }
 }
 
 /**
@@ -571,29 +447,17 @@ object ScreensaverTimeout {
 object SoundMode {
     val modes = listOf(3 to "AI", 1 to "Кино", 2 to "Музыка", 12 to "Спорт", 4 to "Караоке")
 
-    private fun call(name: String, vararg args: Any): Any? = runCatching {
-        val c = Class.forName("com.xgimi.gmpf.api.GmAudioManager")
-        val m = c.getMethod("getInstance").invoke(null)
-        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
-    }.onFailure { Log.w("SoundMode", "$name failed", it) }.getOrNull()
-
-    fun current(): Int? = (call("getSoundeffect") as? Number)?.toInt()
+    fun current(): Int? = Gmpf.int("GmAudioManager", "getSoundeffect")
 
     fun set(mode: Int) {
-        call("setSoundeffect", mode.toByte())
+        Gmpf.call("GmAudioManager", "setSoundeffect", mode)
     }
 }
 
 /** eARC to an HDMI 2.1 sound system: XGIMI's "Auto" is on, "Off" is off (GmTvManager). */
 object Earc {
-    private fun call(name: String, vararg args: Any): Any? = runCatching {
-        val c = Class.forName("com.xgimi.gmpf.api.GmTvManager")
-        val m = c.getMethod("getInstance").invoke(null)
-        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
-    }.onFailure { Log.w("Earc", "$name failed", it) }.getOrNull()
-
-    fun enabled(): Boolean? = call("getEARCEnableState") as? Boolean
-    fun set(on: Boolean) { call("setEARCEnable", on) }
+    fun enabled(): Boolean? = Gmpf.bool("GmTvManager", "getEARCEnableState")
+    fun set(on: Boolean) { Gmpf.call("GmTvManager", "setEARCEnable", on) }
 }
 
 /**
@@ -646,24 +510,21 @@ object Projection {
     const val CEILING = 1
     private const val REAR = 2
 
-    private fun call(cls: String, name: String, vararg args: Any): Any? = runCatching {
-        val c = Class.forName("com.xgimi.gmpf.api.$cls")
-        val m = c.getMethod("getInstance").invoke(null)
-        c.methods.first { it.name == name && it.parameterTypes.size == args.size }.invoke(m, *args)
-    }.onFailure { Log.w("Projection", "$cls.$name failed", it) }.getOrNull()
+    private const val DISPLAY = "DisplayManager"
+    private const val MOTION = "MotionDetectionManager"
 
-    private fun putMode(): Int? = (call("DisplayManager", "getProjectorPutMode") as? Number)?.toInt()
-    private fun setPutMode(mode: Int) { call("DisplayManager", "setProjectorPutMode", mode.toByte()) }
+    private fun putMode(): Int? = Gmpf.int(DISPLAY, "getProjectorPutMode")
+    private fun setPutMode(mode: Int) { Gmpf.call(DISPLAY, "setProjectorPutMode", mode) }
 
     /** [AUTO], [TABLE] or [CEILING]; null when unavailable. */
     fun mount(): Int? {
-        val auto = call("MotionDetectionManager", "getAutoReverse") as? Boolean ?: return null
+        val auto = Gmpf.bool(MOTION, "getAutoReverse") ?: return null
         val mode = putMode() ?: return null
         return if (auto) AUTO else mode and 1
     }
 
     fun setMount(mount: Int) {
-        call("MotionDetectionManager", "setAutoReverse", mount == AUTO)
+        Gmpf.call(MOTION, "setAutoReverse", mount == AUTO)
         if (mount == AUTO) return
         val rear = (putMode() ?: 0) and REAR
         setPutMode(mount or rear)
@@ -678,7 +539,7 @@ object Projection {
 
     /** Nudges the picture's tilt half a degree clockwise (true) or back. */
     fun tilt(clockwise: Boolean) {
-        call("SystemManager", "setScreenRotation", if (clockwise) 5 else 6, 0.5f)
+        Gmpf.call("SystemManager", "setScreenRotation", if (clockwise) 5 else 6, 0.5f)
     }
 }
 
@@ -691,40 +552,40 @@ object Keystone {
     const val WIDTH = 1920
     const val HEIGHT = 1080
 
-    private val manager: Pair<Class<*>, Any>? by lazy {
-        runCatching {
-            val c = Class.forName("com.xgimi.gmpf.api.DisplayManager")
-            c to c.getMethod("getInstance").invoke(null)!!
-        }.getOrNull()
-    }
+    private const val DISPLAY = "DisplayManager"
 
     private val coordsClass by lazy { runCatching { Class.forName("com.xgimi.gmpf.rp.KeyStoneFullCoordinates") }.getOrNull() }
 
+    /** The firmware's current correction, filled in; null if unavailable. */
+    private fun readFull(): Any? {
+        val cls = coordsClass ?: return null
+        val full = cls.getConstructor().newInstance()
+        return if (Gmpf.ok(DISPLAY, "getCorrectKeystone", full)) full else null
+    }
+
+    /** The four corners TL, TR, BL, BR of the 9x9 grid (see above) in [full]. */
+    @Suppress("UNCHECKED_CAST")
+    private fun cornerPoints(full: Any): List<Any> {
+        val grid = coordsClass!!.getField("coordinates").get(full) as Array<Array<Any>>
+        return listOf(grid[0][0], grid[0][1], grid[1][0], grid[1][1])
+    }
+
     /** x0,y0 .. x3,y3 for TL, TR, BL, BR; null if unavailable. */
     fun corners(): List<Int>? = runCatching {
-        val (cls, dm) = manager ?: return null
-        val full = coordsClass!!.getConstructor().newInstance()
-        cls.getMethod("getCorrectKeystone", coordsClass).invoke(dm, full)
-        @Suppress("UNCHECKED_CAST")
-        val grid = coordsClass!!.getField("coordinates").get(full) as Array<Array<Any>>
-        listOf(grid[0][0], grid[0][1], grid[1][0], grid[1][1]).flatMap { p ->
+        val full = readFull() ?: return null
+        cornerPoints(full).flatMap { p ->
             listOf((p.javaClass.getField("x").get(p) as Short).toInt(), (p.javaClass.getField("y").get(p) as Short).toInt())
         }
     }.onFailure { Log.w("Keystone", "read failed", it) }.getOrNull()
 
     fun setCorners(values: List<Int>): Boolean = runCatching {
         require(values.size == 8)
-        val (cls, dm) = manager ?: return false
-        val full = coordsClass!!.getConstructor().newInstance()
-        cls.getMethod("getCorrectKeystone", coordsClass).invoke(dm, full)
-        @Suppress("UNCHECKED_CAST")
-        val grid = coordsClass!!.getField("coordinates").get(full) as Array<Array<Any>>
-        listOf(grid[0][0], grid[0][1], grid[1][0], grid[1][1]).forEachIndexed { i, p ->
+        val full = readFull() ?: return false
+        cornerPoints(full).forEachIndexed { i, p ->
             p.javaClass.getField("x").set(p, values[i * 2].coerceIn(0, WIDTH - 1).toShort())
             p.javaClass.getField("y").set(p, values[i * 2 + 1].coerceIn(0, HEIGHT - 1).toShort())
         }
-        cls.getMethod("correctKeystone", coordsClass).invoke(dm, full)
-        true
+        Gmpf.ok(DISPLAY, "correctKeystone", full)
     }.onFailure { Log.w("Keystone", "write failed", it) }.getOrDefault(false)
 
     /** XGIMI's digital zoom range on this model (ZoomStepRange.zoomOutDigtalMaxNum). */
@@ -737,15 +598,7 @@ object Keystone {
         context.getSharedPreferences("keystone", Context.MODE_PRIVATE).edit().putInt("zoom", step).apply()
     }
 
-    fun zoom(): Int? = runCatching {
-        val (cls, dm) = manager ?: return null
-        (cls.getMethod("getCurrentZoomStep", Int::class.javaPrimitiveType).invoke(dm, 0) as Number).toInt()
-    }.getOrNull()
+    fun zoom(): Int? = Gmpf.int(DISPLAY, "getCurrentZoomStep", 0)
 
-    fun setZoom(step: Int): Boolean = runCatching {
-        val (cls, dm) = manager ?: return false
-        cls.getMethod("setDigitalZoomStep", Int::class.javaPrimitiveType).invoke(dm, step)
-        true
-    }.onFailure { Log.w("Keystone", "zoom failed", it) }.getOrDefault(false)
+    fun setZoom(step: Int): Boolean = Gmpf.ok(DISPLAY, "setDigitalZoomStep", step.coerceIn(0, MAX_ZOOM))
 }
-
