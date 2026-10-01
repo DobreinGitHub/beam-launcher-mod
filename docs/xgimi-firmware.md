@@ -189,7 +189,7 @@ val manager = cls.getConstructor(Context::class.java).newInstance(appContext)
 |---|---|
 | Список входов | `TvInputManager.tvInputList`, тип `TYPE_HDMI`. Устройство, представившееся по CEC, появляется как дочерний вход порта (`parentId`) |
 | Открыть вход | `Intent("com.xgimi.action.hdmiPlayer", TvContract.buildChannelUriForPassthroughInput(id))`, пакет `com.xgimi.xhplayer` |
-| Что-то подключено к HDMI 1 | `GmTvManager.getHdmiConnectStatus(byte 1)` |
+| Что-то подключено к порту HDMI | `GmTvManager.getHdmiConnectStatus(byte порт)`, порты с 1 в порядке списка входов (Beam опрашивает все его порты; `--ez hdmi_get true` печатает `connectedPorts`) |
 | Переключаться на HDMI при подключении | `SystemManager.getHdmiAutoSwitch()` / `setHdmiAutoSwitch(boolean)` |
 | Загрузка сразу в HDMI | свойства `persist.sys.hdmi.bootsource` и `persist.sys.bootanim.alwayswait` = `1`/`0`, оба через `XgimiCommonManager.setSystemProperties` |
 | Управление HDMI-устройствами (нужно для ARC) | `XgimiCommonManager.isHdmiCecControlEnabled()` / `setHdmiCecControlEnabled(boolean)` |

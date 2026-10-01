@@ -395,8 +395,14 @@ object Hdmi {
         Gmpf.call("SystemManager", "setHdmiAutoSwitch", on)
     }
 
-    /** True when something is plugged into HDMI 1 (GmTvManager.getHdmiConnectStatus). */
-    fun connected(): Boolean = Gmpf.bool("GmTvManager", "getHdmiConnectStatus", 1) == true
+    /**
+     * True when something is plugged into HDMI [port] (1-based, GmTvManager.getHdmiConnectStatus).
+     * The firmware numbers the ports in the order [Xgimi.hdmiInputs] lists them.
+     */
+    fun connected(port: Int): Boolean = Gmpf.bool("GmTvManager", "getHdmiConnectStatus", port) == true
+
+    /** The ports (1-based) of the first [ports] that have something plugged in. */
+    fun connectedPorts(ports: Int): List<Int> = (1..ports).filter(::connected)
 
     /**
      * XGIMI's own "boot source" (开机源): the firmware goes straight to HDMI after power-on, before
