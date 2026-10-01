@@ -1,5 +1,6 @@
 package com.home.tiles
 
+import android.content.Context
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -141,6 +142,16 @@ fun PanelScreen(onDismiss: () -> Unit) {
         onDispose { PanelState.open = false }
     }
     LaunchedEffect(Unit) { Sounds.popup() }
+    // Kept here, not in MainPage, so its tiles don't vanish and come back each time a sub-page is
+    // left; re-read while the main page is showing, and so after a sub-page changed something.
+    val context = LocalContext.current
+    var main by remember { mutableStateOf<MainPageState?>(null) }
+    LaunchedEffect(page) {
+        while (page == null) {
+            main = withContext(Dispatchers.IO) { MainPageState.read(context) }
+            delay(MAIN_REFRESH_MS)
+        }
+    }
     LaunchedEffect(page) {
         val target = when {
             page != null -> pageFirst
@@ -200,7 +211,7 @@ fun PanelScreen(onDismiss: () -> Unit) {
             ) {
                 val current = page
                 if (current == null) {
-                    MainPage(firstTile, tileRequesters, onDismiss) { lastPage = null; page = it }
+                    MainPage(main, { main = main?.copy(eco = it) }, firstTile, tileRequesters, onDismiss) { lastPage = null; page = it }
                 } else {
                     SubPage(current, pageFirst, onDismiss, ::back)
                 }
@@ -210,12 +221,28 @@ fun PanelScreen(onDismiss: () -> Unit) {
 }
 
 /** What the main page reads from the firmware; see [MainPage]. */
-private class MainPageState(
+private data class MainPageState(
     val inputs: List<Xgimi.Input>,
     val eco: Boolean?,
     val soundOutput: String?,
     val pictureMode: String?,
-)
+    /** Name of the connected speaker/headphones, shown under the Bluetooth tile. */
+    val bluetoothAudio: String?,
+) {
+    companion object {
+        /** Blocking: binder calls into XGIMI's services, so off the main thread. */
+        fun read(context: Context) = MainPageState(
+            inputs = Xgimi.hdmiInputs(context),
+            eco = Eco.enabled(),
+            soundOutput = SoundOutput.output()?.let(::soundOutputName),
+            pictureMode = PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first },
+            bluetoothAudio = XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name,
+        )
+    }
+}
+
+/** How often the main page re-reads the firmware while it is open (an HDMI plug, a speaker connecting). */
+private const val MAIN_REFRESH_MS = 5_000L
 
 private class QuickItem(
     val icon: ImageVector,
@@ -232,6 +259,8 @@ private class QuickItem(
 
 @Composable
 private fun ColumnScope.MainPage(
+    state: MainPageState?,
+    onEcoChanged: (Boolean?) -> Unit,
     firstTile: FocusRequester,
     tileRequesters: Map<PanelPage, FocusRequester>,
     onDismiss: () -> Unit,
@@ -239,27 +268,13 @@ private fun ColumnScope.MainPage(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Read off the main thread: these are binder calls into XGIMI's services, and the panel opens
-    // over a playing video. The tiles that depend on them appear once they are in.
-    val hardware by produceState<MainPageState?>(null) {
-        value = withContext(Dispatchers.IO) {
-            MainPageState(
-                inputs = Xgimi.hdmiInputs(context),
-                eco = Eco.enabled(),
-                soundOutput = SoundOutput.output()?.let(::soundOutputName),
-                pictureMode = PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first },
-            )
-        }
-    }
-    val inputs = hardware?.inputs.orEmpty()
-    var ecoChanged by remember { mutableStateOf<Boolean?>(null) }
-    val eco = ecoChanged ?: hardware?.eco
-    val soundOutput = hardware?.soundOutput
-    // Name of the connected speaker/headphones, shown under the Bluetooth tile.
-    val bluetoothAudio by produceState<String?>(null) {
-        value = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name }
-    }
-    val pictureMode = hardware?.pictureMode
+    // What the firmware reports comes from PanelScreen (read off the main thread, refreshed while
+    // this page is open); the tiles that depend on it appear once it is in.
+    val inputs = state?.inputs.orEmpty()
+    val eco = state?.eco
+    val soundOutput = state?.soundOutput
+    val bluetoothAudio = state?.bluetoothAudio
+    val pictureMode = state?.pictureMode
     // Projector actions close the panel first so it doesn't cover the picture (keystone photographs it).
     fun projector(action: () -> Unit): () -> Unit = {
         onDismiss()
@@ -282,7 +297,7 @@ private fun ColumnScope.MainPage(
         eco?.let { on ->
             // Stays open: the change is visible behind the panel.
             add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = {
-                scope.launch(Dispatchers.IO) { if (Eco.set(!on)) ecoChanged = Eco.enabled() }
+                scope.launch(Dispatchers.IO) { if (Eco.set(!on)) onEcoChanged(Eco.enabled()) }
             }))
         }
         add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))

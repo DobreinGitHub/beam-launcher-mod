@@ -90,7 +90,7 @@ internal fun KeystonePage(onScreen: () -> Unit) {
     T("Сдвиг работает, когда картинка уменьшена", 14.sp, color = PanelDim)
     Section("Сброс")
     ListRow("Автотрапеция") {
-        Keystone.saveZoom(context, 0)
+        // Xgimi.autoKeystone resets the size and the saved note of it.
         zoom = 0
         Xgimi.autoKeystone(context)
     }

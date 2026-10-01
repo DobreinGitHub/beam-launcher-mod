@@ -25,6 +25,10 @@ object Xgimi {
      * starts the ToF measurement on this firmware). Falls back to the SystemUI command.
      */
     fun autoKeystone(context: Context) {
+        // It starts from a full-size picture, so put the size back (and Beam's note of it) rather
+        // than assume the measurement does: the size setting would otherwise show 100% over a
+        // shrunk picture.
+        if (Keystone.setZoom(0)) Keystone.saveZoom(context, 0)
         val started = runCatching {
             val cls = Class.forName("com.xgimi.gmpf.api.ProjectorFocusManager")
             val pfm = cls.getMethod("getInstance").invoke(null)
