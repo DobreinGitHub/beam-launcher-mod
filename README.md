@@ -112,6 +112,12 @@ adb exec-in "content write --uri content://com.home.tiles.voicemodel/model.zip" 
 adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --ez voice_install true
 ```
 
+Beam отвечает и на стандартные запросы распознавания речи от других приложений
+(`RECOGNIZE_SPEECH`, `RecognitionService`). Поэтому любое установленное приложение может получить
+расшифровку того, что вы говорите в микрофон пульта, пока вы держите голосовую кнопку, даже если у
+самого приложения нет права на микрофон: так устроен этот механизм Android. Без зажатой кнопки
+запись не идёт. Если это неприемлемо, не назначайте Beam распознавателем и не ставьте модель.
+
 Проверка: `--ez voice_status true`. Чтобы кнопки микрофона в других приложениях (например, SmartTube)
 тоже использовали Beam, назначьте его системным распознавателем (по желанию):
 `adb shell settings put secure voice_recognition_service com.home.tiles/com.home.tiles.VoskRecognitionService`.

@@ -65,4 +65,44 @@ class VoiceTest {
         assertFalse(File(target.parentFile, "evil.txt").exists())
         assertFalse(File(target.parentFile.parentFile, "evil.txt").exists())
     }
+
+    @Test
+    fun chunksAreJoinedInOrder() {
+        val all = joinChunks(listOf(shortArrayOf(1, 2), shortArrayOf(), shortArrayOf(3)))
+        assertEquals(listOf<Short>(1, 2, 3), all.toList())
+    }
+
+    @Test
+    fun theRemoteClickAndSilenceBeforeSpeechAreDropped() {
+        val rate = 16000
+        val all = ShortArray(100) + ShortArray(20_000) { 1 }
+        // 100 samples of silence, then 0.3 s (4800 samples) of click.
+        assertEquals(20_100 - (100 + 4800), trimRemoteClick(all, rate).size)
+        assertEquals(0, trimRemoteClick(ShortArray(500), rate).size)
+        assertEquals(0, trimRemoteClick(ShortArray(0), rate).size)
+    }
+
+    @Test
+    fun newModelReplacesTheOldOne() {
+        val target = folder.newFolder("vosk-ru").apply { File(this, "old.txt").writeText("old") }
+        val fresh = folder.newFolder("fresh").apply { File(this, "am").mkdirs() }
+        val backup = File(folder.root, "vosk-ru.old")
+        swapDirectory(fresh, target, backup)
+        assertTrue(File(target, "am").isDirectory)
+        assertFalse(File(target, "old.txt").exists())
+        assertFalse(backup.exists())
+        assertFalse(fresh.exists())
+    }
+
+    @Test
+    fun missingNewModelLeavesTheOldOneAlone() {
+        val target = folder.newFolder("vosk-ru").apply { File(this, "old.txt").writeText("old") }
+        try {
+            swapDirectory(File(folder.root, "nope"), target, File(folder.root, "vosk-ru.old"))
+            fail("expected a refusal")
+        } catch (expected: IllegalStateException) {
+            // refused
+        }
+        assertEquals("old", File(target, "old.txt").readText())
+    }
 }

@@ -115,9 +115,22 @@ object VoiceModel {
     private fun install(context: Context, input: java.io.InputStream): Boolean {
         val target = dir(context)
         val tmp = File(context.filesDir, "vosk-ru.tmp").apply { deleteRecursively(); mkdirs() }
-        extractModelZip(input, tmp)
-        target.deleteRecursively()
-        check(tmp.renameTo(target))
+        try {
+            extractModelZip(input, tmp)
+            // A zip that isn't a model must not replace one that works.
+            check(File(tmp, "am").isDirectory) { "the archive isn't a Vosk model (no am folder)" }
+            // Nobody loads the model while its files are swapped, and the old one isn't left open.
+            synchronized(this) {
+                check(users == 0) { "the model is in use right now" }
+                handler.removeCallbacks(unload)
+                model?.close()
+                model = null
+                swapDirectory(tmp, target, File(context.filesDir, "vosk-ru.old"))
+            }
+        } catch (e: Throwable) {
+            tmp.deleteRecursively()
+            throw e
+        }
         Log.i("Voice", "Model installed")
         return installed(context)
     }
@@ -140,6 +153,21 @@ internal fun extractModelZip(input: java.io.InputStream, into: File) {
             }
         }
     }
+}
+
+/**
+ * Puts [newDir] in place of [target]: the old one is moved to [backup] first and put back if the
+ * new one can't be moved in, so a failure never leaves no model.
+ */
+internal fun swapDirectory(newDir: File, target: File, backup: File) {
+    check(newDir.isDirectory) { "nothing to install" }
+    backup.deleteRecursively()
+    if (target.exists()) check(target.renameTo(backup)) { "can't move the old model aside" }
+    if (!newDir.renameTo(target)) {
+        if (backup.exists()) backup.renameTo(target)
+        error("can't move the new model into place")
+    }
+    backup.deleteRecursively()
 }
 
 /**
@@ -204,6 +232,7 @@ class VoiceSession(private val context: Context) {
             try {
                 recorder.startRecording()
                 val buffer = ShortArray(rate / 10)
+                var total = 0
                 while (recording) {
                     val n = recorder.read(buffer, 0, buffer.size)
                     if (n < 0) {
@@ -212,6 +241,12 @@ class VoiceSession(private val context: Context) {
                         break
                     }
                     if (n > 0) synchronized(chunks) { chunks += buffer.copyOf(n) }
+                    total += n.coerceAtLeast(0)
+                    if (total >= MAX_SECONDS * rate) {
+                        // A stuck key must not fill the projector's memory: what was said so far is used.
+                        Log.w("Voice", "Recording stopped at $MAX_SECONDS s")
+                        break
+                    }
                 }
             } catch (e: IllegalStateException) {
                 Log.w("Voice", "Microphone could not start", e)
@@ -258,11 +293,8 @@ class VoiceSession(private val context: Context) {
         recording = false
         thread?.join(2000)
         VoiceModel.load(context) ?: return null
-        val all = synchronized(chunks) { chunks.toList() }.flatMap { it.asList() }
-        // The remote clicks as its microphone starts (full-scale pop), which the model hears as
-        // "а": skip the silence before the stream and its first 0.3 s.
-        val start = all.indexOfFirst { it.toInt() != 0 }
-        val speech = if (start < 0) ShortArray(0) else all.subList(minOf(all.size, start + rate * 3 / 10), all.size).toShortArray()
+        val all = synchronized(chunks) { joinChunks(chunks).also { chunks.clear() } }
+        val speech = trimRemoteClick(all, rate)
         Log.i("Voice", "Recorded ${all.size / rate.toFloat()} s, speech ${speech.size / rate.toFloat()} s")
         return listOf(speech)
     }
@@ -285,7 +317,32 @@ class VoiceSession(private val context: Context) {
 
     companion object {
         const val NO_MODEL = "\u0000no-model"
+
+        /** The longest recording kept: seconds of audio at the voice key. */
+        const val MAX_SECONDS = 30
     }
+}
+
+/** The recorded chunks as one array (no boxing: this is tens of thousands of samples). */
+internal fun joinChunks(chunks: List<ShortArray>): ShortArray {
+    val all = ShortArray(chunks.sumOf { it.size })
+    var at = 0
+    for (chunk in chunks) {
+        System.arraycopy(chunk, 0, all, at, chunk.size)
+        at += chunk.size
+    }
+    return all
+}
+
+/**
+ * The remote clicks as its microphone starts (a full-scale pop), which the model hears as "а":
+ * drops the silence before the stream and its first 0.3 s. Empty if there was only silence.
+ */
+internal fun trimRemoteClick(all: ShortArray, rate: Int): ShortArray {
+    var start = 0
+    while (start < all.size && all[start].toInt() == 0) start++
+    if (start >= all.size) return ShortArray(0)
+    return all.copyOfRange(minOf(all.size, start + rate * 3 / 10), all.size)
 }
 
 /** The phrases the voice key understands, and what they do. */
@@ -406,6 +463,24 @@ object VoiceRequests {
     /** Called on the main thread with true when the voice key goes down, false when it comes up. */
     @Volatile
     var onVoiceKey: ((Boolean) -> Unit)? = null
+        private set
+
+    private var owner: Any? = null
+
+    /** [owner] takes the voice key; a request that held it before no longer gets it. */
+    @Synchronized
+    fun claim(owner: Any, onKey: (Boolean) -> Unit) {
+        this.owner = owner
+        onVoiceKey = onKey
+    }
+
+    /** Gives the voice key back, unless a newer request has taken it over meanwhile. */
+    @Synchronized
+    fun release(owner: Any) {
+        if (this.owner !== owner) return
+        this.owner = null
+        onVoiceKey = null
+    }
 }
 
 /**
@@ -430,7 +505,7 @@ class VoskRecognitionService : android.speech.RecognitionService() {
         session = VoiceSession(this).also { it.start() }
         listener.readyForSpeech(android.os.Bundle())
         PanelOverlay.caption("🎤  Зажмите голосовую кнопку и говорите")
-        VoiceRequests.onVoiceKey = { down ->
+        VoiceRequests.claim(this) { down ->
             if (down) {
                 handler.removeCallbacks(timeout)
                 PanelOverlay.caption("🎤  Слушаю…")
@@ -482,7 +557,7 @@ class VoskRecognitionService : android.speech.RecognitionService() {
 
     private fun clear() {
         handler.removeCallbacks(timeout)
-        VoiceRequests.onVoiceKey = null
+        VoiceRequests.release(this)
         callback = null
         session = null
     }
@@ -512,7 +587,7 @@ class VoiceSearchActivity : android.app.Activity() {
         }
         session = VoiceSession(this).also { it.start() }
         PanelOverlay.caption("🎤  Зажмите голосовую кнопку и говорите")
-        VoiceRequests.onVoiceKey = { down ->
+        VoiceRequests.claim(this) { down ->
             if (down) {
                 handler.removeCallbacks(timeout)
                 PanelOverlay.caption("🎤  Слушаю…")
@@ -525,7 +600,7 @@ class VoiceSearchActivity : android.app.Activity() {
 
     private fun done(recorded: VoiceSession?) {
         handler.removeCallbacks(timeout)
-        VoiceRequests.onVoiceKey = null
+        VoiceRequests.release(this)
         session = null
         if (recorded == null) {
             PanelOverlay.caption(null)
@@ -551,7 +626,7 @@ class VoiceSearchActivity : android.app.Activity() {
     override fun onDestroy() {
         if (session != null) {
             session?.cancel()
-            VoiceRequests.onVoiceKey = null
+            VoiceRequests.release(this)
             PanelOverlay.caption(null)
         }
         super.onDestroy()
