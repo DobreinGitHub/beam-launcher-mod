@@ -20,26 +20,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** eARC for an HDMI 2.1 sound system (XGIMI's "eARC mode": Auto / Off). */
 @Composable
 internal fun EarcToggle() {
-    var earc by remember { mutableStateOf(Earc.enabled()) }
-    earc?.let { on ->
+    val earc = rememberFirmwareState { Earc.enabled() }
+    earc.value?.let { on ->
         Section("HDMI")
         Toggle("eARC", on, Modifier.fillMaxWidth()) {
-            Earc.set(!on)
-            earc = Earc.enabled() ?: !on
+            earc.change(!on) { Earc.set(!on) }
         }
     }
 }
@@ -47,15 +44,14 @@ internal fun EarcToggle() {
 /** XGIMI's sound modes: AI, movie, music, sport, karaoke. */
 @Composable
 internal fun SoundModeSection() {
-    var current by remember { mutableStateOf(SoundMode.current()) }
-    if (current == null) return
+    val soundMode = rememberFirmwareState { SoundMode.current() }
+    val current = soundMode.value ?: return
     Section("Звуковой режим")
     SoundMode.modes.chunked(2).forEach { pair ->
         PairRow {
             pair.forEach { (mode, label) ->
                 Chip(label, current == mode, Modifier.weight(1f)) {
-                    SoundMode.set(mode)
-                    current = SoundMode.current() ?: mode
+                    soundMode.change(mode) { SoundMode.set(mode) }
                 }
             }
             if (pair.size == 1) Spacer(Modifier.weight(1f))
@@ -100,51 +96,46 @@ internal fun soundOutputName(device: Int) = when (device) {
     else -> "Другой выход"
 }
 
+/** What the sound output section shows: automatic or manual, the output in use, and which are connected. */
+private data class SoundOutputState(val auto: Boolean, val output: Int?, val connected: List<Int>)
+
+private fun readSoundOutput() = SoundOutputState(
+    auto = SoundOutput.auto() ?: true,
+    output = SoundOutput.output(),
+    connected = listOf(SoundOutput.SPEAKER, SoundOutput.ARC, SoundOutput.BLUETOOTH).filter(SoundOutput::connected),
+)
+
 /** Where the sound goes, like XGIMI's page: automatic on/off, and the devices to pick when off. */
 @Composable
 internal fun SoundOutputSection() {
     val context = LocalContext.current
-    LaunchedEffect(Unit) { SoundOutput.prepare(context) }
-    var auto by remember { mutableStateOf(SoundOutput.auto() ?: true) }
-    var output by remember { mutableStateOf(SoundOutput.output()) }
-    val connected = remember { listOf(SoundOutput.SPEAKER, SoundOutput.ARC, SoundOutput.BLUETOOTH).filter(SoundOutput::connected) }
-    val scope = rememberCoroutineScope()
-    var recheck by remember { mutableStateOf<Job?>(null) }
-    // The firmware applies a switch asynchronously, so show the choice right away and read the
-    // real state back a moment later.
-    fun recheckSoon() {
-        recheck?.cancel()
-        recheck = scope.launch {
-            delay(1200)
-            auto = SoundOutput.auto() ?: auto
-            output = SoundOutput.output()
-        }
-    }
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { SoundOutput.prepare(context) } }
+    val sound = rememberFirmwareState { readSoundOutput() }
+    val state = sound.value ?: return
+    // The firmware applies a switch asynchronously, so the choice shows at once and the real state
+    // is read back a moment later.
     fun select(device: Int) {
-        SoundOutput.setOutput(device)
-        output = device
-        recheckSoon()
+        sound.change(state.copy(output = device), settleMs = 1200) { SoundOutput.setOutput(device) }
     }
     Section("Выход звука")
-    Toggle("Автовыбор", auto, Modifier.fillMaxWidth()) {
-        auto = !auto
-        SoundOutput.setAuto(auto)
-        recheckSoon()
+    Toggle("Автовыбор", state.auto, Modifier.fillMaxWidth()) {
+        val auto = !state.auto
+        sound.change(state.copy(auto = auto), settleMs = 1200) { SoundOutput.setAuto(auto) }
     }
-    if (auto) {
-        output?.let {
+    if (state.auto) {
+        state.output?.let {
             Spacer(Modifier.height(8.dp))
             T("Сейчас: ${soundOutputName(it)}", 14.sp, color = PanelDim)
         }
     } else {
         Spacer(Modifier.height(10.dp))
         PairRow {
-            OutputChip(SoundOutput.SPEAKER, output, connected, ::select)
-            OutputChip(SoundOutput.ARC, output, connected, ::select)
+            OutputChip(SoundOutput.SPEAKER, state.output, state.connected, ::select)
+            OutputChip(SoundOutput.ARC, state.output, state.connected, ::select)
         }
         Spacer(Modifier.height(10.dp))
         PairRow {
-            OutputChip(SoundOutput.BLUETOOTH, output, connected, ::select)
+            OutputChip(SoundOutput.BLUETOOTH, state.output, state.connected, ::select)
             Spacer(Modifier.weight(1f))
         }
     }

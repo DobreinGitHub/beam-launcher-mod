@@ -36,13 +36,13 @@ object KeystoneEdit {
 @Composable
 internal fun KeystonePage(onScreen: () -> Unit) {
     val context = LocalContext.current
-    var corners by remember { mutableStateOf(Keystone.corners()) }
+    val cornersState = rememberFirmwareState { Keystone.corners() }
     var zoom by remember { mutableStateOf(Keystone.savedZoom(context)) }
-    var realtime by remember { mutableStateOf(Sensors.realtimeKeystone()) }
+    val realtime = rememberFirmwareState { Sensors.realtimeKeystone() }
     DisposableEffect(Unit) { onDispose { KeystoneEdit.active.value = null } }
-    val current = corners
+    val current = cornersState.value
     if (current == null) {
-        T("Трапеция недоступна", 14.sp, color = PanelDim)
+        T(if (cornersState.loaded) "Трапеция недоступна" else "Загрузка…", 14.sp, color = PanelDim)
         return
     }
     // The corners on screen are the ones last asked for; the write goes to a background queue
@@ -51,22 +51,20 @@ internal fun KeystonePage(onScreen: () -> Unit) {
     fun apply(values: List<Int>) {
         val clamped = Keystone.clamp(values)
         if (!Keystone.isValid(clamped)) return
-        corners = clamped
-        PanelIo.submit("keystone") { Keystone.setCorners(clamped) }
+        cornersState.change(clamped) { Keystone.setCorners(clamped) }
     }
     ListRow("Настроить на экране", onScreen)
-    if (realtime == true) {
+    if (realtime.value == true) {
         Section("Автокоррекция")
         Toggle("Коррекция при сдвиге", true, Modifier.fillMaxWidth()) {
-            Sensors.setRealtimeKeystone(false)
-            realtime = Sensors.realtimeKeystone() ?: false
+            realtime.change(false) { Sensors.setRealtimeKeystone(false) }
         }
         T("Выключите, иначе сдвиг проектора собьёт ручную настройку", 14.sp, color = PanelDim)
     }
     Section("Углы · OK, затем стрелки")
     listOf("↖  Левый верхний", "↗  Правый верхний", "↙  Левый нижний", "↘  Правый нижний").forEachIndexed { i, label ->
         ArrowPad("corner$i", label, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { dx, dy ->
-            val values = (corners ?: current).toMutableList()
+            val values = (cornersState.value ?: current).toMutableList()
             values[i * 2] += dx
             values[i * 2 + 1] += dy
             apply(values)
@@ -76,14 +74,23 @@ internal fun KeystonePage(onScreen: () -> Unit) {
     Selector("Размер", "${Keystone.sizePercent(zoom)}%", Modifier.fillMaxWidth().padding(bottom = 8.dp)) { step ->
         // Right makes it bigger (fewer shrink steps).
         val next = (zoom - step).coerceIn(0, Keystone.MAX_ZOOM)
-        if (next != zoom && Keystone.setZoom(next)) {
+        if (next != zoom) {
+            val previous = zoom
             zoom = next
             Keystone.saveZoom(context, next)
-            corners = Keystone.corners() ?: corners
+            PanelIo.submit("zoom") {
+                if (Keystone.setZoom(next)) {
+                    cornersState.refresh() // the size moves the corners
+                } else {
+                    // Refused: back to what the projector really has.
+                    zoom = previous
+                    Keystone.saveZoom(context, previous)
+                }
+            }
         }
     }
     ArrowPad("shift", "✥  Сдвиг картинки", Modifier.fillMaxWidth()) { dx, dy ->
-        val moved = (corners ?: current).mapIndexed { i, v -> v + if (i % 2 == 0) dx else dy }
+        val moved = (cornersState.value ?: current).mapIndexed { i, v -> v + if (i % 2 == 0) dx else dy }
         val inside = moved.chunked(2).all { (x, y) -> x in 0 until Keystone.WIDTH && y in 0 until Keystone.HEIGHT }
         if (inside) apply(moved)
     }
@@ -92,7 +99,7 @@ internal fun KeystonePage(onScreen: () -> Unit) {
     ListRow("Автотрапеция") {
         // Xgimi.autoKeystone resets the size and the saved note of it.
         zoom = 0
-        Xgimi.autoKeystone(context)
+        PanelIo.submit("auto-keystone") { Xgimi.autoKeystone(context) }
     }
     ListRow("Без коррекции") {
         PanelIo.submit("zoom") { Keystone.setZoom(0) }

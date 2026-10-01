@@ -113,16 +113,18 @@ internal fun BluetoothPage(onXgimiPage: () -> Unit) {
         }
     }
     NewDevicesSection(list)
-    var visible by remember { mutableStateOf(BluetoothOptions.discoverable(context)) }
-    var absolute by remember { mutableStateOf(BluetoothOptions.absoluteVolume()) }
+    val visible = rememberFirmwareState { BluetoothOptions.discoverable(context) }
+    val absolute = rememberFirmwareState { BluetoothOptions.absoluteVolume() }
     Section("Настройки")
-    Toggle("Видимость для других устройств", visible, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        BluetoothOptions.setDiscoverable(context, !visible)
-        visible = BluetoothOptions.discoverable(context)
+    visible.value?.let { on ->
+        Toggle("Видимость для других устройств", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            visible.change(!on) { BluetoothOptions.setDiscoverable(context, !on) }
+        }
     }
-    Toggle("Абсолютная громкость", absolute, Modifier.fillMaxWidth()) {
-        BluetoothOptions.setAbsoluteVolume(context, !absolute)
-        absolute = BluetoothOptions.absoluteVolume()
+    absolute.value?.let { on ->
+        Toggle("Абсолютная громкость", on, Modifier.fillMaxWidth()) {
+            absolute.change(!on) { BluetoothOptions.setAbsoluteVolume(context, !on) }
+        }
     }
     Section("Ещё")
     ListRow("Настройки Bluetooth XGIMI", onXgimiPage)

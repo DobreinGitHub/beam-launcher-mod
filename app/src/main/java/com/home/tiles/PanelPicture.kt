@@ -47,21 +47,14 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun PicturePage(onXgimiPage: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var current by remember { mutableStateOf(PictureMode.current()) }
-    LaunchedEffect(Unit) { XgimiService.bind(context) }
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { XgimiService.bind(context) } }
+    val picture = rememberFirmwareState { PictureMode.current() }
+    val current = picture.value
     var confirmPerformance by remember { mutableStateOf(false) }
-    var recheck by remember { mutableStateOf<Job?>(null) }
     fun apply(mode: Int) {
-        Xgimi.setPictureMode(context, mode)
-        current = mode
-        // The firmware switches asynchronously; read back what it actually applied, once, after
-        // the last choice (a quick second pick must not be overwritten by the first one's read).
-        recheck?.cancel()
-        recheck = scope.launch {
-            delay(1500)
-            withContext(Dispatchers.IO) { PictureMode.current() }?.let { current = it }
-        }
+        // The firmware switches asynchronously: the choice shows at once, and what it really
+        // applied is read back once, after the last choice.
+        picture.change(mode, settleMs = 1500) { Xgimi.setPictureMode(context, mode) }
     }
     Section("Режим изображения")
     Xgimi.pictureModes.forEach { (label, mode) ->
@@ -97,21 +90,21 @@ private val GameLevels = listOf("Базовый", "Максимальный")
 @Composable
 private fun GameModeSection() {
     val context = LocalContext.current
-    var state by remember { mutableStateOf(GameMode.read()) }
+    val gameMode = rememberFirmwareState { GameMode.read() }
     var level by remember { mutableStateOf(GameMode.level(context)) }
-    val current = state ?: return
+    val current = gameMode.value ?: return
     Section("Игровой режим · для HDMI")
     val index = GameModes.indexOfFirst { it.first == current.mode }.coerceAtLeast(0)
     Selector("Режим", GameModes[index].second, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val mode = GameModes[(index + delta).mod(GameModes.size)].first
-        GameMode.setMode(mode)
-        state = GameMode.read() ?: GameMode.State(mode)
+        gameMode.change(GameMode.State(mode)) { GameMode.setMode(mode) }
     }
     // The level (basic / top speed) applies when game mode is forced on.
     if (current.mode == GameMode.ON) {
         Selector("Уровень", GameLevels[level], Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
             level = (level + delta).mod(GameLevels.size)
-            GameMode.setLevel(context, level)
+            val chosen = level
+            PanelIo.submit("game-level") { GameMode.setLevel(context, chosen) }
         }
     }
 }
@@ -295,12 +288,11 @@ private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
 /** The projector's light-source brightness (0..10), the same setting as XGIMI's Brightness page. */
 @Composable
 internal fun BrightnessSlider(modifier: Modifier) {
-    var level by remember { mutableStateOf(Lumens.level()) }
-    val current = level ?: return
+    val level = rememberFirmwareState { Lumens.level() }
+    val current = level.value ?: return
     LevelSlider(Icons.Rounded.BrightnessMedium, current, Lumens.MAX, modifier) {
         // Level 0 would leave a nearly black picture; keep the image usable.
         val value = it.coerceAtLeast(1)
-        level = value
-        PanelIo.submit("lumens") { Lumens.setLevel(value) }
+        level.change(value) { Lumens.setLevel(value) }
     }
 }

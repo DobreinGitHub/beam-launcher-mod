@@ -284,7 +284,7 @@ private fun ColumnScope.MainPage(
         // Everyday actions first as wide labelled tiles, then setup and settings as square
         // icon tiles that show their name only when focused (like XGIMI's own panel).
         add(QuickItem(Icons.Rounded.CenterFocusStrong, "Автофокус", action = projector { Xgimi.autoFocus(context) }, wide = true))
-        add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { Xgimi.autoKeystone(context) }, wide = true))
+        add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { PanelIo.submit("auto-keystone") { Xgimi.autoKeystone(context) } }, wide = true))
         add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }, wide = true))
         add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", PanelPage.Bluetooth, subtitle = bluetoothAudio, wide = true))
         add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput, wide = true))
@@ -506,12 +506,11 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
                     if (KeyTones.set(context, !keyTones)) keyTones = KeyTones.enabled(context)
                 }
             }
-            var bootMusic by remember { mutableStateOf(BootMusic.enabled()) }
-            bootMusic?.let { on ->
+            val bootMusic = rememberFirmwareState { BootMusic.enabled() }
+            bootMusic.value?.let { on ->
                 Spacer(Modifier.height(10.dp))
                 Toggle("Мелодия при включении", on, Modifier.fillMaxWidth()) {
-                    BootMusic.set(!on)
-                    bootMusic = BootMusic.enabled() ?: !on
+                    bootMusic.change(!on) { BootMusic.set(!on) }
                 }
             }
         }

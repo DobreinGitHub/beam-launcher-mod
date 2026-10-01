@@ -30,34 +30,31 @@ import java.util.Locale
 /** XGIMI's sensor switches: keystone when moved, refocus on tilt, eye protection. */
 @Composable
 internal fun SensorToggles() {
-    var realtime by remember { mutableStateOf(Sensors.realtimeKeystone()) }
-    var motionFocus by remember { mutableStateOf(Sensors.motionFocus()) }
-    var eyes by remember { mutableStateOf(Sensors.eyeProtection()) }
-    var bootKeystone by remember { mutableStateOf(Sensors.bootKeystone()) }
-    if (realtime == null && motionFocus == null && eyes == null && bootKeystone == null) return
+    val realtime = rememberFirmwareState { Sensors.realtimeKeystone() }
+    val motionFocus = rememberFirmwareState { Sensors.motionFocus() }
+    val eyes = rememberFirmwareState { Sensors.eyeProtection() }
+    val bootKeystone = rememberFirmwareState { Sensors.bootKeystone() }
+    // Nothing is shown until the firmware has answered, and nothing if it has none of these.
+    if (realtime.value == null && motionFocus.value == null && eyes.value == null && bootKeystone.value == null) return
     Section("Датчики")
-    bootKeystone?.let { on ->
+    bootKeystone.value?.let { on ->
         Toggle("Коррекция при включении", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Sensors.setBootKeystone(!on)
-            bootKeystone = Sensors.bootKeystone() ?: !on
+            bootKeystone.change(!on) { Sensors.setBootKeystone(!on) }
         }
     }
-    realtime?.let { on ->
+    realtime.value?.let { on ->
         Toggle("Коррекция при сдвиге", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Sensors.setRealtimeKeystone(!on)
-            realtime = Sensors.realtimeKeystone() ?: !on
+            realtime.change(!on) { Sensors.setRealtimeKeystone(!on) }
         }
     }
-    motionFocus?.let { on ->
+    motionFocus.value?.let { on ->
         Toggle("Автофокус при сдвиге", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Sensors.setMotionFocus(!on)
-            motionFocus = Sensors.motionFocus() ?: !on
+            motionFocus.change(!on) { Sensors.setMotionFocus(!on) }
         }
     }
-    eyes?.let { on ->
+    eyes.value?.let { on ->
         Toggle("Защита глаз", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Sensors.setEyeProtection(!on)
-            eyes = Sensors.eyeProtection() ?: !on
+            eyes.change(!on) { Sensors.setEyeProtection(!on) }
         }
     }
 }
@@ -112,27 +109,28 @@ private fun aboutRows(context: Context): List<Pair<String, String>> {
 /** Table, ceiling or automatic mounting, rear projection, and a fine tilt of the picture. */
 @Composable
 internal fun ProjectionPage(onRotatePage: () -> Unit) {
-    var mount by remember { mutableStateOf(Projection.mount()) }
-    var rear by remember { mutableStateOf(Projection.rear()) }
-    mount?.let { current ->
+    val mount = rememberFirmwareState { Projection.mount() }
+    val rear = rememberFirmwareState { Projection.rear() }
+    mount.value?.let { current ->
         Section("Установка")
         listOf(Projection.AUTO to "Авто", Projection.TABLE to "На столе", Projection.CEILING to "На потолке").forEach { (value, label) ->
             Chip(label, current == value, Modifier.fillMaxWidth().padding(bottom = 8.dp), note = if (value == Projection.AUTO) "по датчику положения" else null) {
-                Projection.setMount(value)
-                mount = Projection.mount() ?: value
+                mount.change(value) { Projection.setMount(value) }
             }
         }
     }
-    rear?.let { on ->
+    rear.value?.let { on ->
         Spacer(Modifier.height(2.dp))
         Toggle("Обратная проекция", on, Modifier.fillMaxWidth()) {
-            Projection.setRear(!on)
-            rear = Projection.rear() ?: !on
+            rear.change(!on) { Projection.setRear(!on) }
         }
         T("Для экрана на просвет: проектор за экраном", 14.sp, color = PanelDim)
     }
     Section("Наклон картинки")
-    Selector("Выровнять", "по 0,5°", Modifier.fillMaxWidth()) { step -> Projection.tilt(clockwise = step > 0) }
+    Selector("Выровнять", "по 0,5°", Modifier.fillMaxWidth()) { step ->
+        // Every step counts, so each gets its own key: none is merged into the one before.
+        PanelIo.submit("tilt-${System.nanoTime()}") { Projection.tilt(clockwise = step > 0) }
+    }
     Spacer(Modifier.height(10.dp))
     ListRow("Поворот (экран XGIMI)", onRotatePage)
 }

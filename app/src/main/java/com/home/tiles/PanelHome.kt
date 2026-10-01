@@ -58,41 +58,38 @@ internal fun AppearancePage() {
 @Composable
 private fun HdmiSection(onHdmiPage: () -> Unit) {
     val context = LocalContext.current
-    var autoSwitch by remember { mutableStateOf(Hdmi.autoSwitch()) }
-    var bootHdmi by remember { mutableStateOf(Hdmi.bootToHdmi()) }
-    var cec by remember { mutableStateOf(Cec.control(context)) }
-    var cecWake by remember { mutableStateOf(Cec.wakeUp()) }
+    val autoSwitch = rememberFirmwareState { Hdmi.autoSwitch() }
+    val bootState = rememberFirmwareState { Hdmi.bootToHdmi() }
+    val cec = rememberFirmwareState { Cec.control(context) }
+    val cecWake = rememberFirmwareState { Cec.wakeUp() }
+    val bootHdmi = bootState.value ?: false
     Section("При включении")
     PairRow {
         Chip("Главный экран", !bootHdmi, Modifier.weight(1f)) {
-            Hdmi.setBootToHdmi(context, false)
-            bootHdmi = Hdmi.bootToHdmi()
+            bootState.change(false) { Hdmi.setBootToHdmi(context, false) }
         }
         Chip("HDMI", bootHdmi, Modifier.weight(1f), note = "если подключено") {
-            Hdmi.setBootToHdmi(context, true)
-            bootHdmi = Hdmi.bootToHdmi()
+            bootState.change(true) { Hdmi.setBootToHdmi(context, true) }
         }
     }
-    autoSwitch?.let { on ->
+    autoSwitch.value?.let { on ->
         Spacer(Modifier.height(10.dp))
         Toggle("HDMI при подключении", on, Modifier.fillMaxWidth()) {
-            Hdmi.setAutoSwitch(!on)
-            autoSwitch = Hdmi.autoSwitch() ?: !on
+            autoSwitch.change(!on) { Hdmi.setAutoSwitch(!on) }
         }
     }
-    cec?.let { on ->
+    cec.value?.let { on ->
         Section("HDMI‑CEC")
         Toggle("Управление устройствами", on, Modifier.fillMaxWidth()) {
-            Cec.setControl(context, !on)
-            cec = Cec.control(context) ?: !on
-            cecWake = Cec.wakeUp()
+            cec.change(!on) { Cec.setControl(context, !on) }
+            // Turning the control off turns the wake-up off too: ask the firmware what it ended up with.
+            cecWake.value?.let { wake -> cecWake.change(if (on) false else wake) {} }
         }
         T("Нужно для ARC и пульта проектора на консоли", 14.sp, color = PanelDim)
-        if (on) cecWake?.let { wake ->
+        if (on) cecWake.value?.let { wake ->
             Spacer(Modifier.height(10.dp))
             Toggle("HDMI включает проектор", wake, Modifier.fillMaxWidth()) {
-                Cec.setWakeUp(context, !wake)
-                cecWake = Cec.wakeUp() ?: !wake
+                cecWake.change(!wake) { Cec.setWakeUp(context, !wake) }
             }
             T("Консоль включает и выключает проектор", 14.sp, color = PanelDim)
         }
