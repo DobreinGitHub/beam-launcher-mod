@@ -115,23 +115,30 @@ object VoiceModel {
     private fun install(context: Context, input: java.io.InputStream): Boolean {
         val target = dir(context)
         val tmp = File(context.filesDir, "vosk-ru.tmp").apply { deleteRecursively(); mkdirs() }
-        ZipInputStream(input.buffered()).use { zip ->
-            generateSequence { zip.nextEntry }.forEach { entry ->
-                val relative = entry.name.substringAfter('/', "")
-                if (relative.isEmpty()) return@forEach
-                val out = File(tmp, relative)
-                // Zip Slip: an entry like "x/../../y" must not land outside the temp folder.
-                check(out.canonicalPath.startsWith(tmp.canonicalPath + File.separator)) { "bad zip entry ${entry.name}" }
-                if (entry.isDirectory) out.mkdirs() else {
-                    out.parentFile?.mkdirs()
-                    out.outputStream().use { zip.copyTo(it) }
-                }
-            }
-        }
+        extractModelZip(input, tmp)
         target.deleteRecursively()
         check(tmp.renameTo(target))
         Log.i("Voice", "Model installed")
         return installed(context)
+    }
+}
+
+/**
+ * Unzips a Vosk model archive into [into], stripping its one top folder. An entry that would land
+ * outside [into] (Zip Slip: "model/../../x") aborts with an IllegalStateException.
+ */
+internal fun extractModelZip(input: java.io.InputStream, into: File) {
+    ZipInputStream(input.buffered()).use { zip ->
+        generateSequence { zip.nextEntry }.forEach { entry ->
+            val relative = entry.name.substringAfter('/', "")
+            if (relative.isEmpty()) return@forEach
+            val out = File(into, relative)
+            check(out.canonicalPath.startsWith(into.canonicalPath + File.separator)) { "bad zip entry ${entry.name}" }
+            if (entry.isDirectory) out.mkdirs() else {
+                out.parentFile?.mkdirs()
+                out.outputStream().use { zip.copyTo(it) }
+            }
+        }
     }
 }
 

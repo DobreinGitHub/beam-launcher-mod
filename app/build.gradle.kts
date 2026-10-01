@@ -39,7 +39,12 @@ android {
     }
     lint {
         checkReleaseBuilds = false
-        abortOnError = false
+        // CI passes -PlintStrict: lint errors fail the build there; locally they only land in the report.
+        abortOnError = project.hasProperty("lintStrict")
+    }
+    testOptions {
+        // Android's own classes (Log, Handler, ...) are stubs on the JVM: let them return defaults.
+        unitTests.isReturnDefaultValues = true
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -59,4 +64,6 @@ dependencies {
     // Offline speech recognition for the remote's voice key.
     implementation("com.alphacephei:vosk-android:0.3.47@aar")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
+
+    testImplementation("junit:junit:4.13.2")
 }
