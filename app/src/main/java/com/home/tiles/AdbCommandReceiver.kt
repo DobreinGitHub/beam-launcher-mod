@@ -85,6 +85,19 @@ class AdbCommandReceiver : BroadcastReceiver() {
             resultData = "installing"
         }
         if (intent.hasExtra("voice_status")) resultData = "installed=${VoiceModel.installed(context)}"
+        // Voice commands that open apps: --es voice_app "Name|package1,package2|phrase one;phrase two"
+        // adds one, --es voice_app_remove Name removes it, --ez voice_apps true lists the added ones.
+        intent.getStringExtra("voice_app")?.let { spec ->
+            val app = parseVoiceApps(spec).firstOrNull()
+            resultData = if (app == null) "error: expected Name|package1,package2|phrase one;phrase two" else {
+                VoiceApps.add(context, app)
+                "ok ${app.name}: ${app.phrases}"
+            }
+        }
+        intent.getStringExtra("voice_app_remove")?.let { name ->
+            resultData = if (VoiceApps.remove(context, name)) "ok" else "no such app"
+        }
+        if (intent.hasExtra("voice_apps")) resultData = formatVoiceApps(VoiceApps.custom(context)).ifEmpty { "none" }
         // --es voice_test "фраза": run a command as if it had been spoken.
         intent.getStringExtra("voice_test")?.let { resultData = VoiceCommands.run(context, it) ?: "no match" }
         // Bluetooth: --ez bt_list true lists paired devices; --es bt_connect / bt_disconnect NAME.

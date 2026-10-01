@@ -105,4 +105,21 @@ class VoiceTest {
         }
         assertEquals("old", File(target, "old.txt").readText())
     }
+
+    @Test
+    fun addedVoiceAppsAreParsedAndFormattedBack() {
+        val text = "Kodi|org.xbmc.kodi,org.xbmc.kodi.beta|Коди; Открой коди\nbroken line\n||\nMusic|pkg|"
+        val apps = parseVoiceApps(text)
+        assertEquals(1, apps.size) // the other lines lack a part
+        assertEquals("Kodi", apps[0].name)
+        assertEquals(listOf("org.xbmc.kodi", "org.xbmc.kodi.beta"), apps[0].packages)
+        assertEquals(listOf("коди", "открой коди"), apps[0].phrases)
+        assertEquals("Kodi|org.xbmc.kodi,org.xbmc.kodi.beta|коди;открой коди", formatVoiceApps(apps))
+    }
+
+    @Test
+    fun builtInAppsHavePackagesAndPhrases() {
+        assertTrue(VoiceApps.builtIn.all { it.packages.isNotEmpty() && it.phrases.isNotEmpty() })
+        assertTrue(VoiceApps.builtIn.any { it.name == "SmartTube" })
+    }
 }

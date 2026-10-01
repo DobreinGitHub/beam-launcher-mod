@@ -112,6 +112,18 @@ adb exec-in "content write --uri content://com.home.tiles.voicemodel/model.zip" 
 adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --ez voice_install true
 ```
 
+Голосовые команды открывают SmartTube, Spotify и Jellyfin (любую из известных сборок, какая
+установлена; не установленные не распознаются). Свои приложения добавляются по adb:
+
+```sh
+adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver \
+    --es voice_app "Kodi|org.xbmc.kodi|коди;открой коди"   # имя | пакеты через запятую | фразы через ;
+adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --ez voice_apps true          # список добавленных
+adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es voice_app_remove Kodi    # убрать
+```
+
+Модель Vosk русская, поэтому фразы пишите по-русски (так, как их произносят).
+
 Beam отвечает и на стандартные запросы распознавания речи от других приложений
 (`RECOGNIZE_SPEECH`, `RecognitionService`). Поэтому любое установленное приложение может получить
 расшифровку того, что вы говорите в микрофон пульта, пока вы держите голосовую кнопку, даже если у

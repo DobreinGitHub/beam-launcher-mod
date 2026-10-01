@@ -272,17 +272,21 @@ class VoiceSession(private val context: Context) {
      */
     fun finish(): String {
         val samples = stop() ?: return NO_MODEL
-        val free = recognize(samples, null)
-        val text = if (VoiceCommands.searchQuery(free) != null) free else recognize(samples, VoiceCommands.grammar())
+        // The commands are the usual case: recognised against their grammar, one pass. Only when
+        // that heard something it doesn't know (or nothing) is the speech decoded freely, to see
+        // whether it is a "найди …" search; two passes would double the wait after every command.
+        val commands = recognize(samples, VoiceCommands.grammar(context))
+        val free = if (commands.text.isBlank() || commands.hadUnknown) recognize(samples, null).text else null
+        val text = if (free != null && VoiceCommands.searchQuery(free) != null) free else commands.text
         VoiceModel.releaseLater()
-        Log.i("Voice", "Heard \"$text\" (free speech: \"$free\")")
+        Log.i("Voice", "Heard \"$text\" (commands: \"${commands.text}\", free speech: ${free ?: "not needed"})")
         return text
     }
 
     /** Stops recording and returns free speech, for apps that asked for dictation. Blocking. */
     fun finishDictation(): String {
         val samples = stop() ?: return NO_MODEL
-        return recognize(samples, null).also {
+        return recognize(samples, null).text.also {
             VoiceModel.releaseLater()
             Log.i("Voice", "Dictated \"$it\"")
         }
@@ -299,17 +303,21 @@ class VoiceSession(private val context: Context) {
         return listOf(speech)
     }
 
-    private fun recognize(samples: List<ShortArray>, grammar: String?): String {
+    /** What was heard, without the grammar's "[unk]" tokens; [hadUnknown] if there were any. */
+    private class Heard(val text: String, val hadUnknown: Boolean)
+
+    private fun recognize(samples: List<ShortArray>, grammar: String?): Heard {
         val text = VoiceModel.withModel(context) { model ->
             val recognizer = if (grammar != null) Recognizer(model, rate.toFloat(), grammar) else Recognizer(model, rate.toFloat())
             recognizer.use { r ->
                 samples.forEach { r.acceptWaveForm(it, it.size) }
                 JSONObject(r.finalResult).optString("text")
             }
-        } ?: return ""
+        } ?: return Heard("", false)
         // A stray leading "а"/"и" (click remains, hesitation) would break "найди …" and searches;
         // "[unk]" is what the grammar mode puts for anything it doesn't know.
-        return text.trim().split(' ').filter { it != UNKNOWN }.dropWhile { it in fillers }.joinToString(" ")
+        val words = text.trim().split(' ').filter { it.isNotBlank() }
+        return Heard(words.filter { it != UNKNOWN }.dropWhile { it in fillers }.joinToString(" "), UNKNOWN in words)
     }
 
     private val fillers = setOf("а", "и", "э", "ну")
@@ -351,14 +359,11 @@ object VoiceCommands {
 
     private val numbers = listOf("один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять", "десять")
 
-    private val commands: List<Command> by lazy {
+    /** The commands that need no app; the apps' own come from [VoiceApps] (see [commandsFor]). */
+    private val fixedCommands: List<Command> by lazy {
         buildList {
             fun cmd(vararg phrases: String, run: (Context) -> String) = add(Command(phrases.toList(), run))
-            fun app(name: String, pkg: String, vararg phrases: String) = cmd(*phrases) { it.launchPackage(pkg); name }
 
-            app("SmartTube", "org.smarttube.stable", "ютуб", "открой ютуб", "смарт тюб", "открой смарт тюб")
-            app("Spotify", "com.spotify.tv.android", "музыка", "включи музыку", "открой музыку")
-            app("Jellyfin", "org.jellyfin.androidtv", "фильмы", "открой фильмы", "медиатека")
             cmd("домой", "главный экран", "на главный экран") { ctx ->
                 ctx.startActivity(
                     android.content.Intent(android.content.Intent.ACTION_MAIN)
@@ -403,6 +408,15 @@ object VoiceCommands {
         }
     }
 
+    /** Opening the apps that are installed (built-in and added over adb), then the fixed commands. */
+    private fun commandsFor(context: Context): List<Command> = buildList {
+        for (app in VoiceApps.all(context)) {
+            val pkg = VoiceApps.installedPackage(context, app) ?: continue
+            add(Command(app.phrases) { it.launchPackage(pkg); app.name })
+        }
+        addAll(fixedCommands)
+    }
+
     private fun volume(context: Context, direction: Int) {
         context.getSystemService(android.media.AudioManager::class.java)
             .adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, direction, android.media.AudioManager.FLAG_SHOW_UI)
@@ -415,7 +429,7 @@ object VoiceCommands {
     }
 
     /** JSON phrase list for Vosk's grammar mode; "[unk]" lets anything else fall through. */
-    fun grammar(): String = JSONArray(commands.flatMap { it.phrases }.distinct() + "[unk]").toString()
+    fun grammar(context: Context): String = JSONArray(commandsFor(context).flatMap { it.phrases }.distinct() + "[unk]").toString()
 
     private val searchWords = listOf("найди", "найти", "поищи", "поиск", "ищи", "покажи")
 
@@ -428,10 +442,11 @@ object VoiceCommands {
 
     /** YouTube search in SmartTube (it opens youtube.com search links). */
     fun search(context: Context, query: String) {
+        val pkg = VoiceApps.searchPackage(context) ?: error("SmartTube isn't installed")
         val url = "https://www.youtube.com/results?search_query=" + java.net.URLEncoder.encode(query, "UTF-8")
         context.startActivity(
             android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                .setPackage("org.smarttube.stable")
+                .setPackage(pkg)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
@@ -447,7 +462,7 @@ object VoiceCommands {
                 .getOrElse { "Не удалось открыть поиск (SmartTube установлен?)" }
         }
         val phrase = text.trim()
-        val command = commands.firstOrNull { phrase in it.phrases } ?: return null
+        val command = commandsFor(context).firstOrNull { phrase in it.phrases } ?: return null
         return runCatching { command.run(context) }
             .onFailure { Log.w("Voice", "Command \"$phrase\" failed", it) }
             .getOrElse { "Не удалось выполнить: «$phrase»" }
