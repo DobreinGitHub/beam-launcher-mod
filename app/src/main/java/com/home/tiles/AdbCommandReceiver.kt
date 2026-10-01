@@ -74,12 +74,19 @@ class AdbCommandReceiver : BroadcastReceiver() {
             }.getOrElse { "error $it" }
         }
         // Voice model: --ez voice_install true unzips the pushed zip (see VoiceModelProvider),
-        // --es voice_url URL downloads it instead. Both run in the background; watch tag Voice.
+        // --es voice_url HTTPS_URL [--es voice_sha256 HEX] downloads it instead.
+        // Both run in the background (goAsync keeps the receiver alive); watch tag Voice.
         if (intent.hasExtra("voice_install") || intent.hasExtra("voice_url")) {
             val url = intent.getStringExtra("voice_url")
+            val sha256 = intent.getStringExtra("voice_sha256")
             val app = context.applicationContext
+            val pending = goAsync()
             Thread {
-                if (url != null) VoiceModel.download(app, url) else VoiceModel.installFrom(VoiceModelProvider.pushedZip(app), app)
+                try {
+                    if (url != null) VoiceModel.download(app, url, sha256) else VoiceModel.installFrom(VoiceModelProvider.pushedZip(app), app)
+                } finally {
+                    pending.finish()
+                }
             }.start()
             resultData = "installing"
         }
@@ -125,7 +132,14 @@ class AdbCommandReceiver : BroadcastReceiver() {
         // Keystone and zoom state, read only: --ez kst_get true
         if (intent.hasExtra("kst_get")) resultData = KeystoneProbe.dump()
         // --es kst_set "x0,y0,x1,y1,x2,y2,x3,y3" (TL, TR, BL, BR); --ei zoom_set N
-        intent.getStringExtra("kst_set")?.let { resultData = Keystone.setCorners(it.split(',').map { v -> v.trim().toInt() }).toString() }
+        intent.getStringExtra("kst_set")?.let { spec ->
+            val corners = spec.split(',').map { it.trim().toIntOrNull() }
+            resultData = if (corners.size == 8 && corners.all { it != null }) {
+                Keystone.setCorners(corners.filterNotNull()).toString()
+            } else {
+                "error: expected 8 comma-separated integers"
+            }
+        }
         if (intent.hasExtra("zoom_set")) resultData = Keystone.setZoom(intent.getIntExtra("zoom_set", 0)).toString()
         intent.getStringExtra("gmpf")?.let { spec ->
             resultData = runCatching {

@@ -15,6 +15,8 @@ import org.vosk.Recognizer
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.DigestInputStream
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 /**
@@ -58,12 +60,29 @@ object VoiceModel {
         Log.i("Voice", "Model unloaded")
     }
 
-    /** Blocking download + unzip. */
-    fun download(context: Context, url: String = DEFAULT_URL): Boolean = runCatching {
+    /**
+     * Blocking download + unzip. https only. With [sha256] (hex) the archive is checked before
+     * anything is unpacked; without it the download is trusted as is.
+     */
+    fun download(context: Context, url: String = DEFAULT_URL, sha256: String? = null): Boolean = runCatching {
+        require(url.startsWith("https://", ignoreCase = true)) { "model url must be https" }
+        val zip = File(context.cacheDir, "vosk-download.zip")
         val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 60_000
-        connection.inputStream.use { install(context, it) }
+        try {
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 60_000
+            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
+            val digest = MessageDigest.getInstance("SHA-256")
+            DigestInputStream(connection.inputStream, digest).use { input ->
+                zip.outputStream().use { input.copyTo(it) }
+            }
+            val actual = digest.digest().joinToString("") { "%02x".format(it) }
+            check(sha256 == null || actual.equals(sha256.trim(), ignoreCase = true)) { "sha256 mismatch: $actual" }
+            zip.inputStream().use { install(context, it) }
+        } finally {
+            connection.disconnect()
+            zip.delete()
+        }
     }.onFailure { Log.w("Voice", "Model download failed", it) }.getOrDefault(false)
 
     /** The zip pushed over adb into [VoiceModelProvider]. */
@@ -80,6 +99,8 @@ object VoiceModel {
                 val relative = entry.name.substringAfter('/', "")
                 if (relative.isEmpty()) return@forEach
                 val out = File(tmp, relative)
+                // Zip Slip: an entry like "x/../../y" must not land outside the temp folder.
+                check(out.canonicalPath.startsWith(tmp.canonicalPath + File.separator)) { "bad zip entry ${entry.name}" }
                 if (entry.isDirectory) out.mkdirs() else {
                     out.parentFile?.mkdirs()
                     out.outputStream().use { zip.copyTo(it) }
