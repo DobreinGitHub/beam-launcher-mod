@@ -141,7 +141,7 @@ internal fun HomePage(onHdmiPage: () -> Unit) {
 @Composable
 internal fun RemoteButtonsSection() {
     val context = LocalContext.current
-    val options by produceState(listOf("" to "Ничего", RemoteButtons.PANEL to "Эта панель", RemoteButtons.HOME to "Главный экран")) {
+    val choices by produceState(listOf("" to "Ничего", RemoteButtons.PANEL to "Эта панель", RemoteButtons.HOME to "Главный экран")) {
         val apps = withContext(Dispatchers.IO) { AppRepository(context).loadApps().sortedBy { it.label.lowercase() } }
         value = value + apps.map { RemoteButtons.app(it.pkg) to it.label }
     }
@@ -165,16 +165,26 @@ internal fun RemoteButtonsSection() {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth()) {
             val current = RemoteButtons.actions[i]
-            val index = options.indexOfFirst { it.first == current }.coerceAtLeast(0)
+            // An assignment that isn't in the list yet (the apps are still loading) or any more
+            // (the app was removed) is shown as it is, and ← → step from it: not from "Ничего".
+            val options = if (choices.any { it.first == current }) choices else choices + (current to assignedLabel(context, current))
+            val index = options.indexOfFirst { it.first == current }
             Selector(
                 label = "Кнопка ${i + 1}",
-                value = options.getOrNull(index)?.second ?: "Ничего",
+                value = options[index].second,
                 modifier = Modifier.weight(1f).focusRequester(requesters[i]),
             ) { delta ->
                 RemoteButtons.set(i, options[(index + delta).mod(options.size)].first)
             }
         }
     }
+}
+
+/** What a button assigned to [action] is called: the app's label, or its package if it is gone. */
+private fun assignedLabel(context: android.content.Context, action: String): String {
+    val pkg = RemoteButtons.packageOf(action) ?: return "Ничего"
+    val pm = context.packageManager
+    return runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("$pkg (нет на устройстве)")
 }
 
 /** XMB colour (by month like the PS3, or fixed) and the animation switch. */

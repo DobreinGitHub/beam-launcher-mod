@@ -73,7 +73,7 @@ internal fun KeystonePage(onScreen: () -> Unit) {
         }
     }
     Section("Размер и положение")
-    Selector("Размер", "${100 - zoom * 50 / Keystone.MAX_ZOOM}%", Modifier.fillMaxWidth().padding(bottom = 8.dp)) { step ->
+    Selector("Размер", "${Keystone.sizePercent(zoom)}%", Modifier.fillMaxWidth().padding(bottom = 8.dp)) { step ->
         // Right makes it bigger (fewer shrink steps).
         val next = (zoom - step).coerceIn(0, Keystone.MAX_ZOOM)
         if (next != zoom && Keystone.setZoom(next)) {

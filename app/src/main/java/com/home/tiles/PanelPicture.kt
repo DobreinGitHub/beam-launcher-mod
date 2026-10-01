@@ -35,6 +35,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,13 +51,16 @@ internal fun PicturePage(onXgimiPage: () -> Unit) {
     var current by remember { mutableStateOf(PictureMode.current()) }
     LaunchedEffect(Unit) { XgimiService.bind(context) }
     var confirmPerformance by remember { mutableStateOf(false) }
+    var recheck by remember { mutableStateOf<Job?>(null) }
     fun apply(mode: Int) {
         Xgimi.setPictureMode(context, mode)
         current = mode
-        // The firmware switches asynchronously; read back what it actually applied.
-        scope.launch {
+        // The firmware switches asynchronously; read back what it actually applied, once, after
+        // the last choice (a quick second pick must not be overwritten by the first one's read).
+        recheck?.cancel()
+        recheck = scope.launch {
             delay(1500)
-            PictureMode.current()?.let { current = it }
+            withContext(Dispatchers.IO) { PictureMode.current() }?.let { current = it }
         }
     }
     Section("Режим изображения")
@@ -179,10 +183,24 @@ private fun CustomPictureControls() {
         return
     }
     var values by remember(initial) { mutableStateOf(initial) }
-    // Writes go to a background queue; a slider drag keeps only its latest value per control.
+    val scope = rememberCoroutineScope()
+    val changes = remember { java.util.concurrent.atomic.AtomicInteger() }
+    var recheck by remember { mutableStateOf<Job?>(null) }
+    // Writes go to a background queue; a slider drag keeps only its latest value per control. The
+    // screen shows the new value at once, and once the changes have settled and gone through, what
+    // the firmware really holds (a refused change then shows as it is, not as what was asked).
     fun update(key: String, apply: () -> Unit, next: CustomPicture) {
+        val ticket = changes.incrementAndGet()
         PanelIo.submit("pic-$key", apply)
         values = next
+        recheck?.cancel()
+        recheck = scope.launch {
+            delay(600)
+            // Queued behind the writes; skipped if something was changed again in the meantime.
+            PanelIo.submit("pic-readback") {
+                if (changes.get() == ticket) readCustomPicture()?.let { values = it }
+            }
+        }
     }
     val sliders = listOf(
         Triple(PictureAdjust.BRIGHTNESS, "Яркость", Icons.Rounded.WbSunny),

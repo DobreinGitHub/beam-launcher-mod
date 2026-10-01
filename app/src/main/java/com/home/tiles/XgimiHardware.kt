@@ -431,13 +431,14 @@ object Sensors {
  * granted over adb (tools/restore.ps1).
  */
 object ScreensaverTimeout {
+    /** In ascending order, so ← → in the panel is shorter / longer; "never" is the longest. */
     val options = listOf(
-        Int.MAX_VALUE to "Никогда",
         60_000 to "1 мин",
         300_000 to "5 мин",
         600_000 to "10 мин",
         1_800_000 to "30 мин",
         3_600_000 to "1 час",
+        Int.MAX_VALUE to "Никогда",
     )
 
     fun current(context: Context): Int =
@@ -625,6 +626,12 @@ object Keystone {
 
     /** XGIMI's digital zoom range on this model (ZoomStepRange.zoomOutDigtalMaxNum). */
     const val MAX_ZOOM = 32
+
+    /** The picture's size at the last zoom step, as a percentage of full size: about half. */
+    const val MIN_SIZE_PERCENT = 50
+
+    /** Rough size of the picture at zoom step [zoom] (0 = full size, [MAX_ZOOM] = [MIN_SIZE_PERCENT]). */
+    fun sizePercent(zoom: Int): Int = 100 - (100 - MIN_SIZE_PERCENT) * zoom.coerceIn(0, MAX_ZOOM) / MAX_ZOOM
 
     /** The zoom step Beam last set; the firmware's getter doesn't report it back. */
     fun savedZoom(context: Context): Int = context.getSharedPreferences("keystone", Context.MODE_PRIVATE).getInt("zoom", 0)
