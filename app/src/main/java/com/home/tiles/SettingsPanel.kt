@@ -2,6 +2,8 @@ package com.home.tiles
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.SystemClock
+import android.util.Log
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -114,6 +116,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 // XGIMI's own panel: no sheet over the evenly dimmed picture, see-through grey tiles,
@@ -254,6 +257,14 @@ fun PanelScreen(onDismiss: () -> Unit) {
     }
 }
 
+/** What the main page reads from the firmware; see [MainPage]. */
+private class MainPageState(
+    val inputs: List<Xgimi.Input>,
+    val eco: Boolean?,
+    val soundOutput: String?,
+    val pictureMode: String?,
+)
+
 private class QuickItem(
     val icon: ImageVector,
     val label: String,
@@ -275,16 +286,28 @@ private fun ColumnScope.MainPage(
     open: (PanelPage) -> Unit,
 ) {
     val context = LocalContext.current
-    val inputs = remember { Xgimi.hdmiInputs(context) }
-    var eco by remember { mutableStateOf(Eco.enabled()) }
-    val soundOutput = remember { SoundOutput.output()?.let(::soundOutputName) }
+    val scope = rememberCoroutineScope()
+    // Read off the main thread: these are binder calls into XGIMI's services, and the panel opens
+    // over a playing video. The tiles that depend on them appear once they are in.
+    val hardware by produceState<MainPageState?>(null) {
+        value = withContext(Dispatchers.IO) {
+            MainPageState(
+                inputs = Xgimi.hdmiInputs(context),
+                eco = Eco.enabled(),
+                soundOutput = SoundOutput.output()?.let(::soundOutputName),
+                pictureMode = PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first },
+            )
+        }
+    }
+    val inputs = hardware?.inputs.orEmpty()
+    var ecoChanged by remember { mutableStateOf<Boolean?>(null) }
+    val eco = ecoChanged ?: hardware?.eco
+    val soundOutput = hardware?.soundOutput
     // Name of the connected speaker/headphones, shown under the Bluetooth tile.
     val bluetoothAudio by produceState<String?>(null) {
         value = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name }
     }
-    val pictureMode = remember {
-        PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first }
-    }
+    val pictureMode = hardware?.pictureMode
     // Projector actions close the panel first so it doesn't cover the picture (keystone photographs it).
     fun projector(action: () -> Unit): () -> Unit = {
         onDismiss()
@@ -306,7 +329,9 @@ private fun ColumnScope.MainPage(
         }
         eco?.let { on ->
             // Stays open: the change is visible behind the panel.
-            add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = { if (Eco.set(!on)) eco = Eco.enabled() }))
+            add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = {
+                scope.launch(Dispatchers.IO) { if (Eco.set(!on)) ecoChanged = Eco.enabled() }
+            }))
         }
         add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))
         add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", PanelPage.Power, active = SleepTimer.endsAt.longValue > 0))
@@ -369,10 +394,11 @@ private fun ColumnScope.MainPage(
 private fun PanelHeader(onSettings: () -> Unit) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val dateFormat = remember { SimpleDateFormat("EE, d MMMM", Locale("ru")) }
+    // Minute resolution: every change redraws this full-screen window over the video.
     val now by produceState(Date()) {
         while (true) {
             value = Date()
-            delay(1000 - System.currentTimeMillis() % 1000)
+            delay(60_000 - System.currentTimeMillis() % 60_000)
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -677,7 +703,7 @@ private fun CustomPictureControls() {
     val loaded by produceState<CustomPicture?>(null) {
         XgimiService.bind(context)
         repeat(20) {
-            readCustomPicture()?.let {
+            withContext(Dispatchers.IO) { readCustomPicture() }?.let {
                 value = it
                 return@produceState
             }
@@ -690,8 +716,9 @@ private fun CustomPictureControls() {
         return
     }
     var values by remember(initial) { mutableStateOf(initial) }
-    fun update(apply: () -> Unit, next: CustomPicture) {
-        apply()
+    // Writes go to a background queue; a slider drag keeps only its latest value per control.
+    fun update(key: String, apply: () -> Unit, next: CustomPicture) {
+        PanelIo.submit("pic-$key", apply)
         values = next
     }
     val sliders = listOf(
@@ -702,19 +729,19 @@ private fun CustomPictureControls() {
     )
     sliders.forEach { (item, label, icon) ->
         LevelSlider(icon, values.items.getValue(item), 100, Modifier.fillMaxWidth().padding(bottom = 8.dp), label) {
-            update({ PictureAdjust.set(item, it) }, values.copy(items = values.items + (item to it)))
+            update("item$item", { PictureAdjust.set(item, it) }, values.copy(items = values.items + (item to it)))
         }
     }
     Selector("Шумоподавление", NoiseLevels.getOrElse(values.noise) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val next = (values.noise + delta).mod(NoiseLevels.size)
-        update({ PictureAdjust.setNoiseReduction(next) }, values.copy(noise = next))
+        update("noise", { PictureAdjust.setNoiseReduction(next) }, values.copy(noise = next))
     }
     T("Цветовая температура", 14.sp, color = PanelDim)
     Spacer(Modifier.height(8.dp))
     PairRow {
         listOf("Холодная" to 0, "Станд." to 1, "Тёплая" to 2).forEach { (label, temp) ->
             Chip(label, values.colorTemp == temp, Modifier.weight(1f)) {
-                update({ PictureAdjust.setColorTemp(temp) }, values.copy(colorTemp = temp))
+                update("temp", { PictureAdjust.setColorTemp(temp) }, values.copy(colorTemp = temp))
             }
         }
     }
@@ -722,27 +749,27 @@ private fun CustomPictureControls() {
     Section("Расширенные")
     Selector("Плавность (MEMC)", MotionLevels.getOrElse(values.motion) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val next = (values.motion + delta).mod(MotionLevels.size)
-        update({ PictureAdjust.setMotion(next) }, values.copy(motion = next))
+        update("motion", { PictureAdjust.setMotion(next) }, values.copy(motion = next))
     }
     Selector("Гамма", GammaLevels.getOrElse(values.gamma) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val next = (values.gamma + delta).coerceIn(0, GammaLevels.lastIndex)
-        update({ PictureAdjust.setGamma(next) }, values.copy(gamma = next))
+        update("gamma", { PictureAdjust.setGamma(next) }, values.copy(gamma = next))
     }
     Toggle("Динамический контраст", values.dynamicContrast, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         val next = !values.dynamicContrast
-        update({ PictureAdjust.setDynamicContrast(next) }, values.copy(dynamicContrast = next))
+        update("dyn", { PictureAdjust.setDynamicContrast(next) }, values.copy(dynamicContrast = next))
     }
     Toggle("HDR (авто)", values.hdr, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         val next = !values.hdr
-        update({ PictureAdjust.setHdr(next) }, values.copy(hdr = next))
+        update("hdr", { PictureAdjust.setHdr(next) }, values.copy(hdr = next))
     }
     Selector("Локальный контраст", LocalContrastLevels.getOrElse(values.localContrast) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val next = (values.localContrast + delta).mod(LocalContrastLevels.size)
-        update({ PictureAdjust.setLocalContrast(next) }, values.copy(localContrast = next))
+        update("local", { PictureAdjust.setLocalContrast(next) }, values.copy(localContrast = next))
     }
     ListRow("Сбросить по умолчанию") {
         val d = CustomDefaults
-        update({
+        update("reset", {
             d.items.forEach { (item, v) -> PictureAdjust.set(item, v) }
             PictureAdjust.setColorTemp(d.colorTemp)
             PictureAdjust.setNoiseReduction(d.noise)
@@ -783,6 +810,8 @@ private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
         }
     }
 }
+
+private const val PENDING_TIMEOUT_MS = 15_000L
 
 /** Search for new devices; OK on one pairs it (speakers then connect by themselves). */
 @Composable
@@ -827,14 +856,17 @@ private fun BluetoothPage(onXgimiPage: () -> Unit) {
     DisposableEffect(Unit) { onDispose { BluetoothScan.stop(context) } }
     val scope = rememberCoroutineScope()
     var devices by remember { mutableStateOf<List<XgimiBluetooth.Device>?>(null) }
-    // Addresses we just asked to (dis)connect, shown as "…" until the state changes.
-    var pending by remember { mutableStateOf(emptyMap<String, Boolean>()) }
+    // Addresses we just asked to (dis)connect (wanted state, time asked), shown as "…" until the
+    // state changes. Gives up after [PENDING_TIMEOUT_MS]: a speaker that is off never gets there.
+    var pending by remember { mutableStateOf(emptyMap<String, Pair<Boolean, Long>>()) }
     LaunchedEffect(Unit) {
         while (true) {
             val list = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context) }
             devices = list
-            pending = pending.filter { (address, wantConnected) ->
-                list.firstOrNull { it.address == address }?.connected != wantConnected
+            val now = SystemClock.elapsedRealtime()
+            pending = pending.filter { (address, request) ->
+                val (wantConnected, since) = request
+                now - since < PENDING_TIMEOUT_MS && list.firstOrNull { it.address == address }?.connected != wantConnected
             }
             delay(2000)
         }
@@ -847,7 +879,7 @@ private fun BluetoothPage(onXgimiPage: () -> Unit) {
         else -> list.filter { !it.remote }.forEach { device ->
             val waiting = device.address in pending
             val state = when {
-                waiting && pending.getValue(device.address) -> "Подключение…"
+                waiting && pending.getValue(device.address).first -> "Подключение…"
                 waiting -> "Отключение…"
                 device.connecting -> "Подключение…"
                 device.connected -> "Подключено"
@@ -861,7 +893,7 @@ private fun BluetoothPage(onXgimiPage: () -> Unit) {
             ) {
                 if (waiting) return@Chip
                 val connect = !device.connected
-                pending = pending + (device.address to connect)
+                pending = pending + (device.address to (connect to SystemClock.elapsedRealtime()))
                 scope.launch(Dispatchers.IO) {
                     if (connect) XgimiBluetooth.connect(context, device) else XgimiBluetooth.disconnect(context, device)
                 }
@@ -1053,8 +1085,12 @@ private fun KeystonePage(onScreen: () -> Unit) {
         T("Трапеция недоступна", 14.sp, color = PanelDim)
         return
     }
+    // The corners on screen are the ones last asked for; the write goes to a background queue
+    // (keeping the newest), so a held arrow key neither lags nor computes from stale corners.
     fun apply(values: List<Int>) {
-        if (Keystone.setCorners(values)) corners = Keystone.corners() ?: values
+        val clamped = values.mapIndexed { i, v -> v.coerceIn(0, (if (i % 2 == 0) Keystone.WIDTH else Keystone.HEIGHT) - 1) }
+        corners = clamped
+        PanelIo.submit("keystone") { Keystone.setCorners(clamped) }
     }
     ListRow("Настроить на экране", onScreen)
     if (realtime == true) {
@@ -1068,7 +1104,7 @@ private fun KeystonePage(onScreen: () -> Unit) {
     Section("Углы · OK, затем стрелки")
     listOf("↖  Левый верхний", "↗  Правый верхний", "↙  Левый нижний", "↘  Правый нижний").forEachIndexed { i, label ->
         ArrowPad("corner$i", label, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { dx, dy ->
-            val values = current.toMutableList()
+            val values = (corners ?: current).toMutableList()
             values[i * 2] += dx
             values[i * 2 + 1] += dy
             apply(values)
@@ -1085,7 +1121,7 @@ private fun KeystonePage(onScreen: () -> Unit) {
         }
     }
     ArrowPad("shift", "✥  Сдвиг картинки", Modifier.fillMaxWidth()) { dx, dy ->
-        val moved = current.mapIndexed { i, v -> v + if (i % 2 == 0) dx else dy }
+        val moved = (corners ?: current).mapIndexed { i, v -> v + if (i % 2 == 0) dx else dy }
         val inside = moved.chunked(2).all { (x, y) -> x in 0 until Keystone.WIDTH && y in 0 until Keystone.HEIGHT }
         if (inside) apply(moved)
     }
@@ -1097,7 +1133,7 @@ private fun KeystonePage(onScreen: () -> Unit) {
         Xgimi.autoKeystone(context)
     }
     ListRow("Без коррекции") {
-        Keystone.setZoom(0)
+        PanelIo.submit("zoom") { Keystone.setZoom(0) }
         Keystone.saveZoom(context, 0)
         zoom = 0
         apply(listOf(0, 0, Keystone.WIDTH - 1, 0, 0, Keystone.HEIGHT - 1, Keystone.WIDTH - 1, Keystone.HEIGHT - 1))
@@ -1504,7 +1540,7 @@ private fun BrightnessSlider(modifier: Modifier) {
         // Level 0 would leave a nearly black picture; keep the image usable.
         val value = it.coerceAtLeast(1)
         level = value
-        Lumens.setLevel(value)
+        PanelIo.submit("lumens") { Lumens.setLevel(value) }
     }
 }
 
@@ -1771,6 +1807,35 @@ private fun ColorDot(color: Color, selected: Boolean, onClick: () -> Unit) {
     ) {
         if (selected) {
             Image(Icons.Rounded.Check, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(Color.White))
+        }
+    }
+}
+
+/**
+ * Hardware writes from the panel (XGIMI's services are binder calls that can block) run here, one
+ * at a time and in order, off the main thread. A call for the same [submit] key as the one waiting
+ * last replaces it, so dragging a slider sends only where it ended up.
+ */
+private object PanelIo {
+    private class Entry(val key: String, @Volatile var block: () -> Unit)
+
+    private val executor = Executors.newSingleThreadExecutor { Thread(it, "panel-io").apply { isDaemon = true } }
+    private val queue = ArrayDeque<Entry>()
+
+    fun submit(key: String, block: () -> Unit) {
+        val added = synchronized(queue) {
+            val last = queue.lastOrNull()
+            if (last != null && last.key == key) {
+                last.block = block
+                false
+            } else {
+                queue.addLast(Entry(key, block))
+                true
+            }
+        }
+        if (added) executor.execute {
+            val entry = synchronized(queue) { queue.removeFirst() }
+            runCatching(entry.block).onFailure { Log.w("PanelIo", "${entry.key} failed", it) }
         }
     }
 }
