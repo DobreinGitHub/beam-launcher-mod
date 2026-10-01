@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The XGIMI firmware resets the enabled accessibility services on boot, and a service whose process
@@ -22,8 +23,7 @@ object AccessibilityGuard {
         if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) return
         val app = context.applicationContext
         if (isEnabled(app) && isBound(app)) return
-        if (restarting) return
-        restarting = true
+        if (!restarting.compareAndSet(false, true)) return
         // Off the caller's thread: restoring needs pauses and a check that the system bound it.
         Thread {
             runCatching {
@@ -43,7 +43,7 @@ object AccessibilityGuard {
                     if (isBound(app)) break
                 }
             }.onFailure { Log.w("AccessibilityGuard", "Could not restore panel service", it) }
-            restarting = false
+            restarting.set(false)
         }.start()
     }
 
@@ -63,6 +63,5 @@ object AccessibilityGuard {
         Settings.Secure.putString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, entries.joinToString(":"))
     }
 
-    @Volatile
-    private var restarting = false
+    private val restarting = AtomicBoolean(false)
 }
