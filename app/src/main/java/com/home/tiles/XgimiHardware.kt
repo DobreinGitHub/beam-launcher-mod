@@ -1,6 +1,8 @@
 package com.home.tiles
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import java.lang.reflect.Proxy
 
@@ -93,34 +95,116 @@ private const val MST_PICTURE = "com.xgimi.video.MstPictureManager"
  * Parts of com.xgimi.api (XgimiAudioManager, MstPictureManager) talk to com.xgimi.xgimiservice,
  * which the library binds only after XgimiAidlServiceManager.init(context, listener), as XGIMI's
  * settings do on start. Call [bind] ahead of using them; the binding is asynchronous.
+ *
+ * If the service goes away (it is restarted, or its process is killed) and says so through the
+ * listener, binding is retried a few times with growing pauses; the library may also reconnect by
+ * itself, in which case the listener reports it and the pending retry stands down. Whether
+ * init() may be called a second time is not documented: the log (tag XgimiService) shows what the
+ * library reports and what a retry did.
  */
 object XgimiService {
+    private const val TAG = "XgimiService"
+    private const val MAX_RETRIES = 8
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var appContext: Context? = null
+    private var binding = false
+    private var retries = 0
+    private var described = false
+
     @Volatile
-    private var bindRequested = false
+    private var bound = false
 
     fun bind(context: Context) {
-        if (bindRequested) return
-        bindRequested = true
-        runCatching {
-            val cls = Class.forName("com.xgimi.clients.XgimiAidlServiceManager")
-            val instance = cls.getField("INSTANCE").get(null)
-            val listener = Class.forName("com.xgimi.clients.XgimiAidlServiceManager\$IAidlConnectListener")
-            val callback = Proxy.newProxyInstance(listener.classLoader, arrayOf(listener)) { proxy, method, args ->
-                when (method.name) {
-                    "equals" -> proxy === args?.get(0)
-                    "hashCode" -> System.identityHashCode(proxy)
-                    "toString" -> "XgimiService.bind"
-                    else -> {
-                        Log.i("XgimiService", "XGIMI service ${method.name}")
-                        null
-                    }
+        synchronized(this) {
+            if (bound || binding) return
+            binding = true
+            retries = 0
+            appContext = context.applicationContext
+        }
+        attempt()
+    }
+
+    private fun attempt() {
+        val context = appContext ?: return
+        val result = runCatching { init(context) }
+        synchronized(this) {
+            binding = false
+            if (result.isSuccess) bound = true
+        }
+        result.onFailure {
+            val cause = it.cause ?: it
+            Log.w(TAG, "Could not bind XGIMI service", it)
+            // Not an XGIMI firmware: there is nothing to retry.
+            if (cause !is ClassNotFoundException) scheduleRetry()
+        }
+    }
+
+    private fun init(context: Context) {
+        val cls = Class.forName("com.xgimi.clients.XgimiAidlServiceManager")
+        val instance = cls.getField("INSTANCE").get(null)
+        val listener = Class.forName("com.xgimi.clients.XgimiAidlServiceManager\$IAidlConnectListener")
+        if (!described) {
+            described = true
+            Log.i(TAG, "XgimiAidlServiceManager: ${cls.methods.map { it.name }.distinct().sorted()}; listener: ${listener.methods.map { it.name }}")
+        }
+        val callback = Proxy.newProxyInstance(listener.classLoader, arrayOf(listener)) { proxy, method, args ->
+            when (method.name) {
+                "equals" -> proxy === args?.get(0)
+                "hashCode" -> System.identityHashCode(proxy)
+                "toString" -> "XgimiService.bind"
+                else -> {
+                    onListenerEvent(method.name)
+                    defaultFor(method.returnType)
                 }
             }
-            cls.getMethod("init", Context::class.java, listener).invoke(instance, context.applicationContext, callback)
-        }.onFailure {
-            bindRequested = false
-            Log.w("XgimiService", "Could not bind XGIMI service", it)
         }
+        cls.getMethod("init", Context::class.java, listener).invoke(instance, context, callback)
+    }
+
+    /** The listener's methods aren't documented; its disconnect callback is recognised by name. */
+    private fun onListenerEvent(name: String) {
+        val lower = name.lowercase()
+        val gone = "disconnect" in lower || "died" in lower || "unbind" in lower || "lost" in lower
+        Log.i(TAG, "XGIMI service $name" + if (gone) " (gone)" else "")
+        if (gone) {
+            synchronized(this) { bound = false }
+            scheduleRetry()
+        } else {
+            synchronized(this) {
+                bound = true
+                retries = 0
+            }
+        }
+    }
+
+    /** 2, 4, 8 ... 30 s apart, [MAX_RETRIES] times; a later [bind] call starts over. */
+    private fun scheduleRetry() {
+        val pause = synchronized(this) {
+            if (bound || retries >= MAX_RETRIES) return
+            (2_000L shl retries++).coerceAtMost(30_000L)
+        }
+        handler.postDelayed({
+            synchronized(this) {
+                if (bound || binding) return@postDelayed
+                binding = true
+            }
+            Log.i(TAG, "Rebinding XGIMI service")
+            attempt()
+        }, pause)
+    }
+
+    /** What a proxied method with this return type must return in place of null. */
+    private fun defaultFor(type: Class<*>): Any? = when (type) {
+        java.lang.Boolean.TYPE -> false
+        java.lang.Integer.TYPE -> 0
+        java.lang.Long.TYPE -> 0L
+        java.lang.Float.TYPE -> 0f
+        java.lang.Double.TYPE -> 0.0
+        java.lang.Short.TYPE -> 0.toShort()
+        java.lang.Byte.TYPE -> 0.toByte()
+        java.lang.Character.TYPE -> 0.toChar()
+        else -> null
     }
 }
 
