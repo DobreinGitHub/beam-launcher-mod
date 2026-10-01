@@ -139,7 +139,14 @@ object PictureAdjust {
 
     fun get(item: Int): Int? = Gmpf.int(MST_PICTURE, "getPictureItem", item)
 
-    fun set(item: Int, value: Int): Boolean = Gmpf.ok(MST_PICTURE, "setPictureItem", item, value)
+    /** The range of the four sliders (and the hue): XGIMI's pages show 0..100. */
+    const val ITEM_MAX = 100
+
+    /** Brightness .. hue only; [value] is kept inside 0..[ITEM_MAX]. False for an unknown item. */
+    fun set(item: Int, value: Int): Boolean {
+        if (item !in BRIGHTNESS..HUE) return false
+        return Gmpf.ok(MST_PICTURE, "setPictureItem", item, value.coerceIn(0, ITEM_MAX))
+    }
 
     /** GmTvManager calls that take the input first, like XGIMI's picture page makes them. */
     private fun tv(name: String, vararg args: Any?): Result<Any?> {
@@ -578,12 +585,40 @@ object Keystone {
         }
     }.onFailure { Log.w("Keystone", "read failed", it) }.getOrNull()
 
+    /** [values] (x0,y0 .. x3,y3 for TL, TR, BL, BR) with every coordinate kept inside the 1920x1080 chip. */
+    fun clamp(values: List<Int>): List<Int> =
+        values.mapIndexed { i, v -> v.coerceIn(0, (if (i % 2 == 0) WIDTH else HEIGHT) - 1) }
+
+    /**
+     * Whether the corners make a proper four-sided picture: a convex quadrilateral with no
+     * collapsed or crossed side (every turn around TL, TR, BR, BL goes the same way). A corner
+     * dragged past its neighbour, or all four onto a line, would give an unwatchable picture.
+     */
+    fun isValid(values: List<Int>): Boolean {
+        if (values.size != 8) return false
+        val xs = intArrayOf(values[0], values[2], values[6], values[4])
+        val ys = intArrayOf(values[1], values[3], values[7], values[5])
+        var direction = 0
+        for (i in 0..3) {
+            val j = (i + 1) % 4
+            val k = (i + 2) % 4
+            val cross = (xs[j] - xs[i]).toLong() * (ys[k] - ys[j]) - (ys[j] - ys[i]).toLong() * (xs[k] - xs[j])
+            val turn = if (cross > 0) 1 else if (cross < 0) -1 else 0
+            if (turn == 0 || (direction != 0 && turn != direction)) return false
+            direction = turn
+        }
+        return true
+    }
+
+    /** Clamps [values] and writes them; false if they aren't a valid picture ([isValid]) or the firmware refused. */
     fun setCorners(values: List<Int>): Boolean = runCatching {
         require(values.size == 8)
+        val corners = clamp(values)
+        if (!isValid(corners)) return false
         val full = readFull() ?: return false
         cornerPoints(full).forEachIndexed { i, p ->
-            p.javaClass.getField("x").set(p, values[i * 2].coerceIn(0, WIDTH - 1).toShort())
-            p.javaClass.getField("y").set(p, values[i * 2 + 1].coerceIn(0, HEIGHT - 1).toShort())
+            p.javaClass.getField("x").set(p, corners[i * 2].toShort())
+            p.javaClass.getField("y").set(p, corners[i * 2 + 1].toShort())
         }
         Gmpf.ok(DISPLAY, "correctKeystone", full)
     }.onFailure { Log.w("Keystone", "write failed", it) }.getOrDefault(false)

@@ -47,8 +47,10 @@ internal fun KeystonePage(onScreen: () -> Unit) {
     }
     // The corners on screen are the ones last asked for; the write goes to a background queue
     // (keeping the newest), so a held arrow key neither lags nor computes from stale corners.
+    // A move that would cross or collapse the picture is ignored, like the firmware would refuse it.
     fun apply(values: List<Int>) {
-        val clamped = values.mapIndexed { i, v -> v.coerceIn(0, (if (i % 2 == 0) Keystone.WIDTH else Keystone.HEIGHT) - 1) }
+        val clamped = Keystone.clamp(values)
+        if (!Keystone.isValid(clamped)) return
         corners = clamped
         PanelIo.submit("keystone") { Keystone.setCorners(clamped) }
     }
