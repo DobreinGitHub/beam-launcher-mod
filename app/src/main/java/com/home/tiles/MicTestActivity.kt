@@ -6,11 +6,13 @@ import android.graphics.Color
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import android.view.Gravity
 import android.widget.TextView
+import androidx.annotation.RequiresApi
 import kotlin.math.abs
 
 /**
@@ -74,13 +76,18 @@ class MicTestActivity : Activity() {
         }
         recorder.stop()
         recorder.release()
-        val saved = saveToDownloads(wav(pcm.toByteArray(), rate))
+        val saved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            saveToDownloads(wav(pcm.toByteArray(), rate))
+        } else {
+            "нужен Android 10 или новее"
+        }
         Log.i("MicTest", "saved $saved (${pcm.size()} bytes)")
         show("Готово")
         runOnUiThread { label.postDelayed({ finish() }, 800) }
     }
 
     /** Download/beam_mic.wav, where adb can read it (the app's own folder is closed to adb here). */
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun saveToDownloads(bytes: ByteArray): String {
         val resolver = contentResolver
         val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI

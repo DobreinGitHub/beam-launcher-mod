@@ -41,9 +41,6 @@ android {
         checkReleaseBuilds = false
         // CI passes -PlintStrict: lint errors fail the build there; locally they only land in the report.
         abortOnError = project.hasProperty("lintStrict")
-        // In CI the whole list of problems goes to the log, not just the first one.
-        textReport = project.hasProperty("lintStrict")
-        textOutput = file("stdout")
     }
     testOptions {
         // Android's own classes (Log, Handler, ...) are stubs on the JVM: let them return defaults.

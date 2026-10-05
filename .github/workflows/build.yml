@@ -59,6 +59,10 @@ jobs:
       # enough, the four differ only in their package name.
       - name: Lint
         run: ./gradlew :app:lintDebug :stub:lintButton1Debug -PlintStrict --console=plain
+      # Gradle's own message names only the first error: the whole list goes to the log.
+      - name: Lint report
+        if: failure()
+        run: cat app/build/intermediates/lint_intermediate_text_report/*/lintReport*/lint-results-*.txt stub/build/intermediates/lint_intermediate_text_report/*/lintReport*/lint-results-*.txt || true
       - uses: actions/upload-artifact@v7
         if: always()
         continue-on-error: true
