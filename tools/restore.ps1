@@ -273,7 +273,10 @@ Step "Каналы приложений (второй ряд)" {
 Step "Системные настройки (восстановление спец. возможностей)" {
     Check (Adb shell pm grant com.home.tiles android.permission.WRITE_SECURE_SETTINGS)
 }
-Step "Поиск Bluetooth-устройств (местоположение)" { Check (Adb shell pm grant com.home.tiles android.permission.ACCESS_FINE_LOCATION) }
+Step "Поиск Bluetooth-устройств (местоположение)" {
+    Check (Adb shell pm grant com.home.tiles android.permission.ACCESS_FINE_LOCATION)
+    Check (Adb shell pm grant com.home.tiles android.permission.ACCESS_COARSE_LOCATION)
+}
 Step "Микрофон пульта (голосовая кнопка)" { Check (Adb shell pm grant com.home.tiles android.permission.RECORD_AUDIO) }
 Step "Время до заставки (screen_off_timeout)" { Check (Adb shell appops set com.home.tiles WRITE_SETTINGS allow) }
 $script:HomeSet = $false
