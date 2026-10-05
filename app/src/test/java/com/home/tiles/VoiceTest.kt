@@ -63,7 +63,7 @@ class VoiceTest {
             // refused
         }
         assertFalse(File(target.parentFile, "evil.txt").exists())
-        assertFalse(File(target.parentFile.parentFile, "evil.txt").exists())
+        assertFalse(File(target.parentFile!!.parentFile!!, "evil.txt").exists())
     }
 
     @Test

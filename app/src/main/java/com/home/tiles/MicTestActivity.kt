@@ -39,6 +39,7 @@ class MicTestActivity : Activity() {
 
     private fun show(text: String) = runOnUiThread { label.text = text }
 
+    @android.annotation.SuppressLint("MissingPermission")
     private fun record(seconds: Int, source: Int) {
         val rate = 16000
         val min = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)

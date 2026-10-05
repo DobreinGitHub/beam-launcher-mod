@@ -46,5 +46,8 @@ android {
     lint {
         checkReleaseBuilds = false
         abortOnError = project.hasProperty("lintStrict")
+        // In CI the whole list of problems goes to the log, not just the first one.
+        textReport = project.hasProperty("lintStrict")
+        textOutput = file("stdout")
     }
 }

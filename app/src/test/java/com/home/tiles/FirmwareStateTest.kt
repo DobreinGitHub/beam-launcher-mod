@@ -46,12 +46,15 @@ class FirmwareStateTest {
     fun aChangeShowsAtOnceThenWritesAndReadsBack() {
         val hardware = AtomicInteger(1)
         val written = CountDownLatch(1)
+        val mayWrite = CountDownLatch(1)
         val state = FirmwareState({ hardware.get() }, scope)
         state.change(5) {
+            mayWrite.await(5, TimeUnit.SECONDS) // held back until the check below is done
             hardware.set(4) // the firmware ends up with something else than asked for
             written.countDown()
         }
         assertEquals(5, state.value) // before the write has even run
+        mayWrite.countDown()
         assertTrue(written.await(5, TimeUnit.SECONDS))
         waitFor("the read back") { state.value == 4 }
     }
