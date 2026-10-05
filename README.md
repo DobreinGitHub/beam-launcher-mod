@@ -115,8 +115,31 @@ powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.5
 нужен, чтобы Windows не запретила запуск скрипта, `-Adb` указывает, где лежит adb (если `adb` уже в
 `PATH`, параметр можно не писать). Скрипт скачает APK, поставит Beam и заглушки кнопок пульта,
 отключит лишнее, выдаст права и сделает Beam домашним экраном. У каждого шага в выводе должно быть
-`[OK]`, строки `[!!]` означают ошибку. Проектор перезагрузится и загрузится сразу в Beam. Не хотите
-менять язык системы, часовой пояс и Bluetooth-имя: добавьте `-SkipSystem`.
+`[OK]`, строки `[!!]` означают ошибку. Проектор перезагрузится и загрузится сразу в Beam.
+
+**Язык, часовой пояс и Bluetooth-имя.** По умолчанию скрипт ставит язык системы `ru-RU`, часовой
+пояс `Europe/Moscow` и Bluetooth-имя «XGIMI Play 6». Если вам это не нужно, добавьте `-SkipSystem`
+(перед `-Reboot`): три настройки останутся как были.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -SkipSystem -Reboot
+```
+
+Свой часовой пояс можно задать и без пересчёта всего остального, в PowerShell из папки `C:\adb`
+(пояс в формате `Europe/Berlin`, `Europe/Kyiv`, `Asia/Almaty`):
+
+```powershell
+.\adb shell settings put global auto_time_zone 0
+.\adb shell service call alarm 3 s16 Europe/Berlin
+.\adb shell getprop persist.sys.timezone
+```
+
+Последняя команда должна вывести выбранный пояс (если нет, замените вторую команду на
+`.\adb shell cmd alarm set-timezone Europe/Berlin`). Автоопределение отключено намеренно: у
+прошивки по умолчанию пояс Шанхай, а SIM для определения нет. Язык системы на английский
+переключать нельзя: прошивка его не принимает и включит китайский. Язык интерфейса Beam
+выбирается в самом Beam: «Оформление» → «Язык». Своё имя и пояс можно также задать параметрами
+`-BluetoothName "Своё имя"` и `-TimeZone Europe/Berlin` (см. [ниже](#что-меняет-restoreps1)).
 
 Скрипт можно запускать повторно. Шаги для отсутствующих приложений пропускаются. APK, которые нужно
 поставить заодно (SmartTube, LeanKey…), положите в `tools\apks\`. Свой APK Beam (например,

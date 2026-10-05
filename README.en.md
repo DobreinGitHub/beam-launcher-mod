@@ -118,8 +118,31 @@ is needed so that Windows doesn't forbid running the script, and `-Adb` says whe
 already on `PATH`, you can leave it out). The script downloads the APKs, installs Beam and the remote
 button stubs, disables the unneeded apps, grants permissions and makes Beam the home screen. Every step
 in the output should say `[OK]`; `[!!]` lines mean an error. The projector reboots and starts straight
-into Beam. If you don't want to change the system language, time zone and Bluetooth name, add
-`-SkipSystem`.
+into Beam.
+
+**Language, time zone and Bluetooth name.** By default the script sets the system language to
+`ru-RU`, the time zone to `Europe/Moscow` and the Bluetooth name to "XGIMI Play 6". If you don't want
+that, add `-SkipSystem` (before `-Reboot`): the three settings stay as they were.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -SkipSystem -Reboot
+```
+
+You can set your own time zone separately, in PowerShell from the `C:\adb` folder (the zone in the
+form `Europe/Berlin`, `Europe/Kyiv`, `Asia/Almaty`):
+
+```powershell
+.\adb shell settings put global auto_time_zone 0
+.\adb shell service call alarm 3 s16 Europe/Berlin
+.\adb shell getprop persist.sys.timezone
+```
+
+The last command should print the zone you chose (if it doesn't, replace the second command with
+`.\adb shell cmd alarm set-timezone Europe/Berlin`). Auto-detection is turned off on purpose: the
+firmware defaults to Shanghai and there is no SIM to detect the zone. Don't switch the system language
+to English: the firmware doesn't accept it and turns Chinese on. Beam's interface language is chosen
+in Beam itself: Appearance → Language. You can also set the name and the zone with the parameters
+`-BluetoothName "Your name"` and `-TimeZone Europe/Berlin` (see [below](#what-restoreps1-changes)).
 
 The script can be run again; steps for apps that are absent are skipped. APKs to install along the way
 (SmartTube, LeanKey…) go into `tools\apks\`. Your own Beam APK (a build of your own, say) goes there
