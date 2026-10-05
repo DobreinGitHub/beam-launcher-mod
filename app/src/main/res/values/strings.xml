@@ -62,12 +62,6 @@
     <string name="theme">Тема</string>
     <string name="theme_light">Светлая</string>
     <string name="theme_dark">Тёмная</string>
-    <string name="layout">Раскладка</string>
-    <string name="layout_big_tile">Крупная плитка</string>
-    <string name="layout_switch">Как на Switch</string>
-    <string name="tile_size">Размер плиток</string>
-    <string name="tiles_normal">Обычные</string>
-    <string name="tiles_large">Крупные</string>
     <string name="on_power_on">При включении</string>
     <string name="home_screen">Главный экран</string>
     <string name="if_connected">если подключено</string>

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,20 +37,6 @@ internal fun AppearancePage() {
         }
     }
     if (Colors.isXmb) XmbOptions()
-    Section(tr(R.string.layout))
-    PairRow {
-        Chip(tr(R.string.layout_big_tile), LauncherSettings.layout == LAYOUT_FOCUS, Modifier.weight(1f)) {
-            LauncherSettings.layout = LAYOUT_FOCUS
-        }
-        Chip(tr(R.string.layout_switch), LauncherSettings.layout == LAYOUT_CLASSIC, Modifier.weight(1f)) {
-            LauncherSettings.layout = LAYOUT_CLASSIC
-        }
-    }
-    Section(tr(R.string.tile_size))
-    PairRow {
-        Chip(tr(R.string.tiles_normal), !LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = false }
-        Chip(tr(R.string.tiles_large), LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = true }
-    }
     // Each language is named in itself, so it can be found whatever the interface is set to.
     Section(tr(R.string.language))
     PairRow {

@@ -62,12 +62,6 @@
     <string name="theme">Theme</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
-    <string name="layout">Layout</string>
-    <string name="layout_big_tile">Large tile</string>
-    <string name="layout_switch">Like Switch</string>
-    <string name="tile_size">Tile size</string>
-    <string name="tiles_normal">Normal</string>
-    <string name="tiles_large">Large</string>
     <string name="on_power_on">On power-on</string>
     <string name="home_screen">Home screen</string>
     <string name="if_connected">if connected</string>

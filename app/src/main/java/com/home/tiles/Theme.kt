@@ -13,7 +13,6 @@ object LauncherSettings {
 
     private val darkState = mutableStateOf(false)
     private val backgroundState = mutableStateOf(0)
-    private val largeTilesState = mutableStateOf(false)
     private val soundsState = mutableStateOf(true)
     private val nowPlayingState = mutableStateOf(true)
     private val usbTileState = mutableStateOf(true)
@@ -22,7 +21,6 @@ object LauncherSettings {
     private val secondRowState = mutableStateOf(SECOND_ROW_AUTO)
     private val xmbColorState = mutableStateOf(-1)
     private val bgAnimationState = mutableStateOf(true)
-    private val layoutState = mutableStateOf(LAYOUT_FOCUS)
 
     fun init(context: Context) {
         // Shared by the launcher activity and the overlay service in the same process.
@@ -30,7 +28,6 @@ object LauncherSettings {
         prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         darkState.value = prefs.getBoolean("dark", false)
         backgroundState.value = prefs.getInt("background", 0).coerceIn(Backgrounds.indices)
-        largeTilesState.value = prefs.getBoolean("largeTiles", false)
         soundsState.value = prefs.getBoolean("sounds", true)
         nowPlayingState.value = prefs.getBoolean("nowPlaying", true)
         usbTileState.value = prefs.getBoolean("usbTile", true)
@@ -39,7 +36,6 @@ object LauncherSettings {
         secondRowState.value = prefs.getString("secondRow", SECOND_ROW_AUTO) ?: SECOND_ROW_AUTO
         xmbColorState.value = prefs.getInt("xmbColor", -1)
         bgAnimationState.value = prefs.getBoolean("bgAnimation", true)
-        layoutState.value = prefs.getString("layout", LAYOUT_FOCUS) ?: LAYOUT_FOCUS
     }
 
     var dark: Boolean
@@ -49,10 +45,6 @@ object LauncherSettings {
     var background: Int
         get() = backgroundState.value
         set(value) { backgroundState.value = value; prefs.edit().putInt("background", value).apply() }
-
-    var largeTiles: Boolean
-        get() = largeTilesState.value
-        set(value) { largeTilesState.value = value; prefs.edit().putBoolean("largeTiles", value).apply() }
 
     var sounds: Boolean
         get() = soundsState.value
@@ -84,11 +76,6 @@ object LauncherSettings {
     var xmbColor: Int
         get() = xmbColorState.value
         set(value) { xmbColorState.value = value; prefs.edit().putInt("xmbColor", value).apply() }
-
-    /** Home layout: [LAYOUT_FOCUS] (big selected tile) or [LAYOUT_CLASSIC] (Switch row). */
-    var layout: String
-        get() = layoutState.value
-        set(value) { layoutState.value = value; prefs.edit().putString("layout", value).apply() }
 
     var bgAnimation: Boolean
         get() = bgAnimationState.value

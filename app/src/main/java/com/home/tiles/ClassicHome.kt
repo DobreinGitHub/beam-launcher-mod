@@ -30,9 +30,6 @@ import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-const val LAYOUT_FOCUS = "focus"
-const val LAYOUT_CLASSIC = "classic"
-
 private val ClassicPad = 108.dp
 private val ClassicGap = 14.dp
 
