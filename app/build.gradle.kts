@@ -1,10 +1,32 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Release signing key: kept outside the repository (see README). Without it - CI, other people's
+// builds - the release build is signed with the debug key and installs fine, but can't update a
+// Beam that was signed with the real one.
+val releaseKey = Properties().apply {
+    val file = File(System.getenv("BEAM_RELEASE_PROPS") ?: "${System.getProperty("user.home")}/.beam/release.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+
 android {
+    signingConfigs {
+        if (releaseKey.isNotEmpty()) {
+            create("beamRelease") {
+                storeFile = file(releaseKey.getProperty("storeFile"))
+                storePassword = releaseKey.getProperty("storePassword")
+                keyAlias = releaseKey.getProperty("keyAlias")
+                keyPassword = releaseKey.getProperty("keyPassword")
+            }
+        }
+    }
+
     namespace = "com.home.tiles"
     compileSdk = 34
 
@@ -12,8 +34,8 @@ android {
         applicationId = "com.home.tiles"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
         // The projector is 32-bit ARM; keeps Vosk/JNA native libraries to the one ABI.
         ndk { abiFilters += "armeabi-v7a" }
     }
@@ -23,8 +45,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Sideloaded only, so the debug key is fine.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("beamRelease") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {

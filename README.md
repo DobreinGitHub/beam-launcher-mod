@@ -31,9 +31,9 @@
 
 1. Включите на проекторе режим разработчика и отладку по сети (ADB). Отключите VPN на компьютере,
    иначе adb не достучится до проектора.
-2. Соберите APK (см. [Сборка](#сборка)). Сборки из CI неделю хранятся в артефактах на вкладке
-   Actions: положите оттуда `app-release.apk` (и заглушки `stub-*-release.apk`) в `tools\apks\` или
-   укажите путь к Beam параметром `-Apk`.
+2. Скачайте APK со страницы [Releases](https://github.com/tonisaf/beam-launcher/releases): `app-release.apk`
+   (Beam) и четыре `stub-button*-release.apk` (заглушки кнопок пульта). Положите их в `tools\apks\`
+   или укажите путь к Beam параметром `-Apk`. Можно собрать самим (см. [Сборка](#сборка)).
 3. Запустите из корня репозитория (Windows PowerShell):
 
    ```powershell
@@ -142,9 +142,26 @@ Beam отвечает и на стандартные запросы распоз
 ./gradlew :app:assembleRelease :stub:assembleRelease
 ```
 
-APK появятся в `app/build/outputs/apk/release/` и `stub/build/outputs/apk/*/release/`. Релиз
-подписывается debug-ключом вашего компьютера. Поэтому APK, собранный на другом компьютере (или
-скачанный из CI), не встанет поверх вашего: сначала удалите старый.
+APK появятся в `app/build/outputs/apk/release/` и `stub/build/outputs/apk/*/release/`.
+
+### Подпись
+
+Релизы подписаны постоянным ключом, он лежит вне репозитория. Благодаря этому новую версию можно
+ставить поверх старой (`adb install -r`, настройки сохраняются). Gradle берёт ключ из
+`~/.beam/release.properties` (или из файла, путь к которому в `BEAM_RELEASE_PROPS`):
+
+```properties
+storeFile=C:/Users/you/.beam/beam-release.jks
+storePassword=...
+keyAlias=beam
+keyPassword=...
+```
+
+Ключ создаётся один раз: `keytool -genkeypair -alias beam -keyalg RSA -keysize 4096 -validity 36500
+-keystore beam-release.jks`. Храните копию: потерянный ключ значит, что у всех придётся удалить Beam и
+поставить заново. Без этого файла (например, в CI) сборка подписывается debug-ключом компьютера:
+она ставится, но не обновит Beam, подписанный настоящим ключом, и наоборот. Отпечаток SHA-256
+сертификата релизов: `B0:A3:37:70:07:0C:3C:84:00:29:E1:D4:B3:4F:F3:CF:05:F0:A3:4B:97:41:7D:62:22:38:3E:95:9E:8C:20:F9`.
 
 ### Быстрая установка при разработке
 
