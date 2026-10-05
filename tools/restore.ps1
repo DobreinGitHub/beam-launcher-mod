@@ -18,8 +18,10 @@
   -Device and -Adb default to DEVICE and ADB from local.env (KEY=value lines, git-ignored) or the
   environment; adb itself defaults to the one on PATH.
 
-  Beam is taken from -Apk, else app\build\outputs\apk\release\app-release.apk, else tools\apks\app-release.apk
-  (e.g. one downloaded from CI). Remote-button stubs: stub\build\outputs\apk\*\release\ or tools\apks\.
+  Beam is taken from -Apk, else app\build\outputs\apk\release\app-release.apk, else tools\apks\app-release.apk.
+  Remote-button stubs: stub\build\outputs\apk\*\release\ or tools\apks\.
+  Whatever of these is missing is downloaded from the latest GitHub release into tools\apks\ and checked against
+  the release's SHA256SUMS.txt (-Release v0.2 picks another release, -NoDownload turns this off).
   Put extra APKs to install (SmartTube, LeanKey, ...) into tools\apks\.
   Split bundles (.apks/.apkm) are not handled here; install those by hand.
   Turn the VPN off first, otherwise adb cannot reach the projector.
@@ -31,6 +33,8 @@ param(
     [string]$Locale,
     [string]$TimeZone,
     [string]$BluetoothName,
+    [string]$Release,
+    [switch]$NoDownload,
     [switch]$SkipSystem,
     [switch]$Revert,
     [switch]$Reboot
@@ -212,6 +216,56 @@ if ($Revert) {
 
 Write-Host "`n1. Установка приложений" -ForegroundColor Cyan
 $apkDir = Join-Path $PSScriptRoot "apks"
+$releaseRepo = "tonisaf/beam-launcher"
+
+# Downloads the named files of a GitHub release into $apkDir, each checked against the release's
+# SHA256SUMS.txt (a file that is not listed there, or does not match, is thrown away).
+function Get-ReleaseFiles([string[]]$Names) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $headers = @{ "User-Agent" = "beam-restore" }
+    $api = if ($Release) { "https://api.github.com/repos/$releaseRepo/releases/tags/$Release" } else { "https://api.github.com/repos/$releaseRepo/releases/latest" }
+    $rel = Invoke-RestMethod -Uri $api -Headers $headers -UseBasicParsing
+    $assets = @{}
+    foreach ($a in $rel.assets) { $assets[$a.name] = $a.browser_download_url }
+    if (-not $assets.ContainsKey("SHA256SUMS.txt")) { throw "в релизе $($rel.tag_name) нет SHA256SUMS.txt, не скачиваю без проверки" }
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) ("beam-" + [Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $tmp | Out-Null
+    try {
+        Invoke-WebRequest -Uri $assets["SHA256SUMS.txt"] -OutFile (Join-Path $tmp "SHA256SUMS.txt") -Headers $headers -UseBasicParsing
+        $sums = @{}
+        foreach ($line in Get-Content (Join-Path $tmp "SHA256SUMS.txt")) {
+            if ($line -match '^([0-9a-fA-F]{64})\s+\*?(\S+)\s*$') { $sums[$Matches[2]] = $Matches[1].ToLower() }
+        }
+        if (-not (Test-Path $apkDir)) { New-Item -ItemType Directory -Path $apkDir | Out-Null }
+        foreach ($name in $Names) {
+            if (-not $assets.ContainsKey($name)) { throw "в релизе $($rel.tag_name) нет файла $name" }
+            if (-not $sums.ContainsKey($name)) { throw "$name не указан в SHA256SUMS.txt" }
+            $file = Join-Path $tmp $name
+            Invoke-WebRequest -Uri $assets[$name] -OutFile $file -Headers $headers -UseBasicParsing
+            $actual = (Get-FileHash -Algorithm SHA256 -Path $file).Hash.ToLower()
+            if ($actual -ne $sums[$name]) { throw "$name не прошёл проверку SHA-256 (ожидалось $($sums[$name]), получено $actual)" }
+            Move-Item -Force -Path $file -Destination (Join-Path $apkDir $name)
+        }
+        return $rel.tag_name
+    } finally {
+        Remove-Item -Recurse -Force -Path $tmp -ErrorAction SilentlyContinue
+    }
+}
+
+$localBeam = @($Apk, (Join-Path $Root "app\build\outputs\apk\release\app-release.apk"), (Join-Path $apkDir "app-release.apk")) |
+    Where-Object { $_ -and (Test-Path $_) }
+$haveStubs = (@(Get-ChildItem (Join-Path $Root "stub\build\outputs\apk") -Recurse -Filter *.apk -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match '[\\/]release[\\/]' }).Count -gt 0) -or
+    (@(Get-ChildItem $apkDir -Filter "stub-button*-release.apk" -ErrorAction SilentlyContinue).Count -gt 0)
+if (-not $NoDownload -and (-not $localBeam -or -not $haveStubs)) {
+    Step "Скачивание недостающих APK из релиза GitHub" {
+        $want = @()
+        if (-not $localBeam) { $want += "app-release.apk" }
+        if (-not $haveStubs) { $want += 1..4 | ForEach-Object { "stub-button$_-release.apk" } }
+        $tag = Get-ReleaseFiles $want
+        Write-Host "      релиз $tag в tools\apks\: $($want -join ', ')" -ForegroundColor DarkGray
+    }
+}
 $beamApk = @(
     $Apk,
     (Join-Path $Root "app\build\outputs\apk\release\app-release.apk"),
@@ -219,7 +273,7 @@ $beamApk = @(
 ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 Step "Лаунчер Beam" {
     if (-not $beamApk) {
-        throw "нет APK Beam: соберите (./gradlew :app:assembleRelease :stub:assembleRelease), положите app-release.apk в tools\apks\ или укажите -Apk"
+        throw "нет APK Beam: скачайте со страницы Releases, соберите (./gradlew :app:assembleRelease :stub:assembleRelease), положите app-release.apk в tools\apks\ или укажите -Apk"
     }
     Expect (Adb install -r $beamApk) "Success"
 }
