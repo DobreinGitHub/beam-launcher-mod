@@ -47,31 +47,102 @@ The screenshots show the Russian interface.
 
 ## Installation
 
-You need a computer with [adb](https://developer.android.com/tools/releases/platform-tools) and the
-projector on the same network.
+You need: a Windows computer, a USB flash drive (FAT32), and the projector on the same Wi-Fi network
+as the computer. About 15 minutes.
 
-1. Enable developer mode and network debugging (ADB) on the projector. Turn off any VPN on the
-   computer, otherwise adb can't reach the projector.
-2. Download the repository (*Code* → *Download ZIP*) and unzip it. You don't need to download the
-   APKs: the script fetches Beam and the remote button stubs from the latest
-   [release](https://github.com/tonisaf/beam-launcher/releases) and verifies them. The computer needs
-   internet access.
-3. Run from the repository root (Windows PowerShell):
+### Step 1. Download to the computer
 
-   ```powershell
-   .\tools\restore.ps1 -Device 192.168.1.50 -Reboot
-   ```
+- **SystemUI Tuner** (needed to turn ADB on on the projector):
+  [github.com/zacharee/Tweaker/releases](https://github.com/zacharee/Tweaker/releases), the file
+  `SystemUITuner_…-release.apk`.
+- **Platform Tools** (the adb program):
+  [developer.android.com/tools/releases/platform-tools](https://developer.android.com/tools/releases/platform-tools).
+  Unzip it into `C:\adb`.
+- **Beam**: *Code* → *Download ZIP* on this page. Unzip it, for example into `C:\beam`. You don't need
+  to download the Beam APK: the script fetches Beam and the remote button stubs from the latest
+  [release](https://github.com/tonisaf/beam-launcher/releases) and verifies them against
+  `SHA256SUMS.txt` (the computer needs internet access).
+- **The LeanKey keyboard (required):** the script disables the Chinese Sogou keyboard, and without a
+  replacement there would be nothing to type with. Download
+  [LeanKeyboard…apk](https://github.com/yuliskov/LeanKeyKeyboard/releases) and put it into
+  `C:\beam\tools\apks\` (create the folder): the script installs it and makes it the system keyboard.
 
-   **`192.168.1.50` is only an example: use your own projector's IP address.** You can find it in the
-   projector's network settings (Wi-Fi → connection details), in your router's client list, or, if
-   Beam is already installed, in its panel: "XGIMI settings" → "About the projector" → "IP address".
-   Or put it into `local.env` once (`DEVICE=…`) and you won't need the `-Device` parameter.
+### Step 2. Install SystemUI Tuner on the projector from a flash drive
 
-   The script can be run again; steps for apps that are absent are skipped. APKs to install along
-   the way (SmartTube, LeanKey…) go into `tools\apks\`.
+The projector's built-in file manager doesn't open `.apk` files directly: on the computer, rename the
+file by adding `.1` at the end (you get `SystemUITuner_…-release.apk.1`). If Windows hides file
+extensions: File Explorer → *View* → *Show* → *File name extensions*. Copy the file to the flash drive
+and put it into the projector. Then:
 
-   Your own Beam APK (a build of your own, say) goes there too, or pass `-Apk`: the download is
-   skipped then. Another release: `-Release v0.2`; no download at all: `-NoDownload`.
+1. In the stock launcher, open the apps tab and the file manager.
+2. Find the file on the flash drive and press OK.
+3. In the menu that opens, choose the last item ("More actions").
+4. In the "Open with" list choose the APK installer, then "Just once".
+5. Confirm the installation, and press "Open" at the end. Page through the welcome screens and accept
+   the license.
+
+### Step 3. Turn ADB on
+
+In SystemUI Tuner find the ADB item and turn it on. The "debugging over Wi-Fi" item may say that it is
+not supported on this version of Android: that's fine, the network connection works anyway.
+
+### Step 4. Find the projector's IP address
+
+Projector settings → network → Wi-Fi → the current network. Or find the projector in your router's
+device list (usually `192.168.0.1` or `192.168.1.1`). To keep the address from changing, reserve it for
+the projector in the router's settings. In the examples below, replace `192.168.1.50` with your IP.
+
+### Step 5. Check the connection
+
+Open the `C:\adb` folder, type `powershell` into the File Explorer address bar and press Enter. Run:
+
+```powershell
+.\adb connect 192.168.1.50:5555
+.\adb devices
+```
+
+A debugging request appears on the projector's screen: tick "Always allow" and press OK. The list
+should contain the line `192.168.1.50:5555   device` (not `offline` and not `unauthorized`). Turn off
+any VPN on the computer for this: otherwise adb can't reach the projector.
+
+### Step 6. Install Beam
+
+Open the `C:\beam` folder the same way through PowerShell and run, as one line:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -Reboot
+```
+
+**`192.168.1.50` is only an example: use your own projector's IP address.** `-ExecutionPolicy Bypass`
+is needed so that Windows doesn't forbid running the script, and `-Adb` says where adb is (if `adb` is
+already on `PATH`, you can leave it out). The script downloads the APKs, installs Beam and the remote
+button stubs, disables the unneeded apps, grants permissions and makes Beam the home screen. Every step
+in the output should say `[OK]`; `[!!]` lines mean an error. The projector reboots and starts straight
+into Beam. If you don't want to change the system language, time zone and Bluetooth name, add
+`-SkipSystem`.
+
+The script can be run again; steps for apps that are absent are skipped. APKs to install along the way
+(SmartTube, LeanKey…) go into `tools\apks\`. Your own Beam APK (a build of your own, say) goes there
+too, or pass `-Apk`: the download is skipped then. Another release: `-Release v0.2`; no download at
+all: `-NoDownload`. You can put the IP and the path to adb into `local.env` once (`DEVICE=…`, `ADB=…`),
+and then you won't need the `-Device` and `-Adb` parameters.
+
+### Step 7. Check
+
+Press "Home": Beam should open. A short press of the remote's voice button opens the quick settings
+panel. The four app buttons on the remote are assigned in the panel: "Remote buttons". Voice search:
+[Voice model](#voice-model).
+
+### If something doesn't work
+
+- **`cannot connect` / `timed out`:** check that the projector and the computer are on the same
+  network, that any VPN is off, and that the IP is right. After a reboot or sleep of the projector, ADB
+  may turn off: turn it on again in SystemUI Tuner (step 3).
+- **`unauthorized`:** confirm the debugging request on the projector's screen (step 5).
+- **"Running scripts is disabled":** run it with `-ExecutionPolicy Bypass`, as in step 6.
+- **The script can't find adb:** check the path in `-Adb`.
+- **The script can't download the APKs:** check the internet connection. You can put the APKs from the
+  [release](https://github.com/tonisaf/beam-launcher/releases/latest) into `tools\apks\` by hand.
 
 ### What `restore.ps1` changes
 
