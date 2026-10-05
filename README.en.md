@@ -52,13 +52,10 @@ projector on the same network.
 
 1. Enable developer mode and network debugging (ADB) on the projector. Turn off any VPN on the
    computer, otherwise adb can't reach the projector.
-2. Download the repository (or just the `tools` folder). You don't need to download the APKs
-   separately: `restore.ps1` fetches Beam (`app-release.apk`) and the four remote button stubs
-   (`stub-button*-release.apk`) from the latest [release](https://github.com/tonisaf/beam-launcher/releases),
-   puts them into `tools\apks\` and verifies them against `SHA256SUMS.txt`. The computer needs
-   internet access. Your own files are left alone: if an APK is already in `tools\apks\`, `-Apk` is
-   given or you have your own build, that one is used. `-Release v0.2` picks another release,
-   `-NoDownload` turns the download off. To build it yourself, see [Building](#building).
+2. Download the repository (*Code* → *Download ZIP*) and unzip it. You don't need to download the
+   APKs: the script fetches Beam and the remote button stubs from the latest
+   [release](https://github.com/tonisaf/beam-launcher/releases) and verifies them. The computer needs
+   internet access.
 3. Run from the repository root (Windows PowerShell):
 
    ```powershell
@@ -72,6 +69,9 @@ projector on the same network.
 
    The script can be run again; steps for apps that are absent are skipped. APKs to install along
    the way (SmartTube, LeanKey…) go into `tools\apks\`.
+
+   Your own Beam APK (a build of your own, say) goes there too, or pass `-Apk`: the download is
+   skipped then. Another release: `-Release v0.2`; no download at all: `-NoDownload`.
 
 ### What `restore.ps1` changes
 
