@@ -187,7 +187,7 @@ cp local.env.example local.env   # put in the projector's IP (and paths if adb i
 ### How Beam controls the projector
 
 Which services, classes and settings of the XGIMI firmware Beam calls, and what in it doesn't work
-the way you'd expect: [docs/xgimi-firmware.md](docs/xgimi-firmware.md) (in Russian).
+the way you'd expect: [docs/xgimi-firmware.en.md](docs/xgimi-firmware.en.md).
 
 ### Debug commands
 
