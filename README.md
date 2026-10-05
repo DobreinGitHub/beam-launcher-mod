@@ -26,6 +26,20 @@
 - Оформление: светлая и тёмная темы, фоны, в том числе анимированный в стиле PS3 XMB, звуки
   интерфейса, язык интерфейса (как в системе, русский или английский).
 
+## Скриншоты
+
+| Главный экран | Панель быстрых настроек |
+|---|---|
+| ![Главный экран](docs/screenshots/home.webp) | ![Панель быстрых настроек](docs/screenshots/panel.webp) |
+
+| Изображение | Звук |
+|---|---|
+| ![Изображение](docs/screenshots/picture.webp) | ![Звук](docs/screenshots/sound.webp) |
+
+| Трапеция и размер | Настройка трапеции на экране |
+|---|---|
+| ![Трапеция и размер](docs/screenshots/keystone.webp) | ![Настройка трапеции на экране](docs/screenshots/keystone-screen.webp) |
+
 ## Установка
 
 Нужны компьютер с [adb](https://developer.android.com/tools/releases/platform-tools) и проектор в

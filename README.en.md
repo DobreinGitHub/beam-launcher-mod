@@ -27,6 +27,22 @@ refuses English as a system language. Voice commands are Russian only.
 - Appearance: light and dark themes, backgrounds (including an animated PS3 XMB style one),
   interface sounds, interface language (system, Russian or English).
 
+## Screenshots
+
+The screenshots show the Russian interface.
+
+| Home screen | Quick settings panel |
+|---|---|
+| ![Home screen](docs/screenshots/home.webp) | ![Quick settings panel](docs/screenshots/panel.webp) |
+
+| Picture | Sound |
+|---|---|
+| ![Picture](docs/screenshots/picture.webp) | ![Sound](docs/screenshots/sound.webp) |
+
+| Keystone and size | On-screen keystone setup |
+|---|---|
+| ![Keystone and size](docs/screenshots/keystone.webp) | ![On-screen keystone setup](docs/screenshots/keystone-screen.webp) |
+
 ## Installation
 
 You need a computer with [adb](https://developer.android.com/tools/releases/platform-tools) and the
