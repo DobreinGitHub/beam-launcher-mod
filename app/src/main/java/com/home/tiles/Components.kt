@@ -308,7 +308,7 @@ fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Un
 
 @Composable
 fun Clock(size: TextUnit = 36.sp) {
-    val format = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val format = remember(AppLanguage.locale) { SimpleDateFormat("HH:mm", AppLanguage.locale) }
     val time by produceState(format.format(Date())) {
         while (true) {
             value = format.format(Date())
@@ -347,11 +347,11 @@ fun OptionsDialog(entry: AppEntry, repo: AppRepository, onDismiss: () -> Unit, o
     val art by rememberArt(repo, entry)
     val first = remember { FocusRequester() }
     val options = buildList<Pair<String, () -> Unit>> {
-        add("Открыть" to { context.launchApp(entry) })
-        add((if (entry.pinned) "Открепить" else "Закрепить первым") to { repo.togglePinned(entry.pkg); onChanged() })
-        add((if (entry.hidden) "Показать на главном" else "Скрыть с главного") to { repo.toggleHidden(entry.pkg); onChanged() })
-        add("О приложении" to { context.openAppInfo(entry.pkg) })
-        if (!entry.isSystem) add("Удалить" to { context.uninstall(entry.pkg) })
+        add(tr(R.string.menu_open) to { context.launchApp(entry) })
+        add((if (entry.pinned) tr(R.string.menu_unpin) else tr(R.string.menu_pin_first)) to { repo.togglePinned(entry.pkg); onChanged() })
+        add((if (entry.hidden) tr(R.string.menu_show_home) else tr(R.string.menu_hide_home)) to { repo.toggleHidden(entry.pkg); onChanged() })
+        add(tr(R.string.menu_app_info) to { context.openAppInfo(entry.pkg) })
+        if (!entry.isSystem) add(tr(R.string.menu_uninstall) to { context.uninstall(entry.pkg) })
     }
     Dialog(onDismissRequest = onDismiss) {
         Column(

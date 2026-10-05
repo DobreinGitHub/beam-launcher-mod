@@ -66,9 +66,9 @@ private val RowPad = 14.dp
 /** One tile in the home row. Special tiles (drive, HDMI) come before the apps. */
 internal sealed class RowItem(val key: String, val title: String, val subtitle: String = "") {
     class App(val entry: AppEntry) : RowItem(entry.pkg, entry.label)
-    class Usb(val drive: UsbDrive) : RowItem("usb:${drive.key}", "Флешка", drive.label)
-    class Hdmi(val input: Xgimi.Input) : RowItem("hdmi:${input.id}", input.label, if (input.device != null) "HDMI" else "Подключено устройство")
-    class All(count: Int) : RowItem("__all__", "Все приложения", "Приложений: $count")
+    class Usb(val drive: UsbDrive) : RowItem("usb:${drive.key}", tr(R.string.usb_drive), drive.label)
+    class Hdmi(val input: Xgimi.Input) : RowItem("hdmi:${input.id}", input.label, if (input.device != null) "HDMI" else tr(R.string.device_connected))
+    class All(count: Int) : RowItem("__all__", tr(R.string.all_apps), tr(R.string.apps_count, count))
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -259,14 +259,14 @@ private fun TopBar(onOpenAll: () -> Unit, onOpenPanel: () -> Unit) {
 internal fun ActionButtons(onOpenAll: () -> Unit, onOpenPanel: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     Row(horizontalArrangement = Arrangement.spacedBy(22.dp), modifier = modifier) {
-        RoundButton(Icons.Rounded.Apps, Color(0xFF1E88E5), "Все приложения", onOpenAll)
+        RoundButton(Icons.Rounded.Apps, Color(0xFF1E88E5), tr(R.string.all_apps), onOpenAll)
         // Prefer the TV build of RuStore; fall back to the phone one.
         listOf(RUSTORE_TV, RUSTORE).firstOrNull { context.isInstalled(it) }?.let { store ->
             RoundButton(Icons.Rounded.ShoppingBag, Color(0xFFF5A623), "RuStore") { context.launchPackage(store) }
         }
-        RoundButton(Icons.Rounded.Tune, Color(0xFF2EB85C), "Быстрые настройки") { context.openQuickPanel() }
-        RoundButton(Icons.Rounded.Settings, Color(0xFF8A8A8A), "Настройки") { context.openSettings() }
-        RoundButton(Icons.Rounded.Palette, Color(0xFF8E44AD), "Оформление", onOpenPanel)
+        RoundButton(Icons.Rounded.Tune, Color(0xFF2EB85C), tr(R.string.quick_settings)) { context.openQuickPanel() }
+        RoundButton(Icons.Rounded.Settings, Color(0xFF8A8A8A), tr(R.string.settings)) { context.openSettings() }
+        RoundButton(Icons.Rounded.Palette, Color(0xFF8E44AD), tr(R.string.appearance), onOpenPanel)
     }
 }
 

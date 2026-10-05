@@ -1,6 +1,7 @@
 package com.home.tiles
 
 import android.content.Context
+import androidx.annotation.StringRes
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -95,18 +96,20 @@ import java.util.Date
 import java.util.Locale
 
 /** Sub-pages opened from the tile grid. */
-private enum class PanelPage(val title: String) {
-    Picture("Изображение"),
-    Sound("Звук"),
-    Appearance("Оформление"),
-    Home("Главный экран"),
-    Remote("Кнопки пульта"),
-    Xgimi("Настройки XGIMI"),
-    Bluetooth("Bluetooth"),
-    Screensaver("Заставка"),
-    Power("Питание"),
-    Projection("Проекция"),
-    Keystone("Трапеция и размер"),
+private enum class PanelPage(@StringRes val titleRes: Int) {
+    Picture(R.string.picture),
+    Sound(R.string.sound),
+    Appearance(R.string.appearance),
+    Home(R.string.home_screen),
+    Remote(R.string.remote_buttons),
+    Xgimi(R.string.xgimi_settings),
+    Bluetooth(R.string.bluetooth),
+    Screensaver(R.string.screensaver),
+    Power(R.string.power),
+    Projection(R.string.projection),
+    Keystone(R.string.kst_and_size);
+
+    val title: String get() = tr(titleRes)
 }
 
 /** Our quick settings, styled after the Google TV panel; slides in from the right. */
@@ -283,12 +286,12 @@ private fun ColumnScope.MainPage(
     val items = buildList {
         // Everyday actions first as wide labelled tiles, then setup and settings as square
         // icon tiles that show their name only when focused (like XGIMI's own panel).
-        add(QuickItem(Icons.Rounded.CenterFocusStrong, "Автофокус", action = projector { Xgimi.autoFocus(context) }, wide = true))
-        add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { PanelIo.submit("auto-keystone") { Xgimi.autoKeystone(context) } }, wide = true))
+        add(QuickItem(Icons.Rounded.CenterFocusStrong, tr(R.string.autofocus), action = projector { Xgimi.autoFocus(context) }, wide = true))
+        add(QuickItem(Icons.Rounded.CropFree, tr(R.string.keystone), action = projector { PanelIo.submit("auto-keystone") { Xgimi.autoKeystone(context) } }, wide = true))
         add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }, wide = true))
         add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", PanelPage.Bluetooth, subtitle = bluetoothAudio, wide = true))
-        add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput, wide = true))
-        add(QuickItem(Icons.Rounded.Tonality, "Изображение", PanelPage.Picture, subtitle = pictureMode, wide = true))
+        add(QuickItem(Icons.Rounded.VolumeUp, tr(R.string.sound), PanelPage.Sound, subtitle = soundOutput, wide = true))
+        add(QuickItem(Icons.Rounded.Tonality, tr(R.string.picture), PanelPage.Picture, subtitle = pictureMode, wide = true))
         // One HDMI port: switch straight to it; with several, number them.
         inputs.forEachIndexed { i, input ->
             val label = input.device ?: if (inputs.size == 1) "HDMI" else "HDMI ${i + 1}"
@@ -296,18 +299,18 @@ private fun ColumnScope.MainPage(
         }
         eco?.let { on ->
             // Stays open: the change is visible behind the panel.
-            add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = {
+            add(QuickItem(Icons.Rounded.Eco, tr(R.string.eco_mode), active = on, action = {
                 scope.launch(Dispatchers.IO) { if (Eco.set(!on)) onEcoChanged(Eco.enabled()) }
             }))
         }
-        add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))
-        add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", PanelPage.Power, active = SleepTimer.endsAt.longValue > 0))
-        add(QuickItem(Icons.Rounded.FilterCenterFocus, "Ручной фокус", action = projector { Xgimi.manualFocus(context) }))
-        add(QuickItem(Icons.Rounded.Crop, "Трапеция и размер", PanelPage.Keystone))
-        add(QuickItem(Icons.Rounded.ScreenRotation, "Проекция", PanelPage.Projection))
-        add(QuickItem(Icons.Rounded.Palette, "Оформление", PanelPage.Appearance))
-        add(QuickItem(Icons.Rounded.Dashboard, "Главный экран", PanelPage.Home))
-        add(QuickItem(Icons.Rounded.SettingsRemote, "Кнопки пульта", PanelPage.Remote))
+        add(QuickItem(Icons.Rounded.Landscape, tr(R.string.screensaver), PanelPage.Screensaver))
+        add(QuickItem(Icons.Rounded.PowerSettingsNew, tr(R.string.power), PanelPage.Power, active = SleepTimer.endsAt.longValue > 0))
+        add(QuickItem(Icons.Rounded.FilterCenterFocus, tr(R.string.manual_focus), action = projector { Xgimi.manualFocus(context) }))
+        add(QuickItem(Icons.Rounded.Crop, tr(R.string.kst_and_size), PanelPage.Keystone))
+        add(QuickItem(Icons.Rounded.ScreenRotation, tr(R.string.projection), PanelPage.Projection))
+        add(QuickItem(Icons.Rounded.Palette, tr(R.string.appearance), PanelPage.Appearance))
+        add(QuickItem(Icons.Rounded.Dashboard, tr(R.string.home_screen), PanelPage.Home))
+        add(QuickItem(Icons.Rounded.SettingsRemote, tr(R.string.remote_buttons), PanelPage.Remote))
         add(QuickItem(Icons.Rounded.SettingsApplications, "XGIMI", PanelPage.Xgimi))
     }
 
@@ -359,8 +362,8 @@ private fun ColumnScope.MainPage(
 
 @Composable
 private fun PanelHeader(onSettings: () -> Unit) {
-    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-    val dateFormat = remember { SimpleDateFormat("EE, d MMMM", Locale("ru")) }
+    val timeFormat = remember(AppLanguage.locale) { SimpleDateFormat("HH:mm", AppLanguage.locale) }
+    val dateFormat = remember(AppLanguage.locale) { SimpleDateFormat("EE, d MMMM", AppLanguage.locale) }
     // Minute resolution: every change redraws this full-screen window over the video.
     val now by produceState(Date()) {
         while (true) {
@@ -399,7 +402,7 @@ private fun WideTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val on = item.active == true
     val fg = tileText(focused, on)
-    val status = item.active?.let { if (it) "Вкл." else "Выкл." } ?: item.subtitle
+    val status = item.active?.let { if (it) tr(R.string.on_dot) else tr(R.string.off_dot) } ?: item.subtitle
     Row(
         modifier
             .height(TileHeight)
@@ -490,26 +493,26 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
     when (page) {
         PanelPage.Picture -> PicturePage(onXgimiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_PICTURE) } })
         PanelPage.Sound -> {
-            Section("Громкость")
+            Section(tr(R.string.volume))
             VolumeSlider(Modifier.fillMaxWidth())
             if (SoundOutput.available) SoundOutputSection()
             SoundModeSection()
             EarcToggle()
-            Section("Интерфейс")
-            Toggle("Звуки навигации", LauncherSettings.sounds, Modifier.fillMaxWidth()) {
+            Section(tr(R.string.interface_section))
+            Toggle(tr(R.string.nav_sounds), LauncherSettings.sounds, Modifier.fillMaxWidth()) {
                 LauncherSettings.sounds = !LauncherSettings.sounds
             }
             if (ScreensaverTimeout.canWrite(context)) {
                 var keyTones by remember { mutableStateOf(KeyTones.enabled(context)) }
                 Spacer(Modifier.height(10.dp))
-                Toggle("Системный звук нажатий", keyTones, Modifier.fillMaxWidth()) {
+                Toggle(tr(R.string.system_click_sound), keyTones, Modifier.fillMaxWidth()) {
                     if (KeyTones.set(context, !keyTones)) keyTones = KeyTones.enabled(context)
                 }
             }
             val bootMusic = rememberFirmwareState { BootMusic.enabled() }
             bootMusic.value?.let { on ->
                 Spacer(Modifier.height(10.dp))
-                Toggle("Мелодия при включении", on, Modifier.fillMaxWidth()) {
+                Toggle(tr(R.string.power_on_chime), on, Modifier.fillMaxWidth()) {
                     bootMusic.change(!on) { BootMusic.set(!on) }
                 }
             }
@@ -533,10 +536,10 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         PanelPage.Bluetooth -> BluetoothPage(onXgimiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) } })
         PanelPage.Xgimi -> {
             SensorToggles()
-            Section("Разделы настроек проектора")
-            ListRow("Коррекция, фокус, сброс") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_CORRECTION) } }
-            ListRow("Звуковой выход") { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_SOUND_OUTPUT) } }
-            ListRow("Все настройки") { projector { context.openSettings() } }
+            Section(tr(R.string.projector_sections))
+            ListRow(tr(R.string.correction_focus_reset)) { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_CORRECTION) } }
+            ListRow(tr(R.string.sound_output_page)) { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_SOUND_OUTPUT) } }
+            ListRow(tr(R.string.all_settings)) { projector { context.openSettings() } }
             AboutSection()
         }
     }

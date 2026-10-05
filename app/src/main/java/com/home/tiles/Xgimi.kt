@@ -82,14 +82,14 @@ object Xgimi {
     }
 
     /** Picture modes this model lists, in XGIMI's order, with the numbers its settings app sends. */
-    val pictureModes = listOf(
-        "AI-изображение" to 16,
-        "Кино" to 1,
-        "Спорт" to 9,
-        "ТВ" to 7,
-        "Пользовательский" to 3,
-        "Офис" to 25,
-        "Производительность" to PICTURE_PERFORMANCE,
+    val pictureModes get() = listOf(
+        tr(R.string.pm_ai) to 16,
+        tr(R.string.pm_movie) to 1,
+        tr(R.string.pm_sport) to 9,
+        tr(R.string.pm_tv) to 7,
+        tr(R.string.pm_custom) to 3,
+        tr(R.string.pm_office) to 25,
+        tr(R.string.pm_performance) to PICTURE_PERFORMANCE,
     )
 
     /** Brightest mode: drives the light source harder; XGIMI warns about heat before enabling it. */
@@ -120,17 +120,17 @@ object Xgimi {
      */
     private fun startService(context: Context, intent: Intent) {
         val problem = try {
-            if (context.startService(intent) != null) null else "Недоступно на этом проекторе"
+            if (context.startService(intent) != null) null else tr(R.string.unavailable_here)
         } catch (e: IllegalStateException) {
             // Android 8+: an app that isn't in the foreground may not start services.
             Log.w(TAG, "${intent.action}: background start refused", e)
-            "Сейчас нельзя: Android не даёт запускать службы из фона"
+            tr(R.string.cant_now_background)
         } catch (e: SecurityException) {
             Log.w(TAG, "${intent.action}: no access", e)
-            "Нет доступа к службе XGIMI"
+            tr(R.string.no_xgimi_service)
         } catch (e: Exception) {
             Log.w(TAG, "${intent.action} failed", e)
-            "Не удалось выполнить команду"
+            tr(R.string.command_failed)
         }
         if (problem != null) toast(context, problem)
     }
@@ -173,7 +173,7 @@ object Xgimi {
             .recoverCatching { context.startActivity(plain) }
             .onFailure {
                 Log.w(TAG, "Could not open HDMI input ${input.id}", it)
-                toast(context, "Не удалось переключить вход")
+                toast(context, tr(R.string.input_switch_failed))
             }
     }
 

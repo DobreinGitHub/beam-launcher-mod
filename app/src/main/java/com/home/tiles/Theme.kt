@@ -2,6 +2,7 @@ package com.home.tiles
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.StringRes
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -123,19 +124,21 @@ object Colors {
 }
 
 class BackgroundPreset(
-    val name: String,
+    @StringRes val nameRes: Int,
     val light: List<Color>,
     val dark: List<Color>,
     /** PS3-style animated backdrop; colours come from [xmbStops]. */
     val xmb: Boolean = false,
-)
+) {
+    val name: String get() = tr(nameRes)
+}
 
 val Backgrounds = listOf(
-    BackgroundPreset("Обычный", listOf(Color(0xFFFAFAFA)), listOf(Color(0xFF2D2D2D))),
-    BackgroundPreset("Океан", listOf(Color(0xFFDDF1FF), Color(0xFFFAFAFA)), listOf(Color(0xFF0F2027), Color(0xFF2C5364))),
-    BackgroundPreset("Закат", listOf(Color(0xFFFFE3D3), Color(0xFFFFF6EE)), listOf(Color(0xFF2B1B2E), Color(0xFF5A2A3C))),
-    BackgroundPreset("Лес", listOf(Color(0xFFDDF3E4), Color(0xFFFAFAFA)), listOf(Color(0xFF10251C), Color(0xFF24493A))),
-    BackgroundPreset("Лаванда", listOf(Color(0xFFEAE3FF), Color(0xFFFAFAFA)), listOf(Color(0xFF1D1830), Color(0xFF3A3060))),
-    BackgroundPreset("XMB", emptyList(), emptyList(), xmb = true),
+    BackgroundPreset(R.string.bg_normal, listOf(Color(0xFFFAFAFA)), listOf(Color(0xFF2D2D2D))),
+    BackgroundPreset(R.string.bg_ocean, listOf(Color(0xFFDDF1FF), Color(0xFFFAFAFA)), listOf(Color(0xFF0F2027), Color(0xFF2C5364))),
+    BackgroundPreset(R.string.bg_sunset, listOf(Color(0xFFFFE3D3), Color(0xFFFFF6EE)), listOf(Color(0xFF2B1B2E), Color(0xFF5A2A3C))),
+    BackgroundPreset(R.string.bg_forest, listOf(Color(0xFFDDF3E4), Color(0xFFFAFAFA)), listOf(Color(0xFF10251C), Color(0xFF24493A))),
+    BackgroundPreset(R.string.bg_lavender, listOf(Color(0xFFEAE3FF), Color(0xFFFAFAFA)), listOf(Color(0xFF1D1830), Color(0xFF3A3060))),
+    BackgroundPreset(R.string.bg_xmb, emptyList(), emptyList(), xmb = true),
 )
 

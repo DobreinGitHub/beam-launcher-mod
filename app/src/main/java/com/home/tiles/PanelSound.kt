@@ -46,7 +46,7 @@ internal fun EarcToggle() {
 internal fun SoundModeSection() {
     val soundMode = rememberFirmwareState { SoundMode.current() }
     val current = soundMode.value ?: return
-    Section("Звуковой режим")
+    Section(tr(R.string.sound_mode))
     SoundMode.modes.chunked(2).forEach { pair ->
         PairRow {
             pair.forEach { (mode, label) ->
@@ -89,11 +89,11 @@ private const val VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
 private const val EXTRA_VOLUME_STREAM = "android.media.EXTRA_VOLUME_STREAM_TYPE"
 
 internal fun soundOutputName(device: Int) = when (device) {
-    SoundOutput.SPEAKER -> "Динамик"
-    SoundOutput.SPDIF -> "Оптика"
+    SoundOutput.SPEAKER -> tr(R.string.speaker)
+    SoundOutput.SPDIF -> tr(R.string.optical)
     SoundOutput.ARC -> "HDMI ARC"
     SoundOutput.BLUETOOTH -> "Bluetooth"
-    else -> "Другой выход"
+    else -> tr(R.string.other_output)
 }
 
 /** What the sound output section shows: automatic or manual, the output in use, and which are connected. */
@@ -117,15 +117,15 @@ internal fun SoundOutputSection() {
     fun select(device: Int) {
         sound.change(state.copy(output = device), settleMs = 1200) { SoundOutput.setOutput(device) }
     }
-    Section("Выход звука")
-    Toggle("Автовыбор", state.auto, Modifier.fillMaxWidth()) {
+    Section(tr(R.string.sound_output))
+    Toggle(tr(R.string.auto_select), state.auto, Modifier.fillMaxWidth()) {
         val auto = !state.auto
         sound.change(state.copy(auto = auto), settleMs = 1200) { SoundOutput.setAuto(auto) }
     }
     if (state.auto) {
         state.output?.let {
             Spacer(Modifier.height(8.dp))
-            T("Сейчас: ${soundOutputName(it)}", 14.sp, color = PanelDim)
+            T(tr(R.string.now_value, soundOutputName(it)), 14.sp, color = PanelDim)
         }
     } else {
         Spacer(Modifier.height(10.dp))
@@ -148,7 +148,7 @@ private fun RowScope.OutputChip(device: Int, output: Int?, connected: List<Int>,
         soundOutputName(device),
         output == device,
         Modifier.weight(1f),
-        note = if (available) null else "не подключено",
+        note = if (available) null else tr(R.string.not_connected_lc),
         enabled = available,
     ) { select(device) }
 }

@@ -45,7 +45,7 @@ class PanelOverlay : AccessibilityService() {
         listening = true
         voice?.loadModel()
         Sounds.popup()
-        showBubble("🎤  Слушаю…")
+        showBubble(tr(R.string.listening))
     }
     private val hideBubbleTask = Runnable { hideBubble() }
 
@@ -151,9 +151,9 @@ class PanelOverlay : AccessibilityService() {
             // which need the main thread.
             handler.post {
                 val result = when {
-                    text == VoiceSession.NO_MODEL -> "Голосовая модель не установлена"
-                    text.isBlank() -> "Не расслышал"
-                    else -> VoiceCommands.run(this, text) ?: "Не понял: «$text»"
+                    text == VoiceSession.NO_MODEL -> tr(R.string.voice_model_missing)
+                    text.isBlank() -> tr(R.string.didnt_catch)
+                    else -> VoiceCommands.run(this, text) ?: tr(R.string.didnt_understand, text)
                 }
                 showBubble(result)
                 handler.postDelayed(hideBubbleTask, 2500)

@@ -30,8 +30,8 @@ private const val PENDING_TIMEOUT_MS = 15_000L
 private fun NewDevicesSection(paired: List<XgimiBluetooth.Device>?) {
     val context = LocalContext.current
     val scanning = BluetoothScan.scanning.value
-    Section(if (scanning) "Новые устройства · поиск…" else "Новые устройства")
-    ListRow(if (scanning) "Остановить поиск" else "Искать устройства") {
+    Section(if (scanning) tr(R.string.bt_new_searching) else tr(R.string.bt_new_devices))
+    ListRow(if (scanning) tr(R.string.bt_stop_search) else tr(R.string.bt_search)) {
         if (scanning) BluetoothScan.stop(context) else BluetoothScan.start(context)
     }
     Spacer(Modifier.height(8.dp))
@@ -41,7 +41,7 @@ private fun NewDevicesSection(paired: List<XgimiBluetooth.Device>?) {
             device.name,
             state == BluetoothScan.PAIRED,
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            note = listOfNotNull(state ?: "OK — подключить", device.kind).joinToString(" · "),
+            note = listOfNotNull(state ?: tr(R.string.bt_ok_connect), device.kind).joinToString(" · "),
         ) {
             if (state != BluetoothScan.PAIRING) BluetoothScan.pair(context, device.address)
         }
@@ -49,11 +49,11 @@ private fun NewDevicesSection(paired: List<XgimiBluetooth.Device>?) {
     // Until XGIMI's list (refreshed every two seconds) picks the new device up.
     BluetoothScan.pairing.filterValues { it == BluetoothScan.PAIRED }.keys.forEach { address ->
         if (paired != null && paired.none { it.address == address }) {
-            T("Сопряжено: $address — появится в списке выше", 14.sp, color = PanelDim)
+            T(tr(R.string.bt_paired_address, address), 14.sp, color = PanelDim)
         }
     }
     if (!scanning && BluetoothScan.found.isEmpty()) {
-        T("Переведите колонку или наушники в режим сопряжения и нажмите «Искать»", 14.sp, color = PanelDim)
+        T(tr(R.string.bt_pairing_hint), 14.sp, color = PanelDim)
     }
 }
 
@@ -84,24 +84,24 @@ internal fun BluetoothPage(onXgimiPage: () -> Unit) {
         }
     }
     val list = devices
-    Section("Устройства")
+    Section(tr(R.string.devices))
     when {
-        list == null -> T("Загрузка…", 14.sp, color = PanelDim)
-        list.none { !it.remote } -> T("Нет сопряжённых устройств", 14.sp, color = PanelDim)
+        list == null -> T(tr(R.string.loading), 14.sp, color = PanelDim)
+        list.none { !it.remote } -> T(tr(R.string.bt_no_paired), 14.sp, color = PanelDim)
         else -> list.filter { !it.remote }.forEach { device ->
             val waiting = device.address in pending
             val state = when {
-                waiting && pending.getValue(device.address).first -> "Подключение…"
-                waiting -> "Отключение…"
-                device.connecting -> "Подключение…"
-                device.connected -> "Подключено"
-                else -> "Не подключено"
+                waiting && pending.getValue(device.address).first -> tr(R.string.bt_connecting)
+                waiting -> tr(R.string.bt_disconnecting)
+                device.connecting -> tr(R.string.bt_connecting)
+                device.connected -> tr(R.string.bt_connected)
+                else -> tr(R.string.bt_not_connected)
             }
             Chip(
                 device.name.ifBlank { device.address },
                 device.connected,
                 Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                note = if (device.audio) "$state · колонка/наушники" else state,
+                note = if (device.audio) "$state · ${tr(R.string.bt_kind_audio)}" else state,
             ) {
                 if (waiting) return@Chip
                 val connect = !device.connected
@@ -115,17 +115,17 @@ internal fun BluetoothPage(onXgimiPage: () -> Unit) {
     NewDevicesSection(list)
     val visible = rememberFirmwareState { BluetoothOptions.discoverable(context) }
     val absolute = rememberFirmwareState { BluetoothOptions.absoluteVolume() }
-    Section("Настройки")
+    Section(tr(R.string.settings))
     visible.value?.let { on ->
-        Toggle("Видимость для других устройств", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        Toggle(tr(R.string.bt_discoverable), on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             visible.change(!on) { BluetoothOptions.setDiscoverable(context, !on) }
         }
     }
     absolute.value?.let { on ->
-        Toggle("Абсолютная громкость", on, Modifier.fillMaxWidth()) {
+        Toggle(tr(R.string.bt_abs_volume), on, Modifier.fillMaxWidth()) {
             absolute.change(!on) { BluetoothOptions.setAbsoluteVolume(context, !on) }
         }
     }
-    Section("Ещё")
-    ListRow("Настройки Bluetooth XGIMI", onXgimiPage)
+    Section(tr(R.string.more))
+    ListRow(tr(R.string.bt_xgimi_settings), onXgimiPage)
 }

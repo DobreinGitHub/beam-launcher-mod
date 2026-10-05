@@ -522,13 +522,13 @@ object Sensors {
  */
 object ScreensaverTimeout {
     /** In ascending order, so ← → in the panel is shorter / longer; "never" is the longest. */
-    val options = listOf(
-        60_000 to "1 мин",
-        300_000 to "5 мин",
-        600_000 to "10 мин",
-        1_800_000 to "30 мин",
-        3_600_000 to "1 час",
-        Int.MAX_VALUE to "Никогда",
+    val options get() = listOf(
+        60_000 to tr(R.string.min_1),
+        300_000 to tr(R.string.min_5),
+        600_000 to tr(R.string.min_10),
+        1_800_000 to tr(R.string.min_30),
+        3_600_000 to tr(R.string.hour_1),
+        Int.MAX_VALUE to tr(R.string.never),
     )
 
     fun current(context: Context): Int =
@@ -543,7 +543,7 @@ object ScreensaverTimeout {
 
 /** XGIMI's sound modes (GmAudioManager.set/getSoundeffect), numbered as its settings page sets them. */
 object SoundMode {
-    val modes = listOf(3 to "AI", 1 to "Кино", 2 to "Музыка", 12 to "Спорт", 4 to "Караоке")
+    val modes get() = listOf(3 to "AI", 1 to tr(R.string.pm_movie), 2 to tr(R.string.sm_music), 12 to tr(R.string.pm_sport), 4 to tr(R.string.sm_karaoke))
 
     fun current(): Int? = Gmpf.int("GmAudioManager", "getSoundeffect")
 

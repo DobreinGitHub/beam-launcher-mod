@@ -43,7 +43,7 @@ internal fun KeystonePage(onScreen: () -> Unit) {
     DisposableEffect(Unit) { onDispose { KeystoneEdit.active.value = null } }
     val current = cornersState.value
     if (current == null) {
-        T(if (cornersState.loaded) "Трапеция недоступна" else "Загрузка…", 14.sp, color = PanelDim)
+        T(if (cornersState.loaded) tr(R.string.kst_unavailable) else tr(R.string.loading), 14.sp, color = PanelDim)
         return
     }
     // The corners on screen are the ones last asked for; the write goes to a background queue
@@ -54,23 +54,23 @@ internal fun KeystonePage(onScreen: () -> Unit) {
         if (!Keystone.isValid(clamped)) return
         cornersState.change(clamped) { Keystone.setCorners(clamped) }
     }
-    ListRow("Настроить на экране", onScreen)
+    ListRow(tr(R.string.kst_on_screen), onScreen)
     if (bootKeystone.value != null || realtime.value == true) {
-        Section("Автокоррекция")
+        Section(tr(R.string.kst_auto_section))
         bootKeystone.value?.let { on ->
-            Toggle("Коррекция при включении", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Toggle(tr(R.string.kst_on_boot), on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 bootKeystone.change(!on) { Sensors.setBootKeystone(!on) }
             }
         }
         if (realtime.value == true) {
-            Toggle("Коррекция при сдвиге", true, Modifier.fillMaxWidth()) {
+            Toggle(tr(R.string.kst_on_move), true, Modifier.fillMaxWidth()) {
                 realtime.change(false) { Sensors.setRealtimeKeystone(false) }
             }
-            T("Выключите, иначе сдвиг проектора собьёт ручную настройку", 14.sp, color = PanelDim)
+            T(tr(R.string.kst_move_hint), 14.sp, color = PanelDim)
         }
     }
-    Section("Углы · OK, затем стрелки")
-    listOf("↖  Левый верхний", "↗  Правый верхний", "↙  Левый нижний", "↘  Правый нижний").forEachIndexed { i, label ->
+    Section(tr(R.string.kst_corners_section))
+    listOf(tr(R.string.kst_row_tl), tr(R.string.kst_row_tr), tr(R.string.kst_row_bl), tr(R.string.kst_row_br)).forEachIndexed { i, label ->
         ArrowPad("corner$i", label, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { dx, dy ->
             val values = (cornersState.value ?: current).toMutableList()
             values[i * 2] += dx
@@ -78,8 +78,8 @@ internal fun KeystonePage(onScreen: () -> Unit) {
             apply(values)
         }
     }
-    Section("Размер и положение")
-    Selector("Размер", "${Keystone.sizePercent(zoom)}%", Modifier.fillMaxWidth().padding(bottom = 8.dp)) { step ->
+    Section(tr(R.string.kst_size_position))
+    Selector(tr(R.string.size), "${Keystone.sizePercent(zoom)}%", Modifier.fillMaxWidth().padding(bottom = 8.dp)) { step ->
         // Right makes it bigger (fewer shrink steps).
         val next = (zoom - step).coerceIn(0, Keystone.MAX_ZOOM)
         if (next != zoom) {
@@ -97,19 +97,19 @@ internal fun KeystonePage(onScreen: () -> Unit) {
             }
         }
     }
-    ArrowPad("shift", "✥  Сдвиг картинки", Modifier.fillMaxWidth()) { dx, dy ->
+    ArrowPad("shift", tr(R.string.kst_row_shift), Modifier.fillMaxWidth()) { dx, dy ->
         val moved = (cornersState.value ?: current).mapIndexed { i, v -> v + if (i % 2 == 0) dx else dy }
         val inside = moved.chunked(2).all { (x, y) -> x in 0 until Keystone.WIDTH && y in 0 until Keystone.HEIGHT }
         if (inside) apply(moved)
     }
-    T("Сдвиг работает, когда картинка уменьшена", 14.sp, color = PanelDim)
-    Section("Сброс")
-    ListRow("Автотрапеция") {
+    T(tr(R.string.kst_shift_hint), 14.sp, color = PanelDim)
+    Section(tr(R.string.reset))
+    ListRow(tr(R.string.kst_auto)) {
         // Xgimi.autoKeystone resets the size and the saved note of it.
         zoom = 0
         PanelIo.submit("auto-keystone") { Xgimi.autoKeystone(context) }
     }
-    ListRow("Без коррекции") {
+    ListRow(tr(R.string.kst_none)) {
         PanelIo.submit("zoom") { Keystone.setZoom(0) }
         Keystone.saveZoom(context, 0)
         zoom = 0
@@ -160,7 +160,7 @@ private fun ArrowPad(id: String, label: String, modifier: Modifier, onMove: (dx:
     ) {
         val color = if (active) OnText else if (focused) FocusText else PanelText
         T(label, 16.sp, Modifier.weight(1f), color = color)
-        T(if (active) "стрелки · OK" else "OK", 14.sp, color = if (active || focused) color else PanelDim)
+        T(if (active) tr(R.string.arrows_ok) else "OK", 14.sp, color = if (active || focused) color else PanelDim)
     }
 }
 

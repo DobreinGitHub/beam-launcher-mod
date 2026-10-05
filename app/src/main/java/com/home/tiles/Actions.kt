@@ -15,7 +15,7 @@ fun Context.launchApp(entry: AppEntry) = start(
 fun Context.launchPackage(pkg: String) {
     val intent = packageManager.getLeanbackLaunchIntentForPackage(pkg)
         ?: packageManager.getLaunchIntentForPackage(pkg)
-    if (intent == null) toast("Приложение не установлено") else start(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    if (intent == null) toast(tr(R.string.app_not_installed)) else start(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 fun Context.isInstalled(pkg: String) = runCatching { packageManager.getPackageInfo(pkg, 0) }.isSuccess
@@ -52,7 +52,7 @@ private fun Context.start(intent: Intent) {
     try {
         startActivity(intent)
     } catch (e: Exception) {
-        toast("Не удалось открыть")
+        toast(tr(R.string.cant_open))
     }
 }
 

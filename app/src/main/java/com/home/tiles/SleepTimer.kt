@@ -61,7 +61,7 @@ object SleepTimer {
             return
         }
         when (action) {
-            ACTION_WARN -> PanelOverlay.caption("Таймер сна: проектор выключится через минуту", 10_000)
+            ACTION_WARN -> PanelOverlay.caption(tr(R.string.sleep_warning), 10_000)
             ACTION_OFF -> {
                 Log.i("SleepTimer", "Time's up, turning the projector off")
                 cancel(context)

@@ -47,6 +47,7 @@
         android:required="false" />
 
     <application
+        android:name=".BeamApp"
         android:allowBackup="false"
         android:banner="@drawable/banner"
         android:icon="@drawable/ic_launcher"

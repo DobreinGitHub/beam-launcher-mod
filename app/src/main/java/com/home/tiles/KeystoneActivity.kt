@@ -48,7 +48,7 @@ class KeystoneActivity : ComponentActivity() {
         corners = Keystone.corners()
         zoom.intValue = Keystone.savedZoom(this)
         if (Sensors.realtimeKeystone() == true) {
-            message.value = "Включена «Коррекция при сдвиге»: если сдвинуть проектор, настройка пересчитается"
+            message.value = tr(R.string.kst_realtime_warning)
         }
         setContent { Screen(STEPS[step.intValue], zoom.intValue, message.value) }
     }
@@ -129,7 +129,7 @@ class KeystoneActivity : ComponentActivity() {
                 if (target == Step.SHIFT) {
                     val moved = values.mapIndexed { i, v -> v + if (i % 2 == 0) dx * pixels else dy * pixels }
                     if (moved.chunked(2).any { (x, y) -> x !in 0 until Keystone.WIDTH || y !in 0 until Keystone.HEIGHT }) {
-                        message.value = "Сдвигать некуда: сначала уменьшите размер"
+                        message.value = tr(R.string.kst_cant_shift)
                         return
                     }
                     apply(moved)
@@ -151,7 +151,7 @@ class KeystoneActivity : ComponentActivity() {
             Keystone.saveZoom(this, next)
             corners = Keystone.corners() ?: corners
         }
-        if (announce) message.value = "Размер ${Keystone.sizePercent(zoom.intValue)}%"
+        if (announce) message.value = tr(R.string.size_percent, Keystone.sizePercent(zoom.intValue))
     }
 
     private fun apply(values: List<Int>) {
@@ -162,13 +162,13 @@ class KeystoneActivity : ComponentActivity() {
     }
 
     enum class Step(val title: String, val hint: String, val corner: Int = -1) {
-        TOP_LEFT("Левый верхний угол", "Стрелки двигают угол", 0),
-        TOP_RIGHT("Правый верхний угол", "Стрелки двигают угол", 1),
-        BOTTOM_RIGHT("Правый нижний угол", "Стрелки двигают угол", 3),
-        BOTTOM_LEFT("Левый нижний угол", "Стрелки двигают угол", 2),
-        SHIFT("Сдвиг", "Стрелки двигают картинку целиком"),
-        SIZE("Размер", "← → уменьшить или увеличить"),
-        TILT("Наклон", "← → повернуть на 0,5°"),
+        TOP_LEFT(tr(R.string.kst_corner_tl), tr(R.string.kst_arrows_corner), 0),
+        TOP_RIGHT(tr(R.string.kst_corner_tr), tr(R.string.kst_arrows_corner), 1),
+        BOTTOM_RIGHT(tr(R.string.kst_corner_br), tr(R.string.kst_arrows_corner), 3),
+        BOTTOM_LEFT(tr(R.string.kst_corner_bl), tr(R.string.kst_arrows_corner), 2),
+        SHIFT(tr(R.string.kst_shift), tr(R.string.kst_arrows_picture)),
+        SIZE(tr(R.string.size), tr(R.string.kst_size_hint)),
+        TILT(tr(R.string.kst_tilt), tr(R.string.kst_tilt_hint)),
     }
 
     companion object {
@@ -232,7 +232,7 @@ private fun Screen(step: KeystoneActivity.Step, zoom: Int, message: String?) {
                 T(it, 16.sp, color = Mark)
                 Spacer(Modifier.height(8.dp))
             }
-            T("OK — дальше   ·   Громкость — размер   ·   Назад — готово", 18.sp, color = Color.White)
+            T(tr(R.string.kst_screen_hint), 18.sp, color = Color.White)
         }
     }
 }

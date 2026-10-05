@@ -143,7 +143,7 @@ fun queryTvChannels(context: Context): List<TvChannel> {
         }
     }
     val watchNextItems = watchNext.sortedByDescending { it.first }.map { it.second }.clean()
-    if (watchNextItems.isNotEmpty()) result += TvChannel(WATCH_NEXT_KEY, "Продолжить просмотр", watchNextItems)
+    if (watchNextItems.isNotEmpty()) result += TvChannel(WATCH_NEXT_KEY, tr(R.string.continue_watching), watchNextItems)
 
     val channels = mutableListOf<Triple<Long, String, String>>() // id, package, name
     // TvProvider rejects selection/sort arguments from non-system callers, so filter here.

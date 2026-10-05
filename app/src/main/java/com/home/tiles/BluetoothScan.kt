@@ -27,9 +27,9 @@ object BluetoothScan {
     /** Address -> [PAIRING], [PAIRED] or [FAILED]. */
     val pairing = mutableStateMapOf<String, String>()
 
-    const val PAIRING = "Сопряжение…"
-    const val PAIRED = "Сопряжено"
-    const val FAILED = "Не удалось"
+    val PAIRING: String get() = tr(R.string.bt_pairing)
+    val PAIRED: String get() = tr(R.string.bt_paired)
+    val FAILED: String get() = tr(R.string.failed)
 
     private var receiver: BroadcastReceiver? = null
     private val adapter get() = BluetoothAdapter.getDefaultAdapter()
@@ -129,10 +129,10 @@ object BluetoothScan {
     }
 
     private fun kind(device: BluetoothDevice): String = when (device.bluetoothClass?.majorDeviceClass) {
-        BluetoothClass.Device.Major.AUDIO_VIDEO -> "колонка/наушники"
-        BluetoothClass.Device.Major.PHONE -> "телефон"
-        BluetoothClass.Device.Major.COMPUTER -> "компьютер"
-        BluetoothClass.Device.Major.PERIPHERAL -> "геймпад/клавиатура"
-        else -> "устройство"
+        BluetoothClass.Device.Major.AUDIO_VIDEO -> tr(R.string.bt_kind_audio)
+        BluetoothClass.Device.Major.PHONE -> tr(R.string.bt_kind_phone)
+        BluetoothClass.Device.Major.COMPUTER -> tr(R.string.bt_kind_computer)
+        BluetoothClass.Device.Major.PERIPHERAL -> tr(R.string.bt_kind_input)
+        else -> tr(R.string.bt_kind_device)
     }
 }

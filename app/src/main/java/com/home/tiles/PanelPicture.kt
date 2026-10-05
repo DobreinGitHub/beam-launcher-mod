@@ -56,7 +56,7 @@ internal fun PicturePage(onXgimiPage: () -> Unit) {
         // applied is read back once, after the last choice.
         picture.change(mode, settleMs = 1500) { Xgimi.setPictureMode(context, mode) }
     }
-    Section("Режим изображения")
+    Section(tr(R.string.picture_mode))
     Xgimi.pictureModes.forEach { (label, mode) ->
         Chip(label, current == mode, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             if (mode == Xgimi.PICTURE_PERFORMANCE && current != mode) confirmPerformance = true else apply(mode)
@@ -72,19 +72,19 @@ internal fun PicturePage(onXgimiPage: () -> Unit) {
         }
     }
     GameModeSection()
-    Section("Пользовательский режим")
+    Section(tr(R.string.picture_custom_mode))
     if (current == CUSTOM_PICTURE) {
         CustomPictureControls()
     } else {
         // XGIMI keeps these values per mode and only saves them in the custom one.
-        ListRow("Перейти в пользовательский режим") { apply(CUSTOM_PICTURE) }
+        ListRow(tr(R.string.picture_go_custom)) { apply(CUSTOM_PICTURE) }
     }
-    Section("Ещё")
-    ListRow("Настройки AI и режимов XGIMI", onXgimiPage)
+    Section(tr(R.string.more))
+    ListRow(tr(R.string.picture_xgimi_settings), onXgimiPage)
 }
 
-private val GameModes = listOf(GameMode.AUTO to "Авто", GameMode.ON to "Вкл", GameMode.OFF to "Выкл")
-private val GameLevels = listOf("Базовый", "Максимальный")
+private val GameModes = listOf(GameMode.AUTO to tr(R.string.auto), GameMode.ON to tr(R.string.on), GameMode.OFF to tr(R.string.off))
+private val GameLevels = listOf(tr(R.string.level_basic), tr(R.string.level_max))
 
 /** XGIMI's game mode: lower input lag for consoles; it only takes effect with an HDMI signal. */
 @Composable
@@ -93,15 +93,15 @@ private fun GameModeSection() {
     val gameMode = rememberFirmwareState { GameMode.read() }
     var level by remember { mutableStateOf(GameMode.level(context)) }
     val current = gameMode.value ?: return
-    Section("Игровой режим · для HDMI")
+    Section(tr(R.string.game_mode_section))
     val index = GameModes.indexOfFirst { it.first == current.mode }.coerceAtLeast(0)
-    Selector("Режим", GameModes[index].second, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+    Selector(tr(R.string.mode), GameModes[index].second, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val mode = GameModes[(index + delta).mod(GameModes.size)].first
         gameMode.change(GameMode.State(mode)) { GameMode.setMode(mode) }
     }
     // The level (basic / top speed) applies when game mode is forced on.
     if (current.mode == GameMode.ON) {
-        Selector("Уровень", GameLevels[level], Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+        Selector(tr(R.string.level), GameLevels[level], Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
             level = (level + delta).mod(GameLevels.size)
             val chosen = level
             PanelIo.submit("game-level") { GameMode.setLevel(context, chosen) }
@@ -138,9 +138,9 @@ private fun readCustomPicture(): CustomPicture? {
     )
 }
 
-private val NoiseLevels = listOf("Выкл", "Низкое", "Среднее", "Высокое", "Авто")
-private val MotionLevels = listOf("Выкл", "Слабая", "Средняя", "Сильная")
-private val LocalContrastLevels = listOf("Выкл", "Низкий", "Средний", "Высокий")
+private val NoiseLevels = listOf(tr(R.string.off), tr(R.string.level_low_n), tr(R.string.level_mid_n), tr(R.string.level_high_n), tr(R.string.auto))
+private val MotionLevels = listOf(tr(R.string.off), tr(R.string.level_low_f), tr(R.string.level_mid_f), tr(R.string.level_high_f))
+private val LocalContrastLevels = listOf(tr(R.string.off), tr(R.string.level_low_m), tr(R.string.level_mid_m), tr(R.string.level_high_m))
 private val GammaLevels = listOf("1.8", "1.9", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6")
 
 /** XGIMI's defaults for the custom mode, as the projector came. */
@@ -172,7 +172,7 @@ private fun CustomPictureControls() {
     }
     val initial = loaded
     if (initial == null) {
-        T("Загрузка…", 14.sp, color = PanelDim)
+        T(tr(R.string.loading), 14.sp, color = PanelDim)
         return
     }
     var values by remember(initial) { mutableStateOf(initial) }
@@ -196,52 +196,52 @@ private fun CustomPictureControls() {
         }
     }
     val sliders = listOf(
-        Triple(PictureAdjust.BRIGHTNESS, "Яркость", Icons.Rounded.WbSunny),
-        Triple(PictureAdjust.CONTRAST, "Контраст", Icons.Rounded.Contrast),
-        Triple(PictureAdjust.SATURATION, "Насыщенн.", Icons.Rounded.WaterDrop),
-        Triple(PictureAdjust.SHARPNESS, "Резкость", Icons.Rounded.Details),
+        Triple(PictureAdjust.BRIGHTNESS, tr(R.string.brightness), Icons.Rounded.WbSunny),
+        Triple(PictureAdjust.CONTRAST, tr(R.string.contrast), Icons.Rounded.Contrast),
+        Triple(PictureAdjust.SATURATION, tr(R.string.saturation), Icons.Rounded.WaterDrop),
+        Triple(PictureAdjust.SHARPNESS, tr(R.string.sharpness), Icons.Rounded.Details),
     )
     sliders.forEach { (item, label, icon) ->
         LevelSlider(icon, values.items.getValue(item), 100, Modifier.fillMaxWidth().padding(bottom = 8.dp), label) {
             update("item$item", { PictureAdjust.set(item, it) }, values.copy(items = values.items + (item to it)))
         }
     }
-    Selector("Шумоподавление", NoiseLevels.getOrElse(values.noise) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+    Selector(tr(R.string.noise_reduction), NoiseLevels.getOrElse(values.noise) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val next = (values.noise + delta).mod(NoiseLevels.size)
         update("noise", { PictureAdjust.setNoiseReduction(next) }, values.copy(noise = next))
     }
-    T("Цветовая температура", 14.sp, color = PanelDim)
+    T(tr(R.string.color_temperature), 14.sp, color = PanelDim)
     Spacer(Modifier.height(8.dp))
     PairRow {
-        listOf("Холодная" to 0, "Станд." to 1, "Тёплая" to 2).forEach { (label, temp) ->
+        listOf(tr(R.string.temp_cool) to 0, tr(R.string.temp_standard) to 1, tr(R.string.temp_warm) to 2).forEach { (label, temp) ->
             Chip(label, values.colorTemp == temp, Modifier.weight(1f)) {
                 update("temp", { PictureAdjust.setColorTemp(temp) }, values.copy(colorTemp = temp))
             }
         }
     }
 
-    Section("Расширенные")
-    Selector("Плавность (MEMC)", MotionLevels.getOrElse(values.motion) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+    Section(tr(R.string.advanced))
+    Selector(tr(R.string.memc), MotionLevels.getOrElse(values.motion) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val next = (values.motion + delta).mod(MotionLevels.size)
         update("motion", { PictureAdjust.setMotion(next) }, values.copy(motion = next))
     }
-    Selector("Гамма", GammaLevels.getOrElse(values.gamma) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+    Selector(tr(R.string.gamma), GammaLevels.getOrElse(values.gamma) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val next = (values.gamma + delta).coerceIn(0, GammaLevels.lastIndex)
         update("gamma", { PictureAdjust.setGamma(next) }, values.copy(gamma = next))
     }
-    Toggle("Динамический контраст", values.dynamicContrast, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+    Toggle(tr(R.string.dynamic_contrast), values.dynamicContrast, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         val next = !values.dynamicContrast
         update("dyn", { PictureAdjust.setDynamicContrast(next) }, values.copy(dynamicContrast = next))
     }
-    Toggle("HDR (авто)", values.hdr, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+    Toggle(tr(R.string.hdr_auto), values.hdr, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         val next = !values.hdr
         update("hdr", { PictureAdjust.setHdr(next) }, values.copy(hdr = next))
     }
-    Selector("Локальный контраст", LocalContrastLevels.getOrElse(values.localContrast) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
+    Selector(tr(R.string.local_contrast), LocalContrastLevels.getOrElse(values.localContrast) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
         val next = (values.localContrast + delta).mod(LocalContrastLevels.size)
         update("local", { PictureAdjust.setLocalContrast(next) }, values.copy(localContrast = next))
     }
-    ListRow("Сбросить по умолчанию") {
+    ListRow(tr(R.string.reset_default)) {
         val d = CustomDefaults
         update("reset", {
             d.items.forEach { (item, v) -> PictureAdjust.set(item, v) }
@@ -270,17 +270,17 @@ private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
             .border(1.dp, Color(0x66FFB74D), RoundedCornerShape(16.dp))
             .padding(14.dp),
     ) {
-        T("Режим производительности", 16.sp, color = PanelText, weight = FontWeight.Medium)
+        T(tr(R.string.perf_mode_title), 16.sp, color = PanelText, weight = FontWeight.Medium)
         Spacer(Modifier.height(6.dp))
         BasicText(
-            "Максимальная яркость. Вентиляция не должна быть закрыта, в комнате — не выше 25 °C. " +
-                "Долгое использование может перегреть проектор и сократить срок службы.",
+            tr(R.string.perf_mode_text1) +
+                tr(R.string.perf_mode_text2),
             style = TextStyle(color = PanelDim, fontSize = 13.sp),
         )
         Spacer(Modifier.height(10.dp))
         PairRow {
-            Chip("Включить", false, Modifier.weight(1f).focusRequester(confirm), onClick = onConfirm)
-            Chip("Отмена", false, Modifier.weight(1f), onClick = onCancel)
+            Chip(tr(R.string.turn_on), false, Modifier.weight(1f).focusRequester(confirm), onClick = onConfirm)
+            Chip(tr(R.string.cancel), false, Modifier.weight(1f), onClick = onCancel)
         }
     }
 }

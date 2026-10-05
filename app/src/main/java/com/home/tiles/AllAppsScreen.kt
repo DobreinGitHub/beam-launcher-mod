@@ -53,7 +53,7 @@ fun AllAppsScreen(
 
     Column(Modifier.fillMaxSize().padding(start = 64.dp, end = 64.dp, top = 36.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            T("Все приложения", 36.sp, weight = FontWeight.Light)
+            T(tr(R.string.all_apps), 36.sp, weight = FontWeight.Light)
             Spacer(Modifier.width(20.dp))
             T("${apps.size}", 24.sp, color = Colors.TextDim)
             Spacer(Modifier.weight(1f))

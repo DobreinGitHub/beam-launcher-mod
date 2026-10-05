@@ -26,31 +26,40 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun AppearancePage() {
     val dark = LauncherSettings.dark
-    Section("Тема")
+    Section(tr(R.string.theme))
     PairRow {
-        Chip("Светлая", !dark, Modifier.weight(1f)) { LauncherSettings.dark = false }
-        Chip("Тёмная", dark, Modifier.weight(1f)) { LauncherSettings.dark = true }
+        Chip(tr(R.string.theme_light), !dark, Modifier.weight(1f)) { LauncherSettings.dark = false }
+        Chip(tr(R.string.theme_dark), dark, Modifier.weight(1f)) { LauncherSettings.dark = true }
     }
-    Section("Фон · ${Backgrounds[LauncherSettings.background].name}")
+    Section(tr(R.string.background_name, Backgrounds[LauncherSettings.background].name))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Backgrounds.forEachIndexed { i, preset ->
             Swatch(Colors.presetBrush(preset), LauncherSettings.background == i) { LauncherSettings.background = i }
         }
     }
     if (Colors.isXmb) XmbOptions()
-    Section("Раскладка")
+    Section(tr(R.string.layout))
     PairRow {
-        Chip("Крупная плитка", LauncherSettings.layout == LAYOUT_FOCUS, Modifier.weight(1f)) {
+        Chip(tr(R.string.layout_big_tile), LauncherSettings.layout == LAYOUT_FOCUS, Modifier.weight(1f)) {
             LauncherSettings.layout = LAYOUT_FOCUS
         }
-        Chip("Как на Switch", LauncherSettings.layout == LAYOUT_CLASSIC, Modifier.weight(1f)) {
+        Chip(tr(R.string.layout_switch), LauncherSettings.layout == LAYOUT_CLASSIC, Modifier.weight(1f)) {
             LauncherSettings.layout = LAYOUT_CLASSIC
         }
     }
-    Section("Размер плиток")
+    Section(tr(R.string.tile_size))
     PairRow {
-        Chip("Обычные", !LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = false }
-        Chip("Крупные", LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = true }
+        Chip(tr(R.string.tiles_normal), !LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = false }
+        Chip(tr(R.string.tiles_large), LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = true }
+    }
+    // Each language is named in itself, so it can be found whatever the interface is set to.
+    Section(tr(R.string.language))
+    PairRow {
+        Chip(tr(R.string.language_system), AppLanguage.current == AppLanguage.SYSTEM, Modifier.weight(1f)) { AppLanguage.current = AppLanguage.SYSTEM }
+        Chip("Русский", AppLanguage.current == AppLanguage.RU, Modifier.weight(1f)) { AppLanguage.current = AppLanguage.RU }
+    }
+    PairRow {
+        Chip("English", AppLanguage.current == AppLanguage.EN, Modifier.weight(1f)) { AppLanguage.current = AppLanguage.EN }
     }
 }
 
@@ -63,39 +72,39 @@ private fun HdmiSection(onHdmiPage: () -> Unit) {
     val cec = rememberFirmwareState { Cec.control(context) }
     val cecWake = rememberFirmwareState { Cec.wakeUp() }
     val bootHdmi = bootState.value ?: false
-    Section("При включении")
+    Section(tr(R.string.on_power_on))
     PairRow {
-        Chip("Главный экран", !bootHdmi, Modifier.weight(1f)) {
+        Chip(tr(R.string.home_screen), !bootHdmi, Modifier.weight(1f)) {
             bootState.change(false) { Hdmi.setBootToHdmi(context, false) }
         }
-        Chip("HDMI", bootHdmi, Modifier.weight(1f), note = "если подключено") {
+        Chip("HDMI", bootHdmi, Modifier.weight(1f), note = tr(R.string.if_connected)) {
             bootState.change(true) { Hdmi.setBootToHdmi(context, true) }
         }
     }
     autoSwitch.value?.let { on ->
         Spacer(Modifier.height(10.dp))
-        Toggle("HDMI при подключении", on, Modifier.fillMaxWidth()) {
+        Toggle(tr(R.string.hdmi_on_connect), on, Modifier.fillMaxWidth()) {
             autoSwitch.change(!on) { Hdmi.setAutoSwitch(!on) }
         }
     }
     cec.value?.let { on ->
         Section("HDMI‑CEC")
-        Toggle("Управление устройствами", on, Modifier.fillMaxWidth()) {
+        Toggle(tr(R.string.hdmi_cec_control), on, Modifier.fillMaxWidth()) {
             cec.change(!on) { Cec.setControl(context, !on) }
             // Turning the control off turns the wake-up off too: ask the firmware what it ended up with.
             cecWake.value?.let { wake -> cecWake.change(if (on) false else wake) {} }
         }
-        T("Нужно для ARC и пульта проектора на консоли", 14.sp, color = PanelDim)
+        T(tr(R.string.hdmi_cec_hint), 14.sp, color = PanelDim)
         if (on) cecWake.value?.let { wake ->
             Spacer(Modifier.height(10.dp))
-            Toggle("HDMI включает проектор", wake, Modifier.fillMaxWidth()) {
+            Toggle(tr(R.string.hdmi_wakes), wake, Modifier.fillMaxWidth()) {
                 cecWake.change(!wake) { Cec.setWakeUp(context, !wake) }
             }
-            T("Консоль включает и выключает проектор", 14.sp, color = PanelDim)
+            T(tr(R.string.hdmi_wakes_hint), 14.sp, color = PanelDim)
         }
     }
     Spacer(Modifier.height(10.dp))
-    ListRow("Другие настройки HDMI", onHdmiPage)
+    ListRow(tr(R.string.hdmi_more), onHdmiPage)
 }
 
 @Composable
@@ -104,25 +113,25 @@ internal fun HomePage(onHdmiPage: () -> Unit) {
     val channels by produceState(emptyList<TvChannel>()) {
         value = withContext(Dispatchers.IO) { queryTvChannels(context).filter { it.items.isNotEmpty() } }
     }
-    Section("Показывать")
-    Toggle("Сейчас играет", LauncherSettings.nowPlaying, Modifier.fillMaxWidth()) {
+    Section(tr(R.string.show))
+    Toggle(tr(R.string.now_playing), LauncherSettings.nowPlaying, Modifier.fillMaxWidth()) {
         LauncherSettings.nowPlaying = !LauncherSettings.nowPlaying
     }
     Spacer(Modifier.height(10.dp))
-    Toggle("Плитка флешки", LauncherSettings.usbTile, Modifier.fillMaxWidth()) {
+    Toggle(tr(R.string.usb_tile), LauncherSettings.usbTile, Modifier.fillMaxWidth()) {
         LauncherSettings.usbTile = !LauncherSettings.usbTile
     }
     Spacer(Modifier.height(10.dp))
-    Toggle("Плитка HDMI", LauncherSettings.hdmiTile, Modifier.fillMaxWidth()) {
+    Toggle(tr(R.string.hdmi_tile), LauncherSettings.hdmiTile, Modifier.fillMaxWidth()) {
         LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
     }
     HdmiSection(onHdmiPage)
-    Section("Второй ряд")
+    Section(tr(R.string.second_row))
     PairRow {
-        Chip("Авто", LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {
+        Chip(tr(R.string.auto), LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {
             LauncherSettings.secondRow = SECOND_ROW_AUTO
         }
-        Chip("Выкл", LauncherSettings.secondRow == SECOND_ROW_OFF, Modifier.weight(1f)) {
+        Chip(tr(R.string.off), LauncherSettings.secondRow == SECOND_ROW_OFF, Modifier.weight(1f)) {
             LauncherSettings.secondRow = SECOND_ROW_OFF
         }
     }
@@ -138,7 +147,7 @@ internal fun HomePage(onHdmiPage: () -> Unit) {
 @Composable
 internal fun RemoteButtonsSection() {
     val context = LocalContext.current
-    val choices by produceState(listOf("" to "Ничего", RemoteButtons.PANEL to "Эта панель", RemoteButtons.HOME to "Главный экран")) {
+    val choices by produceState(listOf("" to tr(R.string.nothing), RemoteButtons.PANEL to tr(R.string.this_panel), RemoteButtons.HOME to tr(R.string.home_screen))) {
         val apps = withContext(Dispatchers.IO) { AppRepository(context).loadApps().sortedBy { it.label.lowercase() } }
         value = value + apps.map { RemoteButtons.app(it.pkg) to it.label }
     }
@@ -151,13 +160,13 @@ internal fun RemoteButtonsSection() {
         }
     }
 
-    Section("Кнопка настроек")
-    Toggle("Открывает панель Beam", LauncherSettings.settingsKeyPanel, Modifier.fillMaxWidth()) {
+    Section(tr(R.string.settings_button))
+    Toggle(tr(R.string.opens_beam_panel), LauncherSettings.settingsKeyPanel, Modifier.fillMaxWidth()) {
         LauncherSettings.settingsKeyPanel = !LauncherSettings.settingsKeyPanel
     }
-    T("Вместо быстрых настроек XGIMI (они на миг мелькнут и закроются)", 14.sp, color = PanelDim)
-    Section("Кнопки приложений")
-    T("Нажмите кнопку на пульте, чтобы перейти к ней. ← → — действие", 14.sp, color = PanelDim)
+    T(tr(R.string.settings_button_hint), 14.sp, color = PanelDim)
+    Section(tr(R.string.app_buttons))
+    T(tr(R.string.app_buttons_hint), 14.sp, color = PanelDim)
     for (i in 0..3) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth()) {
@@ -167,7 +176,7 @@ internal fun RemoteButtonsSection() {
             val options = if (choices.any { it.first == current }) choices else choices + (current to assignedLabel(context, current))
             val index = options.indexOfFirst { it.first == current }
             Selector(
-                label = "Кнопка ${i + 1}",
+                label = tr(R.string.button_n, i + 1),
                 value = options[index].second,
                 modifier = Modifier.weight(1f).focusRequester(requesters[i]),
             ) { delta ->
@@ -179,9 +188,9 @@ internal fun RemoteButtonsSection() {
 
 /** What a button assigned to [action] is called: the app's label, or its package if it is gone. */
 private fun assignedLabel(context: android.content.Context, action: String): String {
-    val pkg = RemoteButtons.packageOf(action) ?: return "Ничего"
+    val pkg = RemoteButtons.packageOf(action) ?: return tr(R.string.nothing)
     val pm = context.packageManager
-    return runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("$pkg (нет на устройстве)")
+    return runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(tr(R.string.pkg_missing, pkg))
 }
 
 /** XMB colour (by month like the PS3, or fixed) and the animation switch. */
@@ -189,7 +198,7 @@ private fun assignedLabel(context: android.content.Context, action: String): Str
 private fun XmbOptions() {
     Spacer(Modifier.height(12.dp))
     Row(Modifier.fillMaxWidth()) {
-        Chip("Цвет по месяцу", LauncherSettings.xmbColor < 0, Modifier.weight(1f)) { LauncherSettings.xmbColor = -1 }
+        Chip(tr(R.string.color_by_month), LauncherSettings.xmbColor < 0, Modifier.weight(1f)) { LauncherSettings.xmbColor = -1 }
     }
     // Two rows of six: January-June, July-December.
     XmbColors.chunked(6).forEachIndexed { row, colors ->
@@ -203,7 +212,7 @@ private fun XmbOptions() {
     }
     Spacer(Modifier.height(12.dp))
     Row(Modifier.fillMaxWidth()) {
-        Toggle("Анимация фона", LauncherSettings.bgAnimation, Modifier.weight(1f)) {
+        Toggle(tr(R.string.background_animation), LauncherSettings.bgAnimation, Modifier.weight(1f)) {
             LauncherSettings.bgAnimation = !LauncherSettings.bgAnimation
         }
     }

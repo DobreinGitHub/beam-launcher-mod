@@ -49,12 +49,12 @@ class MicTestActivity : Activity() {
             AudioRecord(source, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(min, rate))
         }.getOrElse {
             Log.w("MicTest", "AudioRecord failed", it)
-            show("Микрофон недоступен: $it")
+            show(tr(R.string.mic_unavailable, it))
             return
         }
         if (recorder.state != AudioRecord.STATE_INITIALIZED) {
             Log.w("MicTest", "AudioRecord not initialized (source=$source)")
-            show("Микрофон не инициализирован")
+            show(tr(R.string.mic_not_initialized))
             return
         }
         val pcm = java.io.ByteArrayOutputStream()
@@ -72,17 +72,17 @@ class MicTestActivity : Activity() {
                 pcm.write(buffer[i].toInt() shr 8 and 0xFF)
             }
             Log.i("MicTest", "peak=$peak")
-            show("Запись… говорите\nуровень: $peak")
+            show(tr(R.string.mic_recording, peak))
         }
         recorder.stop()
         recorder.release()
         val saved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             saveToDownloads(wav(pcm.toByteArray(), rate))
         } else {
-            "нужен Android 10 или новее"
+            tr(R.string.needs_android_10)
         }
         Log.i("MicTest", "saved $saved (${pcm.size()} bytes)")
-        show("Готово")
+        show(tr(R.string.done))
         runOnUiThread { label.postDelayed({ finish() }, 800) }
     }
 
