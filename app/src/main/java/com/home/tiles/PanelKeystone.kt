@@ -39,6 +39,7 @@ internal fun KeystonePage(onScreen: () -> Unit) {
     val cornersState = rememberFirmwareState { Keystone.corners() }
     var zoom by remember { mutableStateOf(Keystone.savedZoom(context)) }
     val realtime = rememberFirmwareState { Sensors.realtimeKeystone() }
+    val bootKeystone = rememberFirmwareState { Sensors.bootKeystone() }
     DisposableEffect(Unit) { onDispose { KeystoneEdit.active.value = null } }
     val current = cornersState.value
     if (current == null) {
@@ -54,12 +55,19 @@ internal fun KeystonePage(onScreen: () -> Unit) {
         cornersState.change(clamped) { Keystone.setCorners(clamped) }
     }
     ListRow("Настроить на экране", onScreen)
-    if (realtime.value == true) {
+    if (bootKeystone.value != null || realtime.value == true) {
         Section("Автокоррекция")
-        Toggle("Коррекция при сдвиге", true, Modifier.fillMaxWidth()) {
-            realtime.change(false) { Sensors.setRealtimeKeystone(false) }
+        bootKeystone.value?.let { on ->
+            Toggle("Коррекция при включении", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                bootKeystone.change(!on) { Sensors.setBootKeystone(!on) }
+            }
         }
-        T("Выключите, иначе сдвиг проектора собьёт ручную настройку", 14.sp, color = PanelDim)
+        if (realtime.value == true) {
+            Toggle("Коррекция при сдвиге", true, Modifier.fillMaxWidth()) {
+                realtime.change(false) { Sensors.setRealtimeKeystone(false) }
+            }
+            T("Выключите, иначе сдвиг проектора собьёт ручную настройку", 14.sp, color = PanelDim)
+        }
     }
     Section("Углы · OK, затем стрелки")
     listOf("↖  Левый верхний", "↗  Правый верхний", "↙  Левый нижний", "↘  Правый нижний").forEachIndexed { i, label ->
