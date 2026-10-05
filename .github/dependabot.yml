@@ -1,0 +1,23 @@
+# Weekly pull requests for out-of-date dependencies; CI (build, tests, lint) says whether each one is fine.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      androidx:
+        patterns: ["androidx.*"]
+      kotlin:
+        patterns: ["org.jetbrains.kotlin*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # From v6 on, gradle/actions caching is under Gradle's own terms of use
+      # (https://gradle.com/legal/terms-of-use/): accepting them is the owner's decision.
+      - dependency-name: "gradle/actions/*"
+        update-types: ["version-update:semver-major"]

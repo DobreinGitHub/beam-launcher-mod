@@ -9,16 +9,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
       - name: Build launcher and remote-button stubs
         run: ./gradlew :app:assembleRelease :stub:assembleRelease --console=plain
       # The build is the check; the account's artifact storage quota running out shouldn't fail it.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         continue-on-error: true
         with:
           name: apks
@@ -26,3 +26,49 @@ jobs:
           path: |
             app/build/outputs/apk/release/*.apk
             stub/build/outputs/apk/*/release/*.apk
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --console=plain
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        continue-on-error: true
+        with:
+          name: test-reports
+          retention-days: 7
+          path: app/build/reports/tests/
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+      # -PlintStrict: errors fail the build; warnings stay in the report. One stub flavour is
+      # enough, the four differ only in their package name.
+      - name: Lint
+        run: ./gradlew :app:lintDebug :stub:lintButton1Debug -PlintStrict --console=plain
+      # Gradle's own message names only the first error: the whole list goes to the log.
+      - name: Lint report
+        if: failure()
+        run: cat app/build/intermediates/lint_intermediate_text_report/*/lintReport*/lint-results-*.txt stub/build/intermediates/lint_intermediate_text_report/*/lintReport*/lint-results-*.txt || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        continue-on-error: true
+        with:
+          name: lint-reports
+          retention-days: 7
+          path: |
+            app/build/reports/lint-results-*.html
+            stub/build/reports/lint-results-*.html

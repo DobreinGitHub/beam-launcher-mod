@@ -151,7 +151,7 @@ class KeystoneActivity : ComponentActivity() {
             Keystone.saveZoom(this, next)
             corners = Keystone.corners() ?: corners
         }
-        if (announce) message.value = "Размер ${sizePercent(zoom.intValue)}%"
+        if (announce) message.value = "Размер ${Keystone.sizePercent(zoom.intValue)}%"
     }
 
     private fun apply(values: List<Int>) {
@@ -182,9 +182,6 @@ class KeystoneActivity : ComponentActivity() {
         var volumeKeys: ((up: Boolean) -> Unit)? = null
     }
 }
-
-/** Rough size for a zoom step: 32 steps take the picture down to about half. */
-private fun sizePercent(zoom: Int) = 100 - zoom * 50 / Keystone.MAX_ZOOM
 
 private val Blue = Color(0xFF2469D6)
 private val Line = Color(0x66FFFFFF)
@@ -224,7 +221,7 @@ private fun Screen(step: KeystoneActivity.Step, zoom: Int, message: String?) {
             T(step.hint, 18.sp, color = Color(0xFFD3E3FD))
             if (step == KeystoneActivity.Step.SIZE) {
                 Spacer(Modifier.height(6.dp))
-                T("${sizePercent(zoom)}%", 22.sp, color = Mark)
+                T("${Keystone.sizePercent(zoom)}%", 22.sp, color = Mark)
             }
         }
         Column(

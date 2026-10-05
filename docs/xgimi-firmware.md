@@ -102,6 +102,12 @@ cls.getMethod("init", Context::class.java, listener).invoke(instance, appContext
 Привязка асинхронная: первые вызовы сразу после неё могут вернуть ошибку, поэтому Beam
 повторяет чтение несколько раз (`XgimiService.bind`).
 
+Если сервис перезапустился и сообщил об этом через слушатель (имя метода с `disconnect`, `died`,
+`unbind` или `lost`), `XgimiService` повторяет привязку: через 2, 4, 8 … 30 с, не больше восьми раз.
+Имена методов слушателя в документации библиотеки не описаны, поэтому при первой привязке Beam пишет
+их в лог (тег `XgimiService`). Можно ли вызывать `init` повторно, не проверено: если повтор не
+помогает, смотрите в логе, что библиотека сообщила и что сделал повтор.
+
 `XgimiCommonManager` работает от имени system. Через него Beam пишет системные свойства, которые
 обычному приложению недоступны (`setSystemProperties(name, value)`).
 
@@ -183,7 +189,7 @@ val manager = cls.getConstructor(Context::class.java).newInstance(appContext)
 |---|---|
 | Список входов | `TvInputManager.tvInputList`, тип `TYPE_HDMI`. Устройство, представившееся по CEC, появляется как дочерний вход порта (`parentId`) |
 | Открыть вход | `Intent("com.xgimi.action.hdmiPlayer", TvContract.buildChannelUriForPassthroughInput(id))`, пакет `com.xgimi.xhplayer` |
-| Что-то подключено к HDMI 1 | `GmTvManager.getHdmiConnectStatus(byte 1)` |
+| Что-то подключено к порту HDMI | `GmTvManager.getHdmiConnectStatus(byte порт)`, порты с 1 в порядке списка входов (Beam опрашивает все его порты; `--ez hdmi_get true` печатает `connectedPorts`) |
 | Переключаться на HDMI при подключении | `SystemManager.getHdmiAutoSwitch()` / `setHdmiAutoSwitch(boolean)` |
 | Загрузка сразу в HDMI | свойства `persist.sys.hdmi.bootsource` и `persist.sys.bootanim.alwayswait` = `1`/`0`, оба через `XgimiCommonManager.setSystemProperties` |
 | Управление HDMI-устройствами (нужно для ARC) | `XgimiCommonManager.isHdmiCecControlEnabled()` / `setHdmiCecControlEnabled(boolean)` |

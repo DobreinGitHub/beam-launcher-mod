@@ -15,6 +15,8 @@ import org.vosk.Recognizer
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.DigestInputStream
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 /**
@@ -30,6 +32,9 @@ object VoiceModel {
 
     @Volatile
     private var model: Model? = null
+
+    /** Recognitions running right now; the model is never closed under them. */
+    private var users = 0
     private val unload = Runnable { release() }
     private val handler = Handler(Looper.getMainLooper())
 
@@ -45,6 +50,20 @@ object VoiceModel {
             .also { model = it }
     }
 
+    /**
+     * Runs [block] with the loaded model, which stays open until it returns (the unload timer
+     * waits for it: closing a Vosk model under a running recognizer crashes the process).
+     * Blocking; null if the model isn't installed or failed to load.
+     */
+    fun <T> withModel(context: Context, block: (Model) -> T): T? {
+        val loaded = synchronized(this) { load(context)?.also { users++ } } ?: return null
+        try {
+            return block(loaded)
+        } finally {
+            synchronized(this) { users-- }
+        }
+    }
+
     /** Frees the model a minute after the last use. */
     fun releaseLater() {
         handler.removeCallbacks(unload)
@@ -53,17 +72,38 @@ object VoiceModel {
 
     @Synchronized
     private fun release() {
+        if (users > 0) {
+            handler.postDelayed(unload, 60_000)
+            return
+        }
         model?.close()
         model = null
         Log.i("Voice", "Model unloaded")
     }
 
-    /** Blocking download + unzip. */
-    fun download(context: Context, url: String = DEFAULT_URL): Boolean = runCatching {
+    /**
+     * Blocking download + unzip. https only. With [sha256] (hex) the archive is checked before
+     * anything is unpacked; without it the download is trusted as is.
+     */
+    fun download(context: Context, url: String = DEFAULT_URL, sha256: String? = null): Boolean = runCatching {
+        require(url.startsWith("https://", ignoreCase = true)) { "model url must be https" }
+        val zip = File(context.cacheDir, "vosk-download.zip")
         val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 60_000
-        connection.inputStream.use { install(context, it) }
+        try {
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 60_000
+            check(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
+            val digest = MessageDigest.getInstance("SHA-256")
+            DigestInputStream(connection.inputStream, digest).use { input ->
+                zip.outputStream().use { input.copyTo(it) }
+            }
+            val actual = digest.digest().joinToString("") { "%02x".format(it) }
+            check(sha256 == null || actual.equals(sha256.trim(), ignoreCase = true)) { "sha256 mismatch: $actual" }
+            zip.inputStream().use { install(context, it) }
+        } finally {
+            connection.disconnect()
+            zip.delete()
+        }
     }.onFailure { Log.w("Voice", "Model download failed", it) }.getOrDefault(false)
 
     /** The zip pushed over adb into [VoiceModelProvider]. */
@@ -75,22 +115,59 @@ object VoiceModel {
     private fun install(context: Context, input: java.io.InputStream): Boolean {
         val target = dir(context)
         val tmp = File(context.filesDir, "vosk-ru.tmp").apply { deleteRecursively(); mkdirs() }
-        ZipInputStream(input.buffered()).use { zip ->
-            generateSequence { zip.nextEntry }.forEach { entry ->
-                val relative = entry.name.substringAfter('/', "")
-                if (relative.isEmpty()) return@forEach
-                val out = File(tmp, relative)
-                if (entry.isDirectory) out.mkdirs() else {
-                    out.parentFile?.mkdirs()
-                    out.outputStream().use { zip.copyTo(it) }
-                }
+        try {
+            extractModelZip(input, tmp)
+            // A zip that isn't a model must not replace one that works.
+            check(File(tmp, "am").isDirectory) { "the archive isn't a Vosk model (no am folder)" }
+            // Nobody loads the model while its files are swapped, and the old one isn't left open.
+            synchronized(this) {
+                check(users == 0) { "the model is in use right now" }
+                handler.removeCallbacks(unload)
+                model?.close()
+                model = null
+                swapDirectory(tmp, target, File(context.filesDir, "vosk-ru.old"))
             }
+        } catch (e: Throwable) {
+            tmp.deleteRecursively()
+            throw e
         }
-        target.deleteRecursively()
-        check(tmp.renameTo(target))
         Log.i("Voice", "Model installed")
         return installed(context)
     }
+}
+
+/**
+ * Unzips a Vosk model archive into [into], stripping its one top folder. An entry that would land
+ * outside [into] (Zip Slip: "model/../../x") aborts with an IllegalStateException.
+ */
+internal fun extractModelZip(input: java.io.InputStream, into: File) {
+    ZipInputStream(input.buffered()).use { zip ->
+        generateSequence { zip.nextEntry }.forEach { entry ->
+            val relative = entry.name.substringAfter('/', "")
+            if (relative.isEmpty()) return@forEach
+            val out = File(into, relative)
+            check(out.canonicalPath.startsWith(into.canonicalPath + File.separator)) { "bad zip entry ${entry.name}" }
+            if (entry.isDirectory) out.mkdirs() else {
+                out.parentFile?.mkdirs()
+                out.outputStream().use { zip.copyTo(it) }
+            }
+        }
+    }
+}
+
+/**
+ * Puts [newDir] in place of [target]: the old one is moved to [backup] first and put back if the
+ * new one can't be moved in, so a failure never leaves no model.
+ */
+internal fun swapDirectory(newDir: File, target: File, backup: File) {
+    check(newDir.isDirectory) { "nothing to install" }
+    backup.deleteRecursively()
+    if (target.exists()) check(target.renameTo(backup)) { "can't move the old model aside" }
+    if (!newDir.renameTo(target)) {
+        if (backup.exists()) backup.renameTo(target)
+        error("can't move the new model into place")
+    }
+    backup.deleteRecursively()
 }
 
 /**
@@ -147,18 +224,37 @@ class VoiceSession(private val context: Context) {
                 AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
             }.getOrNull()
             if (recorder == null || recorder.state != AudioRecord.STATE_INITIALIZED) {
-                Log.w("Voice", "Microphone unavailable")
+                Log.w("Voice", "Microphone unavailable (is RECORD_AUDIO granted?)")
+                recorder?.release()
                 recording = false
                 return@Thread
             }
-            recorder.startRecording()
-            val buffer = ShortArray(rate / 10)
-            while (recording) {
-                val n = recorder.read(buffer, 0, buffer.size)
-                if (n > 0) synchronized(chunks) { chunks += buffer.copyOf(n) }
+            try {
+                recorder.startRecording()
+                val buffer = ShortArray(rate / 10)
+                var total = 0
+                while (recording) {
+                    val n = recorder.read(buffer, 0, buffer.size)
+                    if (n < 0) {
+                        // An error code (dead object, bad state): don't spin on it.
+                        Log.w("Voice", "Microphone read failed: $n")
+                        break
+                    }
+                    if (n > 0) synchronized(chunks) { chunks += buffer.copyOf(n) }
+                    total += n.coerceAtLeast(0)
+                    if (total >= MAX_SECONDS * rate) {
+                        // A stuck key must not fill the projector's memory: what was said so far is used.
+                        Log.w("Voice", "Recording stopped at $MAX_SECONDS s")
+                        break
+                    }
+                }
+            } catch (e: IllegalStateException) {
+                Log.w("Voice", "Microphone could not start", e)
+            } finally {
+                recording = false
+                runCatching { recorder.stop() }
+                recorder.release()
             }
-            recorder.stop()
-            recorder.release()
         }.apply { start() }
     }
 
@@ -176,17 +272,21 @@ class VoiceSession(private val context: Context) {
      */
     fun finish(): String {
         val samples = stop() ?: return NO_MODEL
-        val free = recognize(samples, null)
-        val text = if (VoiceCommands.searchQuery(free) != null) free else recognize(samples, VoiceCommands.grammar())
+        // The commands are the usual case: recognised against their grammar, one pass. Only when
+        // that heard something it doesn't know (or nothing) is the speech decoded freely, to see
+        // whether it is a "найди …" search; two passes would double the wait after every command.
+        val commands = recognize(samples, VoiceCommands.grammar(context))
+        val free = if (commands.text.isBlank() || commands.hadUnknown) recognize(samples, null).text else null
+        val text = if (free != null && VoiceCommands.searchQuery(free) != null) free else commands.text
         VoiceModel.releaseLater()
-        Log.i("Voice", "Heard \"$text\" (free speech: \"$free\")")
+        Log.i("Voice", "Heard \"$text\" (commands: \"${commands.text}\", free speech: ${free ?: "not needed"})")
         return text
     }
 
     /** Stops recording and returns free speech, for apps that asked for dictation. Blocking. */
     fun finishDictation(): String {
         val samples = stop() ?: return NO_MODEL
-        return recognize(samples, null).also {
+        return recognize(samples, null).text.also {
             VoiceModel.releaseLater()
             Log.i("Voice", "Dictated \"$it\"")
         }
@@ -197,31 +297,60 @@ class VoiceSession(private val context: Context) {
         recording = false
         thread?.join(2000)
         VoiceModel.load(context) ?: return null
-        val all = synchronized(chunks) { chunks.toList() }.flatMap { it.asList() }
-        // The remote clicks as its microphone starts (full-scale pop), which the model hears as
-        // "а": skip the silence before the stream and its first 0.3 s.
-        val start = all.indexOfFirst { it.toInt() != 0 }
-        val speech = if (start < 0) ShortArray(0) else all.subList(minOf(all.size, start + rate * 3 / 10), all.size).toShortArray()
+        val all = synchronized(chunks) { joinChunks(chunks).also { chunks.clear() } }
+        val speech = trimRemoteClick(all, rate)
         Log.i("Voice", "Recorded ${all.size / rate.toFloat()} s, speech ${speech.size / rate.toFloat()} s")
         return listOf(speech)
     }
 
-    private fun recognize(samples: List<ShortArray>, grammar: String?): String {
-        val model = VoiceModel.load(context) ?: return ""
-        val recognizer = if (grammar != null) Recognizer(model, rate.toFloat(), grammar) else Recognizer(model, rate.toFloat())
-        val text = recognizer.use { r ->
-            samples.forEach { r.acceptWaveForm(it, it.size) }
-            JSONObject(r.finalResult).optString("text")
-        }
-        // A stray leading "а"/"и" (click remains, hesitation) would break "найди …" and searches.
-        return text.trim().split(' ').dropWhile { it in fillers }.joinToString(" ")
+    /** What was heard, without the grammar's "[unk]" tokens; [hadUnknown] if there were any. */
+    private class Heard(val text: String, val hadUnknown: Boolean)
+
+    private fun recognize(samples: List<ShortArray>, grammar: String?): Heard {
+        val text = VoiceModel.withModel(context) { model ->
+            val recognizer = if (grammar != null) Recognizer(model, rate.toFloat(), grammar) else Recognizer(model, rate.toFloat())
+            recognizer.use { r ->
+                samples.forEach { r.acceptWaveForm(it, it.size) }
+                JSONObject(r.finalResult).optString("text")
+            }
+        } ?: return Heard("", false)
+        // A stray leading "а"/"и" (click remains, hesitation) would break "найди …" and searches;
+        // "[unk]" is what the grammar mode puts for anything it doesn't know.
+        val words = text.trim().split(' ').filter { it.isNotBlank() }
+        return Heard(words.filter { it != UNKNOWN }.dropWhile { it in fillers }.joinToString(" "), UNKNOWN in words)
     }
 
     private val fillers = setOf("а", "и", "э", "ну")
+    private val UNKNOWN = "[unk]"
 
     companion object {
         const val NO_MODEL = "\u0000no-model"
+
+        /** The longest recording kept: seconds of audio at the voice key. */
+        const val MAX_SECONDS = 30
     }
+}
+
+/** The recorded chunks as one array (no boxing: this is tens of thousands of samples). */
+internal fun joinChunks(chunks: List<ShortArray>): ShortArray {
+    val all = ShortArray(chunks.sumOf { it.size })
+    var at = 0
+    for (chunk in chunks) {
+        System.arraycopy(chunk, 0, all, at, chunk.size)
+        at += chunk.size
+    }
+    return all
+}
+
+/**
+ * The remote clicks as its microphone starts (a full-scale pop), which the model hears as "а":
+ * drops the silence before the stream and its first 0.3 s. Empty if there was only silence.
+ */
+internal fun trimRemoteClick(all: ShortArray, rate: Int): ShortArray {
+    var start = 0
+    while (start < all.size && all[start].toInt() == 0) start++
+    if (start >= all.size) return ShortArray(0)
+    return all.copyOfRange(minOf(all.size, start + rate * 3 / 10), all.size)
 }
 
 /** The phrases the voice key understands, and what they do. */
@@ -230,14 +359,11 @@ object VoiceCommands {
 
     private val numbers = listOf("один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять", "десять")
 
-    private val commands: List<Command> by lazy {
+    /** The commands that need no app; the apps' own come from [VoiceApps] (see [commandsFor]). */
+    private val fixedCommands: List<Command> by lazy {
         buildList {
             fun cmd(vararg phrases: String, run: (Context) -> String) = add(Command(phrases.toList(), run))
-            fun app(name: String, pkg: String, vararg phrases: String) = cmd(*phrases) { it.launchPackage(pkg); name }
 
-            app("SmartTube", "org.smarttube.stable", "ютуб", "открой ютуб", "смарт тюб", "открой смарт тюб")
-            app("Spotify", "com.spotify.tv.android", "музыка", "включи музыку", "открой музыку")
-            app("Jellyfin", "org.jellyfin.androidtv", "фильмы", "открой фильмы", "медиатека")
             cmd("домой", "главный экран", "на главный экран") { ctx ->
                 ctx.startActivity(
                     android.content.Intent(android.content.Intent.ACTION_MAIN)
@@ -282,6 +408,15 @@ object VoiceCommands {
         }
     }
 
+    /** Opening the apps that are installed (built-in and added over adb), then the fixed commands. */
+    private fun commandsFor(context: Context): List<Command> = buildList {
+        for (app in VoiceApps.all(context)) {
+            val pkg = VoiceApps.installedPackage(context, app) ?: continue
+            add(Command(app.phrases) { it.launchPackage(pkg); app.name })
+        }
+        addAll(fixedCommands)
+    }
+
     private fun volume(context: Context, direction: Int) {
         context.getSystemService(android.media.AudioManager::class.java)
             .adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, direction, android.media.AudioManager.FLAG_SHOW_UI)
@@ -294,7 +429,7 @@ object VoiceCommands {
     }
 
     /** JSON phrase list for Vosk's grammar mode; "[unk]" lets anything else fall through. */
-    fun grammar(): String = JSONArray(commands.flatMap { it.phrases }.distinct() + "[unk]").toString()
+    fun grammar(context: Context): String = JSONArray(commandsFor(context).flatMap { it.phrases }.distinct() + "[unk]").toString()
 
     private val searchWords = listOf("найди", "найти", "поищи", "поиск", "ищи", "покажи")
 
@@ -307,24 +442,30 @@ object VoiceCommands {
 
     /** YouTube search in SmartTube (it opens youtube.com search links). */
     fun search(context: Context, query: String) {
+        val pkg = VoiceApps.searchPackage(context) ?: error("SmartTube isn't installed")
         val url = "https://www.youtube.com/results?search_query=" + java.net.URLEncoder.encode(query, "UTF-8")
         context.startActivity(
             android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                .setPackage("org.smarttube.stable")
+                .setPackage(pkg)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 
-    /** Runs the command for a recognised phrase; returns what to show, or null if nothing matched. */
+    /**
+     * Runs the command for a recognised phrase; returns what to show: null only if no command
+     * matched, a failure message if one matched but couldn't run.
+     */
     fun run(context: Context, text: String): String? {
         searchQuery(text)?.let { query ->
-            return runCatching { search(context, query); "Поиск: $query" }.getOrNull()
+            return runCatching { search(context, query); "Поиск: $query" }
+                .onFailure { Log.w("Voice", "Search \"$query\" failed", it) }
+                .getOrElse { "Не удалось открыть поиск (SmartTube установлен?)" }
         }
         val phrase = text.trim()
-        val command = commands.firstOrNull { phrase in it.phrases } ?: return null
+        val command = commandsFor(context).firstOrNull { phrase in it.phrases } ?: return null
         return runCatching { command.run(context) }
             .onFailure { Log.w("Voice", "Command \"$phrase\" failed", it) }
-            .getOrNull()
+            .getOrElse { "Не удалось выполнить: «$phrase»" }
     }
 }
 
@@ -337,6 +478,24 @@ object VoiceRequests {
     /** Called on the main thread with true when the voice key goes down, false when it comes up. */
     @Volatile
     var onVoiceKey: ((Boolean) -> Unit)? = null
+        private set
+
+    private var owner: Any? = null
+
+    /** [owner] takes the voice key; a request that held it before no longer gets it. */
+    @Synchronized
+    fun claim(owner: Any, onKey: (Boolean) -> Unit) {
+        this.owner = owner
+        onVoiceKey = onKey
+    }
+
+    /** Gives the voice key back, unless a newer request has taken it over meanwhile. */
+    @Synchronized
+    fun release(owner: Any) {
+        if (this.owner !== owner) return
+        this.owner = null
+        onVoiceKey = null
+    }
 }
 
 /**
@@ -354,11 +513,14 @@ class VoskRecognitionService : android.speech.RecognitionService() {
             listener.error(android.speech.SpeechRecognizer.ERROR_CLIENT)
             return
         }
+        // A request that was never cancelled must not keep recording behind the new one.
+        session?.cancel()
+        handler.removeCallbacks(timeout)
         callback = listener
         session = VoiceSession(this).also { it.start() }
         listener.readyForSpeech(android.os.Bundle())
         PanelOverlay.caption("🎤  Зажмите голосовую кнопку и говорите")
-        VoiceRequests.onVoiceKey = { down ->
+        VoiceRequests.claim(this) { down ->
             if (down) {
                 handler.removeCallbacks(timeout)
                 PanelOverlay.caption("🎤  Слушаю…")
@@ -410,7 +572,7 @@ class VoskRecognitionService : android.speech.RecognitionService() {
 
     private fun clear() {
         handler.removeCallbacks(timeout)
-        VoiceRequests.onVoiceKey = null
+        VoiceRequests.release(this)
         callback = null
         session = null
     }
@@ -440,7 +602,7 @@ class VoiceSearchActivity : android.app.Activity() {
         }
         session = VoiceSession(this).also { it.start() }
         PanelOverlay.caption("🎤  Зажмите голосовую кнопку и говорите")
-        VoiceRequests.onVoiceKey = { down ->
+        VoiceRequests.claim(this) { down ->
             if (down) {
                 handler.removeCallbacks(timeout)
                 PanelOverlay.caption("🎤  Слушаю…")
@@ -453,7 +615,7 @@ class VoiceSearchActivity : android.app.Activity() {
 
     private fun done(recorded: VoiceSession?) {
         handler.removeCallbacks(timeout)
-        VoiceRequests.onVoiceKey = null
+        VoiceRequests.release(this)
         session = null
         if (recorded == null) {
             PanelOverlay.caption(null)
@@ -479,7 +641,7 @@ class VoiceSearchActivity : android.app.Activity() {
     override fun onDestroy() {
         if (session != null) {
             session?.cancel()
-            VoiceRequests.onVoiceKey = null
+            VoiceRequests.release(this)
             PanelOverlay.caption(null)
         }
         super.onDestroy()

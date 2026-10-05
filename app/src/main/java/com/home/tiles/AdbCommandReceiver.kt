@@ -40,10 +40,8 @@ class AdbCommandReceiver : BroadcastReceiver() {
         if (intent.hasExtra("sound_bind")) SoundOutput.prepare(context)
         if (intent.hasExtra("sound_get")) {
             val devices = (0..8).filter { SoundOutput.connected(it) }
-            val service = runCatching {
-                val cls = Class.forName("com.xgimi.api.XgimiAudioManager")
-                cls.getMethod("getAudioOutputDevices").invoke(cls.getMethod("getInstance").invoke(null))
-            }.fold({ "ok paths=$it" }, { "error ${it.cause ?: it}" })
+            val service = Gmpf.call("com.xgimi.api.XgimiAudioManager", "getAudioOutputDevices")
+                .fold({ "ok paths=$it" }, { "error $it" })
             resultData = "auto=${SoundOutput.auto()} output=${SoundOutput.output()} connected=$devices service=$service"
         }
         // --ei pic_item N --ei pic_value V: set one picture parameter (0 brightness .. 4 hue).
@@ -66,24 +64,40 @@ class AdbCommandReceiver : BroadcastReceiver() {
         }
         // --ez pic_get true: current picture mode number (as XGIMI's settings use it).
         if (intent.hasExtra("pic_get")) {
-            resultData = runCatching {
-                val cls = Class.forName("com.xgimi.gmpf.api.GmTvManager")
-                val tv = cls.getMethod("getInstance").invoke(null)
-                val source = cls.getMethod("getCurrentInputSource").invoke(tv) as Int
-                "source=$source mode=${cls.getMethod("getPictureMode", Int::class.javaPrimitiveType).invoke(tv, source)}"
-            }.getOrElse { "error $it" }
+            val source = Gmpf.int("GmTvManager", "getCurrentInputSource")
+            resultData = if (source == null) "error: no input source" else "source=$source mode=${Gmpf.int("GmTvManager", "getPictureMode", source)}"
         }
         // Voice model: --ez voice_install true unzips the pushed zip (see VoiceModelProvider),
-        // --es voice_url URL downloads it instead. Both run in the background; watch tag Voice.
+        // --es voice_url HTTPS_URL [--es voice_sha256 HEX] downloads it instead.
+        // Both run in the background (goAsync keeps the receiver alive); watch tag Voice.
         if (intent.hasExtra("voice_install") || intent.hasExtra("voice_url")) {
             val url = intent.getStringExtra("voice_url")
+            val sha256 = intent.getStringExtra("voice_sha256")
             val app = context.applicationContext
+            val pending = goAsync()
             Thread {
-                if (url != null) VoiceModel.download(app, url) else VoiceModel.installFrom(VoiceModelProvider.pushedZip(app), app)
+                try {
+                    if (url != null) VoiceModel.download(app, url, sha256) else VoiceModel.installFrom(VoiceModelProvider.pushedZip(app), app)
+                } finally {
+                    pending.finish()
+                }
             }.start()
             resultData = "installing"
         }
         if (intent.hasExtra("voice_status")) resultData = "installed=${VoiceModel.installed(context)}"
+        // Voice commands that open apps: --es voice_app "Name|package1,package2|phrase one;phrase two"
+        // adds one, --es voice_app_remove Name removes it, --ez voice_apps true lists the added ones.
+        intent.getStringExtra("voice_app")?.let { spec ->
+            val app = parseVoiceApps(spec).firstOrNull()
+            resultData = if (app == null) "error: expected Name|package1,package2|phrase one;phrase two" else {
+                VoiceApps.add(context, app)
+                "ok ${app.name}: ${app.phrases}"
+            }
+        }
+        intent.getStringExtra("voice_app_remove")?.let { name ->
+            resultData = if (VoiceApps.remove(context, name)) "ok" else "no such app"
+        }
+        if (intent.hasExtra("voice_apps")) resultData = formatVoiceApps(VoiceApps.custom(context)).ifEmpty { "none" }
         // --es voice_test "фраза": run a command as if it had been spoken.
         intent.getStringExtra("voice_test")?.let { resultData = VoiceCommands.run(context, it) ?: "no match" }
         // Bluetooth: --ez bt_list true lists paired devices; --es bt_connect / bt_disconnect NAME.
@@ -109,8 +123,10 @@ class AdbCommandReceiver : BroadcastReceiver() {
         if (intent.hasExtra("hdmi_auto")) Hdmi.setAutoSwitch(intent.getBooleanExtra("hdmi_auto", true))
         if (intent.hasExtra("boot_hdmi")) Hdmi.setBootToHdmi(context, intent.getBooleanExtra("boot_hdmi", false))
         if (intent.hasExtra("hdmi_get") || intent.hasExtra("hdmi_auto") || intent.hasExtra("boot_hdmi")) {
-            resultData = "autoSwitch=${Hdmi.autoSwitch()} connected=${Hdmi.connected()} bootHdmi=${Hdmi.bootToHdmi()} cec=${Cec.control(context)} cecWake=${Cec.wakeUp()} " +
-                "inputs=" + Xgimi.hdmiInputs(context).joinToString { "${it.label}|${it.device}|${it.id}" }
+            val inputs = Xgimi.hdmiInputs(context)
+            resultData = "autoSwitch=${Hdmi.autoSwitch()} connectedPorts=${Hdmi.connectedPorts(inputs.size.coerceAtLeast(1))} " +
+                "bootHdmi=${Hdmi.bootToHdmi()} cec=${Cec.control(context)} cecWake=${Cec.wakeUp()} " +
+                "inputs=" + inputs.joinToString { "${it.label}|${it.device}|${it.id}" }
         }
         // Sensors: --ez eye_protection BOOL (test), then read all three.
         if (intent.hasExtra("eye_protection")) Sensors.setEyeProtection(intent.getBooleanExtra("eye_protection", false))
@@ -125,26 +141,23 @@ class AdbCommandReceiver : BroadcastReceiver() {
         // Keystone and zoom state, read only: --ez kst_get true
         if (intent.hasExtra("kst_get")) resultData = KeystoneProbe.dump()
         // --es kst_set "x0,y0,x1,y1,x2,y2,x3,y3" (TL, TR, BL, BR); --ei zoom_set N
-        intent.getStringExtra("kst_set")?.let { resultData = Keystone.setCorners(it.split(',').map { v -> v.trim().toInt() }).toString() }
+        intent.getStringExtra("kst_set")?.let { spec ->
+            val corners = spec.split(',').map { it.trim().toIntOrNull() }
+            resultData = if (corners.size == 8 && corners.all { it != null }) {
+                Keystone.setCorners(corners.filterNotNull()).toString()
+            } else {
+                "error: expected 8 comma-separated integers"
+            }
+        }
         if (intent.hasExtra("zoom_set")) resultData = Keystone.setZoom(intent.getIntExtra("zoom_set", 0)).toString()
         intent.getStringExtra("gmpf")?.let { spec ->
+            // "Class.method" or "Class.method:1,2": integer arguments are converted to what the method takes.
             resultData = runCatching {
-                // "Class.method" or "Class.method:1,2" with int arguments.
                 val (cls, call) = spec.split('.', limit = 2)
                 val method = call.substringBefore(':')
                 val args = call.substringAfter(':', "").split(',').filter { it.isNotBlank() }.map { it.trim().toInt() }
-                val c = Class.forName("com.xgimi.gmpf.api.$cls")
-                val m = c.getMethod("getInstance").invoke(null)
-                val target = c.methods.first { it.name == method && it.parameterTypes.size == args.size }
-                val converted = target.parameterTypes.zip(args).map { (type, v) ->
-                    when (type) {
-                        Byte::class.javaPrimitiveType -> v.toByte()
-                        Boolean::class.javaPrimitiveType -> v != 0
-                        else -> v
-                    }
-                }
-                target.invoke(m, *converted.toTypedArray()).toString()
-            }.getOrElse { "error ${it.cause ?: it}" }
+                Gmpf.call(cls, method, *args.toTypedArray()).fold({ it.toString() }, { "error $it" })
+            }.getOrElse { "error: expected Class.method[:int,int] ($it)" }
         }
         intent.getStringExtra("bt_name")?.let { name ->
             @Suppress("DEPRECATION", "MissingPermission")
@@ -167,19 +180,11 @@ private object KeystoneProbe {
 
     fun dump(): String {
         val out = StringBuilder()
-        val dm = runCatching {
-            val c = Class.forName("com.xgimi.gmpf.api.DisplayManager")
-            c to c.getMethod("getInstance").invoke(null)
-        }.getOrNull() ?: return "no DisplayManager"
-        val (cls, m) = dm
-        fun call(name: String, vararg args: Any): Any? = runCatching {
-            cls.methods.first { it.name == name && it.parameterTypes.size == args.size &&
-                (args.isEmpty() || it.parameterTypes[0].isInstance(args[0]) || it.parameterTypes[0].isPrimitive) }
-                .invoke(m, *args)
-        }.getOrElse { "err ${it.cause ?: it}" }
+        if (!Gmpf.available("DisplayManager")) return "no DisplayManager"
+        fun call(name: String, vararg args: Any): Any? = Gmpf.call("DisplayManager", name, *args).getOrElse { "err $it" }
         fun filled(className: String, method: String): String = runCatching {
             val o = Class.forName("com.xgimi.gmpf.rp.$className").getConstructor().newInstance()
-            val r = cls.getMethod(method, o.javaClass).invoke(m, o)
+            val r = Gmpf.call("DisplayManager", method, o).getOrThrow()
             "${describe(o)}${if (r != null) " -> $r" else ""}"
         }.getOrElse { "err ${it.cause ?: it}" }
         out.append("full=").append(filled("KeyStoneFullCoordinates", "getCorrectKeystone")).append(';')

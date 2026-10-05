@@ -147,12 +147,14 @@ class PanelOverlay : AccessibilityService() {
         showBubble("…")
         Thread {
             val text = session?.finish().orEmpty()
-            val result = when {
-                text == VoiceSession.NO_MODEL -> "Голосовая модель не установлена"
-                text.isBlank() -> "Не расслышал"
-                else -> VoiceCommands.run(this, text) ?: "Не понял: «$text»"
-            }
+            // Recognition is slow and stays here; the command itself touches windows and toasts,
+            // which need the main thread.
             handler.post {
+                val result = when {
+                    text == VoiceSession.NO_MODEL -> "Голосовая модель не установлена"
+                    text.isBlank() -> "Не расслышал"
+                    else -> VoiceCommands.run(this, text) ?: "Не понял: «$text»"
+                }
                 showBubble(result)
                 handler.postDelayed(hideBubbleTask, 2500)
             }
@@ -188,7 +190,8 @@ class PanelOverlay : AccessibilityService() {
             y = (48 * density).toInt()
         }
         runCatching { windows.addView(label, params) }
-        bubble = label
+            .onSuccess { bubble = label }
+            .onFailure { Log.w("PanelOverlay", "Caption window failed", it) }
     }
 
     private fun hideBubble() {
@@ -212,7 +215,14 @@ class PanelOverlay : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply { windowAnimations = 0 }
-        windows.addView(composeView, params)
+        val added = runCatching { windows.addView(composeView, params) }
+            .onFailure { Log.w("PanelOverlay", "Panel window failed", it) }
+            .isSuccess
+        if (!added) {
+            owner.destroy()
+            this.owner = null
+            return
+        }
         owner.resume()
         view = composeView
         panelParams = params
@@ -273,6 +283,7 @@ class PanelOverlay : AccessibilityService() {
         const val SETTINGS_KEY = KeyEvent.KEYCODE_MOVE_HOME
         private const val STOCK_SETTINGS = "com.android.newsettings"
 
+        @Volatile
         private var instance: PanelOverlay? = null
 
         /** Shows [text] at the bottom of the screen (null hides it), optionally hiding it later. */
@@ -289,10 +300,13 @@ class PanelOverlay : AccessibilityService() {
         /** Whether the service is connected, so it (not the launcher) handles the panel key. */
         val running get() = instance != null
 
-        /** Opens the panel over the current app; false when the service isn't enabled. */
+        /**
+         * Opens the panel over the current app; false when the service isn't enabled. Safe from any
+         * thread: the window is added on the main thread.
+         */
         fun show(): Boolean {
             val service = instance ?: return false
-            service.showPanel()
+            service.handler.post { service.showPanel() }
             return true
         }
     }

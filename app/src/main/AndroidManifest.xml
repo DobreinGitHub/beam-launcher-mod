@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Held by the :stub apps (same signature) that forward the remote's shortcut keys. -->
+    <permission
+        android:name="com.home.tiles.permission.REMOTE_BUTTON"
+        android:protectionLevel="signature" />
+
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
@@ -20,6 +25,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <!-- Bluetooth discovery (BluetoothScan); runtime permission granted over adb. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Android 12+ lets the user grant only this one; the pair is required for fine location. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Granted over adb; see AccessibilityGuard. -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
@@ -145,10 +152,11 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-        <!-- Diagnostic: records the microphone (does the remote's voice reach apps?). -->
+        <!-- Diagnostic: records the microphone (does the remote's voice reach apps?). Shell-only via DUMP. -->
         <activity
             android:name=".MicTestActivity"
             android:exported="true"
+            android:permission="android.permission.DUMP"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- Started by the stub apps (:stub) when a remote shortcut key is pressed. -->
@@ -156,6 +164,7 @@
             android:name=".RemoteButtonActivity"
             android:excludeFromRecents="true"
             android:exported="true"
+            android:permission="com.home.tiles.permission.REMOTE_BUTTON"
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.NoDisplay" />

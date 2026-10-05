@@ -1,7 +1,6 @@
 package com.home.tiles
 
 import android.content.Context
-import android.media.AudioManager
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -16,24 +15,17 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,19 +35,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.BrightnessMedium
 import androidx.compose.material.icons.rounded.CenterFocusStrong
 import androidx.compose.material.icons.rounded.Bluetooth
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Details
-import androidx.compose.material.icons.rounded.WaterDrop
-import androidx.compose.material.icons.rounded.Contrast
-import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Eco
 import androidx.compose.material.icons.rounded.Wifi
-import androidx.compose.material.icons.rounded.ZoomOutMap
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CropFree
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.FilterCenterFocus
@@ -68,7 +52,6 @@ import androidx.compose.material.icons.rounded.SettingsApplications
 import androidx.compose.material.icons.rounded.SettingsInputHdmi
 import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.material.icons.rounded.Tonality
-import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -85,8 +68,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
@@ -99,7 +80,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -109,34 +89,10 @@ import androidx.compose.ui.window.DialogWindowProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.roundToInt
-
-// XGIMI's own panel: no sheet over the evenly dimmed picture, see-through grey tiles,
-// saturated blue focus with white text.
-private val CardBg = Color(0x38FFFFFF)
-private val FocusBg = Color(0xFF3B7CF5)
-private val FocusText = Color.White
-/** Filled part of a focused slider or switch, drawn on [FocusBg]. */
-private val FocusFill = Color.White
-private val Accent = Color(0xFF8AB4F8)
-/** Text on a tile that is switched on (light [Accent] fill). */
-private val OnText = Color(0xFF0B1D36)
-private val PanelText = Color(0xFFE8EAED)
-private val PanelDim = Color(0xFFA8ACB3)
-/**
- * Projector: like XGIMI's panel, darkest along the panel's edge and fading across the picture
- * (theirs is on the left, ours on the right).
- */
-private val TvScrim = Brush.horizontalGradient(
-    0f to Color(0x26000000),
-    0.5f to Color(0x8C000000),
-    1f to Color(0xD9000000),
-)
 
 /** Sub-pages opened from the tile grid. */
 private enum class PanelPage(val title: String) {
@@ -186,6 +142,16 @@ fun PanelScreen(onDismiss: () -> Unit) {
         onDispose { PanelState.open = false }
     }
     LaunchedEffect(Unit) { Sounds.popup() }
+    // Kept here, not in MainPage, so its tiles don't vanish and come back each time a sub-page is
+    // left; re-read while the main page is showing, and so after a sub-page changed something.
+    val context = LocalContext.current
+    var main by remember { mutableStateOf<MainPageState?>(null) }
+    LaunchedEffect(page) {
+        while (page == null) {
+            main = withContext(Dispatchers.IO) { MainPageState.read(context) }
+            delay(MAIN_REFRESH_MS)
+        }
+    }
     LaunchedEffect(page) {
         val target = when {
             page != null -> pageFirst
@@ -245,7 +211,7 @@ fun PanelScreen(onDismiss: () -> Unit) {
             ) {
                 val current = page
                 if (current == null) {
-                    MainPage(firstTile, tileRequesters, onDismiss) { lastPage = null; page = it }
+                    MainPage(main, { main = main?.copy(eco = it) }, firstTile, tileRequesters, onDismiss) { lastPage = null; page = it }
                 } else {
                     SubPage(current, pageFirst, onDismiss, ::back)
                 }
@@ -253,6 +219,30 @@ fun PanelScreen(onDismiss: () -> Unit) {
         }
     }
 }
+
+/** What the main page reads from the firmware; see [MainPage]. */
+private data class MainPageState(
+    val inputs: List<Xgimi.Input>,
+    val eco: Boolean?,
+    val soundOutput: String?,
+    val pictureMode: String?,
+    /** Name of the connected speaker/headphones, shown under the Bluetooth tile. */
+    val bluetoothAudio: String?,
+) {
+    companion object {
+        /** Blocking: binder calls into XGIMI's services, so off the main thread. */
+        fun read(context: Context) = MainPageState(
+            inputs = Xgimi.hdmiInputs(context),
+            eco = Eco.enabled(),
+            soundOutput = SoundOutput.output()?.let(::soundOutputName),
+            pictureMode = PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first },
+            bluetoothAudio = XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name,
+        )
+    }
+}
+
+/** How often the main page re-reads the firmware while it is open (an HDMI plug, a speaker connecting). */
+private const val MAIN_REFRESH_MS = 5_000L
 
 private class QuickItem(
     val icon: ImageVector,
@@ -269,22 +259,22 @@ private class QuickItem(
 
 @Composable
 private fun ColumnScope.MainPage(
+    state: MainPageState?,
+    onEcoChanged: (Boolean?) -> Unit,
     firstTile: FocusRequester,
     tileRequesters: Map<PanelPage, FocusRequester>,
     onDismiss: () -> Unit,
     open: (PanelPage) -> Unit,
 ) {
     val context = LocalContext.current
-    val inputs = remember { Xgimi.hdmiInputs(context) }
-    var eco by remember { mutableStateOf(Eco.enabled()) }
-    val soundOutput = remember { SoundOutput.output()?.let(::soundOutputName) }
-    // Name of the connected speaker/headphones, shown under the Bluetooth tile.
-    val bluetoothAudio by produceState<String?>(null) {
-        value = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name }
-    }
-    val pictureMode = remember {
-        PictureMode.current()?.let { mode -> Xgimi.pictureModes.firstOrNull { it.second == mode }?.first }
-    }
+    val scope = rememberCoroutineScope()
+    // What the firmware reports comes from PanelScreen (read off the main thread, refreshed while
+    // this page is open); the tiles that depend on it appear once it is in.
+    val inputs = state?.inputs.orEmpty()
+    val eco = state?.eco
+    val soundOutput = state?.soundOutput
+    val bluetoothAudio = state?.bluetoothAudio
+    val pictureMode = state?.pictureMode
     // Projector actions close the panel first so it doesn't cover the picture (keystone photographs it).
     fun projector(action: () -> Unit): () -> Unit = {
         onDismiss()
@@ -294,7 +284,7 @@ private fun ColumnScope.MainPage(
         // Everyday actions first as wide labelled tiles, then setup and settings as square
         // icon tiles that show their name only when focused (like XGIMI's own panel).
         add(QuickItem(Icons.Rounded.CenterFocusStrong, "Автофокус", action = projector { Xgimi.autoFocus(context) }, wide = true))
-        add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { Xgimi.autoKeystone(context) }, wide = true))
+        add(QuickItem(Icons.Rounded.CropFree, "Трапеция", action = projector { PanelIo.submit("auto-keystone") { Xgimi.autoKeystone(context) } }, wide = true))
         add(QuickItem(Icons.Rounded.Wifi, "Wi‑Fi", action = projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_WIFI) }, wide = true))
         add(QuickItem(Icons.Rounded.Bluetooth, "Bluetooth", PanelPage.Bluetooth, subtitle = bluetoothAudio, wide = true))
         add(QuickItem(Icons.Rounded.VolumeUp, "Звук", PanelPage.Sound, subtitle = soundOutput, wide = true))
@@ -306,7 +296,9 @@ private fun ColumnScope.MainPage(
         }
         eco?.let { on ->
             // Stays open: the change is visible behind the panel.
-            add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = { if (Eco.set(!on)) eco = Eco.enabled() }))
+            add(QuickItem(Icons.Rounded.Eco, "Эко-режим", active = on, action = {
+                scope.launch(Dispatchers.IO) { if (Eco.set(!on)) onEcoChanged(Eco.enabled()) }
+            }))
         }
         add(QuickItem(Icons.Rounded.Landscape, "Заставка", PanelPage.Screensaver))
         add(QuickItem(Icons.Rounded.PowerSettingsNew, "Питание", PanelPage.Power, active = SleepTimer.endsAt.longValue > 0))
@@ -369,10 +361,11 @@ private fun ColumnScope.MainPage(
 private fun PanelHeader(onSettings: () -> Unit) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val dateFormat = remember { SimpleDateFormat("EE, d MMMM", Locale("ru")) }
+    // Minute resolution: every change redraws this full-screen window over the video.
     val now by produceState(Date()) {
         while (true) {
             value = Date()
-            delay(1000 - System.currentTimeMillis() % 1000)
+            delay(60_000 - System.currentTimeMillis() % 60_000)
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -513,12 +506,11 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
                     if (KeyTones.set(context, !keyTones)) keyTones = KeyTones.enabled(context)
                 }
             }
-            var bootMusic by remember { mutableStateOf(BootMusic.enabled()) }
-            bootMusic?.let { on ->
+            val bootMusic = rememberFirmwareState { BootMusic.enabled() }
+            bootMusic.value?.let { on ->
                 Spacer(Modifier.height(10.dp))
                 Toggle("Мелодия при включении", on, Modifier.fillMaxWidth()) {
-                    BootMusic.set(!on)
-                    bootMusic = BootMusic.enabled() ?: !on
+                    bootMusic.change(!on) { BootMusic.set(!on) }
                 }
             }
         }
@@ -550,926 +542,6 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
     }
 }
 
-/**
- * Picture modes with the current one ticked. The panel stays open so the change can be judged
- * against the picture behind it. Performance asks first, like XGIMI does (heat warning).
- */
-@Composable
-private fun PicturePage(onXgimiPage: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var current by remember { mutableStateOf(PictureMode.current()) }
-    LaunchedEffect(Unit) { XgimiService.bind(context) }
-    var confirmPerformance by remember { mutableStateOf(false) }
-    fun apply(mode: Int) {
-        Xgimi.setPictureMode(context, mode)
-        current = mode
-        // The firmware switches asynchronously; read back what it actually applied.
-        scope.launch {
-            delay(1500)
-            PictureMode.current()?.let { current = it }
-        }
-    }
-    Section("Режим изображения")
-    Xgimi.pictureModes.forEach { (label, mode) ->
-        Chip(label, current == mode, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            if (mode == Xgimi.PICTURE_PERFORMANCE && current != mode) confirmPerformance = true else apply(mode)
-        }
-        if (mode == Xgimi.PICTURE_PERFORMANCE && confirmPerformance) {
-            PerformanceWarning(
-                onConfirm = {
-                    confirmPerformance = false
-                    apply(mode)
-                },
-                onCancel = { confirmPerformance = false },
-            )
-        }
-    }
-    GameModeSection()
-    Section("Пользовательский режим")
-    if (current == CUSTOM_PICTURE) {
-        CustomPictureControls()
-    } else {
-        // XGIMI keeps these values per mode and only saves them in the custom one.
-        ListRow("Перейти в пользовательский режим") { apply(CUSTOM_PICTURE) }
-    }
-    Section("Ещё")
-    ListRow("Настройки AI и режимов XGIMI", onXgimiPage)
-}
-
-private val GameModes = listOf(GameMode.AUTO to "Авто", GameMode.ON to "Вкл", GameMode.OFF to "Выкл")
-private val GameLevels = listOf("Базовый", "Максимальный")
-
-/** XGIMI's game mode: lower input lag for consoles; it only takes effect with an HDMI signal. */
-@Composable
-private fun GameModeSection() {
-    val context = LocalContext.current
-    var state by remember { mutableStateOf(GameMode.read()) }
-    var level by remember { mutableStateOf(GameMode.level(context)) }
-    val current = state ?: return
-    Section("Игровой режим · для HDMI")
-    val index = GameModes.indexOfFirst { it.first == current.mode }.coerceAtLeast(0)
-    Selector("Режим", GameModes[index].second, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
-        val mode = GameModes[(index + delta).mod(GameModes.size)].first
-        GameMode.setMode(mode)
-        state = GameMode.read() ?: GameMode.State(mode)
-    }
-    // The level (basic / top speed) applies when game mode is forced on.
-    if (current.mode == GameMode.ON) {
-        Selector("Уровень", GameLevels[level], Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
-            level = (level + delta).mod(GameLevels.size)
-            GameMode.setLevel(context, level)
-        }
-    }
-}
-
-private const val CUSTOM_PICTURE = 3
-
-/** Everything XGIMI's custom picture mode page offers, read once XGIMI's service is bound. */
-private data class CustomPicture(
-    val items: Map<Int, Int>,
-    val colorTemp: Int,
-    val noise: Int,
-    val motion: Int,
-    val gamma: Int,
-    val dynamicContrast: Boolean,
-    val localContrast: Int,
-    val hdr: Boolean,
-)
-
-private fun readCustomPicture(): CustomPicture? {
-    val items = listOf(PictureAdjust.BRIGHTNESS, PictureAdjust.CONTRAST, PictureAdjust.SATURATION, PictureAdjust.SHARPNESS)
-        .associateWith { PictureAdjust.get(it) ?: return null }
-    return CustomPicture(
-        items,
-        PictureAdjust.colorTemp() ?: return null,
-        PictureAdjust.noiseReduction() ?: return null,
-        PictureAdjust.motion() ?: return null,
-        PictureAdjust.gamma() ?: return null,
-        PictureAdjust.dynamicContrast() ?: return null,
-        PictureAdjust.localContrast() ?: return null,
-        PictureAdjust.hdr() ?: return null,
-    )
-}
-
-private val NoiseLevels = listOf("Выкл", "Низкое", "Среднее", "Высокое", "Авто")
-private val MotionLevels = listOf("Выкл", "Слабая", "Средняя", "Сильная")
-private val LocalContrastLevels = listOf("Выкл", "Низкий", "Средний", "Высокий")
-private val GammaLevels = listOf("1.8", "1.9", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6")
-
-/** XGIMI's defaults for the custom mode, as the projector came. */
-private val CustomDefaults = CustomPicture(
-    items = mapOf(PictureAdjust.BRIGHTNESS to 50, PictureAdjust.CONTRAST to 50, PictureAdjust.SATURATION to 50, PictureAdjust.SHARPNESS to 50),
-    colorTemp = 1,
-    noise = 2,
-    motion = 3,
-    gamma = 4,
-    dynamicContrast = true,
-    localContrast = 2,
-    hdr = true,
-)
-
-/** The custom picture mode's settings, laid out like XGIMI's page (basic, then advanced). */
-@Composable
-private fun CustomPictureControls() {
-    val context = LocalContext.current
-    // XGIMI's service binds asynchronously on first use, so poll briefly for the values.
-    val loaded by produceState<CustomPicture?>(null) {
-        XgimiService.bind(context)
-        repeat(20) {
-            readCustomPicture()?.let {
-                value = it
-                return@produceState
-            }
-            delay(250)
-        }
-    }
-    val initial = loaded
-    if (initial == null) {
-        T("Загрузка…", 14.sp, color = PanelDim)
-        return
-    }
-    var values by remember(initial) { mutableStateOf(initial) }
-    fun update(apply: () -> Unit, next: CustomPicture) {
-        apply()
-        values = next
-    }
-    val sliders = listOf(
-        Triple(PictureAdjust.BRIGHTNESS, "Яркость", Icons.Rounded.WbSunny),
-        Triple(PictureAdjust.CONTRAST, "Контраст", Icons.Rounded.Contrast),
-        Triple(PictureAdjust.SATURATION, "Насыщенн.", Icons.Rounded.WaterDrop),
-        Triple(PictureAdjust.SHARPNESS, "Резкость", Icons.Rounded.Details),
-    )
-    sliders.forEach { (item, label, icon) ->
-        LevelSlider(icon, values.items.getValue(item), 100, Modifier.fillMaxWidth().padding(bottom = 8.dp), label) {
-            update({ PictureAdjust.set(item, it) }, values.copy(items = values.items + (item to it)))
-        }
-    }
-    Selector("Шумоподавление", NoiseLevels.getOrElse(values.noise) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
-        val next = (values.noise + delta).mod(NoiseLevels.size)
-        update({ PictureAdjust.setNoiseReduction(next) }, values.copy(noise = next))
-    }
-    T("Цветовая температура", 14.sp, color = PanelDim)
-    Spacer(Modifier.height(8.dp))
-    PairRow {
-        listOf("Холодная" to 0, "Станд." to 1, "Тёплая" to 2).forEach { (label, temp) ->
-            Chip(label, values.colorTemp == temp, Modifier.weight(1f)) {
-                update({ PictureAdjust.setColorTemp(temp) }, values.copy(colorTemp = temp))
-            }
-        }
-    }
-
-    Section("Расширенные")
-    Selector("Плавность (MEMC)", MotionLevels.getOrElse(values.motion) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
-        val next = (values.motion + delta).mod(MotionLevels.size)
-        update({ PictureAdjust.setMotion(next) }, values.copy(motion = next))
-    }
-    Selector("Гамма", GammaLevels.getOrElse(values.gamma) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
-        val next = (values.gamma + delta).coerceIn(0, GammaLevels.lastIndex)
-        update({ PictureAdjust.setGamma(next) }, values.copy(gamma = next))
-    }
-    Toggle("Динамический контраст", values.dynamicContrast, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        val next = !values.dynamicContrast
-        update({ PictureAdjust.setDynamicContrast(next) }, values.copy(dynamicContrast = next))
-    }
-    Toggle("HDR (авто)", values.hdr, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        val next = !values.hdr
-        update({ PictureAdjust.setHdr(next) }, values.copy(hdr = next))
-    }
-    Selector("Локальный контраст", LocalContrastLevels.getOrElse(values.localContrast) { "?" }, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { delta ->
-        val next = (values.localContrast + delta).mod(LocalContrastLevels.size)
-        update({ PictureAdjust.setLocalContrast(next) }, values.copy(localContrast = next))
-    }
-    ListRow("Сбросить по умолчанию") {
-        val d = CustomDefaults
-        update({
-            d.items.forEach { (item, v) -> PictureAdjust.set(item, v) }
-            PictureAdjust.setColorTemp(d.colorTemp)
-            PictureAdjust.setNoiseReduction(d.noise)
-            PictureAdjust.setMotion(d.motion)
-            PictureAdjust.setGamma(d.gamma)
-            PictureAdjust.setDynamicContrast(d.dynamicContrast)
-            PictureAdjust.setLocalContrast(d.localContrast)
-            PictureAdjust.setHdr(d.hdr)
-        }, d)
-    }
-}
-
-@Composable
-private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
-    val confirm = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        withFrameNanos {}
-        runCatching { confirm.requestFocus() }
-    }
-    Column(
-        Modifier
-            .padding(bottom = 8.dp)
-            .fillMaxWidth()
-            .border(1.dp, Color(0x66FFB74D), RoundedCornerShape(16.dp))
-            .padding(14.dp),
-    ) {
-        T("Режим производительности", 16.sp, color = PanelText, weight = FontWeight.Medium)
-        Spacer(Modifier.height(6.dp))
-        BasicText(
-            "Максимальная яркость. Вентиляция не должна быть закрыта, в комнате — не выше 25 °C. " +
-                "Долгое использование может перегреть проектор и сократить срок службы.",
-            style = TextStyle(color = PanelDim, fontSize = 13.sp),
-        )
-        Spacer(Modifier.height(10.dp))
-        PairRow {
-            Chip("Включить", false, Modifier.weight(1f).focusRequester(confirm), onClick = onConfirm)
-            Chip("Отмена", false, Modifier.weight(1f), onClick = onCancel)
-        }
-    }
-}
-
-/** Search for new devices; OK on one pairs it (speakers then connect by themselves). */
-@Composable
-private fun NewDevicesSection(paired: List<XgimiBluetooth.Device>?) {
-    val context = LocalContext.current
-    val scanning = BluetoothScan.scanning.value
-    Section(if (scanning) "Новые устройства · поиск…" else "Новые устройства")
-    ListRow(if (scanning) "Остановить поиск" else "Искать устройства") {
-        if (scanning) BluetoothScan.stop(context) else BluetoothScan.start(context)
-    }
-    Spacer(Modifier.height(8.dp))
-    BluetoothScan.found.forEach { device ->
-        val state = BluetoothScan.pairing[device.address]
-        Chip(
-            device.name,
-            state == BluetoothScan.PAIRED,
-            Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            note = listOfNotNull(state ?: "OK — подключить", device.kind).joinToString(" · "),
-        ) {
-            if (state != BluetoothScan.PAIRING) BluetoothScan.pair(context, device.address)
-        }
-    }
-    // Until XGIMI's list (refreshed every two seconds) picks the new device up.
-    BluetoothScan.pairing.filterValues { it == BluetoothScan.PAIRED }.keys.forEach { address ->
-        if (paired != null && paired.none { it.address == address }) {
-            T("Сопряжено: $address — появится в списке выше", 14.sp, color = PanelDim)
-        }
-    }
-    if (!scanning && BluetoothScan.found.isEmpty()) {
-        T("Переведите колонку или наушники в режим сопряжения и нажмите «Искать»", 14.sp, color = PanelDim)
-    }
-}
-
-/**
- * Paired Bluetooth devices; a click connects or disconnects one (e.g. switching sound between a
- * speaker and the projector). Refreshed every two seconds while open, since connecting takes a
- * moment and XGIMI's calls don't report the outcome.
- */
-@Composable
-private fun BluetoothPage(onXgimiPage: () -> Unit) {
-    val context = LocalContext.current
-    DisposableEffect(Unit) { onDispose { BluetoothScan.stop(context) } }
-    val scope = rememberCoroutineScope()
-    var devices by remember { mutableStateOf<List<XgimiBluetooth.Device>?>(null) }
-    // Addresses we just asked to (dis)connect, shown as "…" until the state changes.
-    var pending by remember { mutableStateOf(emptyMap<String, Boolean>()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            val list = withContext(Dispatchers.IO) { XgimiBluetooth.devices(context) }
-            devices = list
-            pending = pending.filter { (address, wantConnected) ->
-                list.firstOrNull { it.address == address }?.connected != wantConnected
-            }
-            delay(2000)
-        }
-    }
-    val list = devices
-    Section("Устройства")
-    when {
-        list == null -> T("Загрузка…", 14.sp, color = PanelDim)
-        list.none { !it.remote } -> T("Нет сопряжённых устройств", 14.sp, color = PanelDim)
-        else -> list.filter { !it.remote }.forEach { device ->
-            val waiting = device.address in pending
-            val state = when {
-                waiting && pending.getValue(device.address) -> "Подключение…"
-                waiting -> "Отключение…"
-                device.connecting -> "Подключение…"
-                device.connected -> "Подключено"
-                else -> "Не подключено"
-            }
-            Chip(
-                device.name.ifBlank { device.address },
-                device.connected,
-                Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                note = if (device.audio) "$state · колонка/наушники" else state,
-            ) {
-                if (waiting) return@Chip
-                val connect = !device.connected
-                pending = pending + (device.address to connect)
-                scope.launch(Dispatchers.IO) {
-                    if (connect) XgimiBluetooth.connect(context, device) else XgimiBluetooth.disconnect(context, device)
-                }
-            }
-        }
-    }
-    NewDevicesSection(list)
-    var visible by remember { mutableStateOf(BluetoothOptions.discoverable(context)) }
-    var absolute by remember { mutableStateOf(BluetoothOptions.absoluteVolume()) }
-    Section("Настройки")
-    Toggle("Видимость для других устройств", visible, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        BluetoothOptions.setDiscoverable(context, !visible)
-        visible = BluetoothOptions.discoverable(context)
-    }
-    Toggle("Абсолютная громкость", absolute, Modifier.fillMaxWidth()) {
-        BluetoothOptions.setAbsoluteVolume(context, !absolute)
-        absolute = BluetoothOptions.absoluteVolume()
-    }
-    Section("Ещё")
-    ListRow("Настройки Bluetooth XGIMI", onXgimiPage)
-}
-
-/** XGIMI's sensor switches: keystone when moved, refocus on tilt, eye protection. */
-@Composable
-private fun SensorToggles() {
-    var realtime by remember { mutableStateOf(Sensors.realtimeKeystone()) }
-    var motionFocus by remember { mutableStateOf(Sensors.motionFocus()) }
-    var eyes by remember { mutableStateOf(Sensors.eyeProtection()) }
-    var bootKeystone by remember { mutableStateOf(Sensors.bootKeystone()) }
-    if (realtime == null && motionFocus == null && eyes == null && bootKeystone == null) return
-    Section("Датчики")
-    bootKeystone?.let { on ->
-        Toggle("Коррекция при включении", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Sensors.setBootKeystone(!on)
-            bootKeystone = Sensors.bootKeystone() ?: !on
-        }
-    }
-    realtime?.let { on ->
-        Toggle("Коррекция при сдвиге", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Sensors.setRealtimeKeystone(!on)
-            realtime = Sensors.realtimeKeystone() ?: !on
-        }
-    }
-    motionFocus?.let { on ->
-        Toggle("Автофокус при сдвиге", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Sensors.setMotionFocus(!on)
-            motionFocus = Sensors.motionFocus() ?: !on
-        }
-    }
-    eyes?.let { on ->
-        Toggle("Защита глаз", on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Sensors.setEyeProtection(!on)
-            eyes = Sensors.eyeProtection() ?: !on
-        }
-    }
-}
-
-/** eARC for an HDMI 2.1 sound system (XGIMI's "eARC mode": Auto / Off). */
-@Composable
-private fun EarcToggle() {
-    var earc by remember { mutableStateOf(Earc.enabled()) }
-    earc?.let { on ->
-        Section("HDMI")
-        Toggle("eARC", on, Modifier.fillMaxWidth()) {
-            Earc.set(!on)
-            earc = Earc.enabled() ?: !on
-        }
-    }
-}
-
-/** Model, firmware and the like, read once when the page opens. */
-@Composable
-private fun AboutSection() {
-    val context = LocalContext.current
-    val rows by produceState(emptyList<Pair<String, String>>()) {
-        value = withContext(Dispatchers.IO) { aboutRows(context) }
-    }
-    if (rows.isEmpty()) return
-    Section("О проекторе")
-    Column(Modifier.fillMaxWidth().background(CardBg, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
-        rows.forEach { (label, value) ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-                T(label, 15.sp, color = PanelDim)
-                Spacer(Modifier.weight(1f))
-                T(value, 15.sp, color = PanelText)
-            }
-        }
-    }
-}
-
-private fun aboutRows(context: Context): List<Pair<String, String>> {
-    fun prop(name: String) = XgimiCommon.property(name).takeIf { it.isNotBlank() }
-    val memory = android.app.ActivityManager.MemoryInfo().also {
-        context.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(it)
-    }
-    val storage = android.os.StatFs(android.os.Environment.getDataDirectory().path)
-    val uptime = android.os.SystemClock.elapsedRealtime() / 60_000
-    val ip = runCatching {
-        java.net.NetworkInterface.getNetworkInterfaces().toList()
-            .flatMap { it.inetAddresses.toList() }
-            .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }?.hostAddress
-    }.getOrNull()
-    val beam = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
-    fun gb(bytes: Long) = String.format(Locale.US, "%.1f", bytes / 1e9)
-    return listOfNotNull(
-        prop("ro.boot.xgimi.modelname")?.let { "Модель" to "XGIMI · $it" },
-        prop("ro.build.version.incremental")?.let { "Прошивка" to it },
-        "Android" to android.os.Build.VERSION.RELEASE,
-        prop("ro.boot.serialno")?.let { "Серийный номер" to it },
-        ip?.let { "IP-адрес" to it },
-        "Работает" to if (uptime >= 60) "${uptime / 60} ч ${uptime % 60} мин" else "$uptime мин",
-        "Свободно памяти" to "${memory.availMem / 1_048_576} из ${memory.totalMem / 1_048_576} МБ",
-        "Свободно места" to "${gb(storage.availableBytes)} из ${gb(storage.totalBytes)} ГБ",
-        beam?.let { "Beam" to it },
-    )
-}
-
-/** XGIMI's sound modes: AI, movie, music, sport, karaoke. */
-@Composable
-private fun SoundModeSection() {
-    var current by remember { mutableStateOf(SoundMode.current()) }
-    if (current == null) return
-    Section("Звуковой режим")
-    SoundMode.modes.chunked(2).forEach { pair ->
-        PairRow {
-            pair.forEach { (mode, label) ->
-                Chip(label, current == mode, Modifier.weight(1f)) {
-                    SoundMode.set(mode)
-                    current = SoundMode.current() ?: mode
-                }
-            }
-            if (pair.size == 1) Spacer(Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(10.dp))
-    }
-}
-
-@Composable
-private fun AppearancePage() {
-    val dark = LauncherSettings.dark
-    Section("Тема")
-    PairRow {
-        Chip("Светлая", !dark, Modifier.weight(1f)) { LauncherSettings.dark = false }
-        Chip("Тёмная", dark, Modifier.weight(1f)) { LauncherSettings.dark = true }
-    }
-    Section("Фон · ${Backgrounds[LauncherSettings.background].name}")
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Backgrounds.forEachIndexed { i, preset ->
-            Swatch(Colors.presetBrush(preset), LauncherSettings.background == i) { LauncherSettings.background = i }
-        }
-    }
-    if (Colors.isXmb) XmbOptions()
-    Section("Раскладка")
-    PairRow {
-        Chip("Крупная плитка", LauncherSettings.layout == LAYOUT_FOCUS, Modifier.weight(1f)) {
-            LauncherSettings.layout = LAYOUT_FOCUS
-        }
-        Chip("Как на Switch", LauncherSettings.layout == LAYOUT_CLASSIC, Modifier.weight(1f)) {
-            LauncherSettings.layout = LAYOUT_CLASSIC
-        }
-    }
-    Section("Размер плиток")
-    PairRow {
-        Chip("Обычные", !LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = false }
-        Chip("Крупные", LauncherSettings.largeTiles, Modifier.weight(1f)) { LauncherSettings.largeTiles = true }
-    }
-}
-
-private val NoScrim = Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
-
-/** Which keystone control is taking the arrow keys, if any (see [ArrowPad]). */
-object KeystoneEdit {
-    val active = mutableStateOf<String?>(null)
-}
-
-/**
- * Manual keystone: each corner moved with the arrows, the whole picture shifted, its size
- * shrunk in XGIMI's digital zoom steps; plus automatic keystone and a reset to no correction.
- */
-@Composable
-private fun KeystonePage(onScreen: () -> Unit) {
-    val context = LocalContext.current
-    var corners by remember { mutableStateOf(Keystone.corners()) }
-    var zoom by remember { mutableStateOf(Keystone.savedZoom(context)) }
-    var realtime by remember { mutableStateOf(Sensors.realtimeKeystone()) }
-    DisposableEffect(Unit) { onDispose { KeystoneEdit.active.value = null } }
-    val current = corners
-    if (current == null) {
-        T("Трапеция недоступна", 14.sp, color = PanelDim)
-        return
-    }
-    fun apply(values: List<Int>) {
-        if (Keystone.setCorners(values)) corners = Keystone.corners() ?: values
-    }
-    ListRow("Настроить на экране", onScreen)
-    if (realtime == true) {
-        Section("Автокоррекция")
-        Toggle("Коррекция при сдвиге", true, Modifier.fillMaxWidth()) {
-            Sensors.setRealtimeKeystone(false)
-            realtime = Sensors.realtimeKeystone() ?: false
-        }
-        T("Выключите, иначе сдвиг проектора собьёт ручную настройку", 14.sp, color = PanelDim)
-    }
-    Section("Углы · OK, затем стрелки")
-    listOf("↖  Левый верхний", "↗  Правый верхний", "↙  Левый нижний", "↘  Правый нижний").forEachIndexed { i, label ->
-        ArrowPad("corner$i", label, Modifier.fillMaxWidth().padding(bottom = 8.dp)) { dx, dy ->
-            val values = current.toMutableList()
-            values[i * 2] += dx
-            values[i * 2 + 1] += dy
-            apply(values)
-        }
-    }
-    Section("Размер и положение")
-    Selector("Размер", "${100 - zoom * 50 / Keystone.MAX_ZOOM}%", Modifier.fillMaxWidth().padding(bottom = 8.dp)) { step ->
-        // Right makes it bigger (fewer shrink steps).
-        val next = (zoom - step).coerceIn(0, Keystone.MAX_ZOOM)
-        if (next != zoom && Keystone.setZoom(next)) {
-            zoom = next
-            Keystone.saveZoom(context, next)
-            corners = Keystone.corners() ?: corners
-        }
-    }
-    ArrowPad("shift", "✥  Сдвиг картинки", Modifier.fillMaxWidth()) { dx, dy ->
-        val moved = current.mapIndexed { i, v -> v + if (i % 2 == 0) dx else dy }
-        val inside = moved.chunked(2).all { (x, y) -> x in 0 until Keystone.WIDTH && y in 0 until Keystone.HEIGHT }
-        if (inside) apply(moved)
-    }
-    T("Сдвиг работает, когда картинка уменьшена", 14.sp, color = PanelDim)
-    Section("Сброс")
-    ListRow("Автотрапеция") {
-        Keystone.saveZoom(context, 0)
-        zoom = 0
-        Xgimi.autoKeystone(context)
-    }
-    ListRow("Без коррекции") {
-        Keystone.setZoom(0)
-        Keystone.saveZoom(context, 0)
-        zoom = 0
-        apply(listOf(0, 0, Keystone.WIDTH - 1, 0, 0, Keystone.HEIGHT - 1, Keystone.WIDTH - 1, Keystone.HEIGHT - 1))
-    }
-}
-
-/**
- * A row that, after OK, takes the four arrows (a held key moves faster) until OK or Back.
- * [id] ties it to [KeystoneEdit] so only one is active and the panel can end it on Back.
- */
-@Composable
-private fun ArrowPad(id: String, label: String, modifier: Modifier, onMove: (dx: Int, dy: Int) -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val active = KeystoneEdit.active.value == id
-    Row(
-        modifier
-            .height(56.dp)
-            .background(
-                when {
-                    active -> Accent
-                    focused -> FocusBg
-                    else -> CardBg
-                },
-                RoundedCornerShape(16.dp),
-            )
-            .onPreviewKeyEvent { event ->
-                val native = event.nativeKeyEvent
-                if (!active || native.keyCode !in ARROWS) return@onPreviewKeyEvent false
-                if (event.type == KeyEventType.KeyDown) {
-                    val step = if (native.repeatCount > 0) 12 else 4
-                    when (native.keyCode) {
-                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> onMove(-step, 0)
-                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> onMove(step, 0)
-                        AndroidKeyEvent.KEYCODE_DPAD_UP -> onMove(0, -step)
-                        AndroidKeyEvent.KEYCODE_DPAD_DOWN -> onMove(0, step)
-                    }
-                }
-                true
-            }
-            .onFocusChanged {
-                focused = it.isFocused
-                if (!it.isFocused && active) KeystoneEdit.active.value = null
-            }
-            .panelControl({ }, { KeystoneEdit.active.value = if (active) null else id })
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val color = if (active) OnText else if (focused) FocusText else PanelText
-        T(label, 16.sp, Modifier.weight(1f), color = color)
-        T(if (active) "стрелки · OK" else "OK", 14.sp, color = if (active || focused) color else PanelDim)
-    }
-}
-
-private val ARROWS = setOf(
-    AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
-    AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN,
-)
-
-/** Table, ceiling or automatic mounting, rear projection, and a fine tilt of the picture. */
-@Composable
-private fun ProjectionPage(onRotatePage: () -> Unit) {
-    var mount by remember { mutableStateOf(Projection.mount()) }
-    var rear by remember { mutableStateOf(Projection.rear()) }
-    mount?.let { current ->
-        Section("Установка")
-        listOf(Projection.AUTO to "Авто", Projection.TABLE to "На столе", Projection.CEILING to "На потолке").forEach { (value, label) ->
-            Chip(label, current == value, Modifier.fillMaxWidth().padding(bottom = 8.dp), note = if (value == Projection.AUTO) "по датчику положения" else null) {
-                Projection.setMount(value)
-                mount = Projection.mount() ?: value
-            }
-        }
-    }
-    rear?.let { on ->
-        Spacer(Modifier.height(2.dp))
-        Toggle("Обратная проекция", on, Modifier.fillMaxWidth()) {
-            Projection.setRear(!on)
-            rear = Projection.rear() ?: !on
-        }
-        T("Для экрана на просвет: проектор за экраном", 14.sp, color = PanelDim)
-    }
-    Section("Наклон картинки")
-    Selector("Выровнять", "по 0,5°", Modifier.fillMaxWidth()) { step -> Projection.tilt(clockwise = step > 0) }
-    Spacer(Modifier.height(10.dp))
-    ListRow("Поворот (экран XGIMI)", onRotatePage)
-}
-
-/** Power off now, or later with the sleep timer; XGIMI's own menu for restart and the rest. */
-@Composable
-private fun PowerPage(onOff: () -> Unit, onXgimiMenu: () -> Unit) {
-    val context = LocalContext.current
-    val end = SleepTimer.endsAt.longValue
-    // Ticks the remaining time while the page is open.
-    val now by produceState(System.currentTimeMillis(), end) {
-        while (true) {
-            value = System.currentTimeMillis()
-            delay(15_000)
-        }
-    }
-    Section("Сейчас")
-    ListRow("Выключить проектор", onOff)
-    Section(if (end > 0) "Таймер сна · осталось ${SleepTimer.minutesLeft(now)} мин" else "Таймер сна")
-    val choices = listOf(0) + SleepTimer.options
-    choices.chunked(2).forEach { pair ->
-        PairRow {
-            pair.forEach { minutes ->
-                val label = if (minutes == 0) "Выкл" else if (minutes % 60 == 0) "${minutes / 60} ч" else "$minutes мин"
-                // The running timer's own chip is the one ticked; a new choice restarts it.
-                val selected = if (minutes == 0) end == 0L else end > 0 && SleepTimer.lastMinutes(context) == minutes
-                Chip(label, selected, Modifier.weight(1f)) {
-                    if (minutes == 0) SleepTimer.cancel(context) else SleepTimer.start(context, minutes)
-                }
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-    }
-    if (end > 0) {
-        val at = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(end))
-        T("Выключится в $at, за минуту предупредит", 14.sp, color = PanelDim)
-    }
-    Section("Ещё")
-    ListRow("Перезагрузка (меню XGIMI)", onXgimiMenu)
-}
-
-/**
- * XGIMI's screensaver: how long the projector waits before starting it, and its "Any Door"
- * scenes app, where the scene itself is chosen.
- */
-@Composable
-private fun ScreensaverPage(onScenes: () -> Unit) {
-    val context = LocalContext.current
-    var timeout by remember { mutableStateOf(ScreensaverTimeout.current(context)) }
-    val options = ScreensaverTimeout.options
-    Section("Включать через")
-    if (ScreensaverTimeout.canWrite(context)) {
-        // Unknown values (set elsewhere) show as the nearest longer option.
-        val index = options.indices.filter { options[it].first >= timeout }.minBy { options[it].first }
-        Selector("Бездействие", options[index].second, Modifier.fillMaxWidth()) { step ->
-            val next = options[(index + step).coerceIn(0, options.lastIndex)].first
-            if (ScreensaverTimeout.set(context, next)) timeout = ScreensaverTimeout.current(context)
-        }
-    } else {
-        T("Нет разрешения менять время (appops WRITE_SETTINGS)", 14.sp, color = PanelDim)
-    }
-    Section("Сцены")
-    ListRow("Выбрать заставку", onScenes)
-}
-
-/** Where the projector starts, the firmware's HDMI auto switch, and a link to its HDMI page (CEC). */
-@Composable
-private fun HdmiSection(onHdmiPage: () -> Unit) {
-    val context = LocalContext.current
-    var autoSwitch by remember { mutableStateOf(Hdmi.autoSwitch()) }
-    var bootHdmi by remember { mutableStateOf(Hdmi.bootToHdmi()) }
-    var cec by remember { mutableStateOf(Cec.control(context)) }
-    var cecWake by remember { mutableStateOf(Cec.wakeUp()) }
-    Section("При включении")
-    PairRow {
-        Chip("Главный экран", !bootHdmi, Modifier.weight(1f)) {
-            Hdmi.setBootToHdmi(context, false)
-            bootHdmi = Hdmi.bootToHdmi()
-        }
-        Chip("HDMI", bootHdmi, Modifier.weight(1f), note = "если подключено") {
-            Hdmi.setBootToHdmi(context, true)
-            bootHdmi = Hdmi.bootToHdmi()
-        }
-    }
-    autoSwitch?.let { on ->
-        Spacer(Modifier.height(10.dp))
-        Toggle("HDMI при подключении", on, Modifier.fillMaxWidth()) {
-            Hdmi.setAutoSwitch(!on)
-            autoSwitch = Hdmi.autoSwitch() ?: !on
-        }
-    }
-    cec?.let { on ->
-        Section("HDMI‑CEC")
-        Toggle("Управление устройствами", on, Modifier.fillMaxWidth()) {
-            Cec.setControl(context, !on)
-            cec = Cec.control(context) ?: !on
-            cecWake = Cec.wakeUp()
-        }
-        T("Нужно для ARC и пульта проектора на консоли", 14.sp, color = PanelDim)
-        if (on) cecWake?.let { wake ->
-            Spacer(Modifier.height(10.dp))
-            Toggle("HDMI включает проектор", wake, Modifier.fillMaxWidth()) {
-                Cec.setWakeUp(context, !wake)
-                cecWake = Cec.wakeUp() ?: !wake
-            }
-            T("Консоль включает и выключает проектор", 14.sp, color = PanelDim)
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    ListRow("Другие настройки HDMI", onHdmiPage)
-}
-
-@Composable
-private fun HomePage(onHdmiPage: () -> Unit) {
-    val context = LocalContext.current
-    val channels by produceState(emptyList<TvChannel>()) {
-        value = withContext(Dispatchers.IO) { queryTvChannels(context).filter { it.items.isNotEmpty() } }
-    }
-    Section("Показывать")
-    Toggle("Сейчас играет", LauncherSettings.nowPlaying, Modifier.fillMaxWidth()) {
-        LauncherSettings.nowPlaying = !LauncherSettings.nowPlaying
-    }
-    Spacer(Modifier.height(10.dp))
-    Toggle("Плитка флешки", LauncherSettings.usbTile, Modifier.fillMaxWidth()) {
-        LauncherSettings.usbTile = !LauncherSettings.usbTile
-    }
-    Spacer(Modifier.height(10.dp))
-    Toggle("Плитка HDMI", LauncherSettings.hdmiTile, Modifier.fillMaxWidth()) {
-        LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
-    }
-    HdmiSection(onHdmiPage)
-    Section("Второй ряд")
-    PairRow {
-        Chip("Авто", LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {
-            LauncherSettings.secondRow = SECOND_ROW_AUTO
-        }
-        Chip("Выкл", LauncherSettings.secondRow == SECOND_ROW_OFF, Modifier.weight(1f)) {
-            LauncherSettings.secondRow = SECOND_ROW_OFF
-        }
-    }
-    channels.forEach { channel ->
-        Spacer(Modifier.height(10.dp))
-        Chip(channel.name, LauncherSettings.secondRow == channel.key, Modifier.fillMaxWidth()) {
-            LauncherSettings.secondRow = channel.key
-        }
-    }
-}
-
-@Composable
-private fun Section(title: String) {
-    Spacer(Modifier.height(18.dp))
-    T(title, 14.sp, color = PanelDim)
-    Spacer(Modifier.height(10.dp))
-}
-
-@Composable
-private fun PairRow(content: @Composable RowScope.() -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), content = content)
-}
-
-/** A full-width row that runs an action, with a chevron like Google TV's list entries. */
-@Composable
-private fun ListRow(text: String, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val fg = if (focused) FocusText else PanelText
-    Row(
-        Modifier
-            .padding(bottom = 8.dp)
-            .fillMaxWidth()
-            .height(56.dp)
-            .background(if (focused) FocusBg else CardBg, RoundedCornerShape(16.dp))
-            .panelControl({ focused = it }, onClick)
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        T(text, 17.sp, Modifier.weight(1f), color = fg)
-        Image(Icons.Rounded.ChevronRight, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(fg))
-    }
-}
-
-/** Focus handling shared by every panel control: nav/activate sounds. */
-@Composable
-private fun Modifier.panelControl(onFocus: (Boolean) -> Unit, onClick: () -> Unit): Modifier =
-    onFocusChanged {
-        onFocus(it.isFocused)
-        if (it.isFocused) Sounds.navigate()
-    }.clickable(remember { MutableInteractionSource() }, null) {
-        Sounds.activate()
-        onClick()
-    }
-
-@Composable
-private fun Chip(
-    text: String,
-    selected: Boolean,
-    modifier: Modifier,
-    note: String? = null,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    var focused by remember { mutableStateOf(false) }
-    val fg = if (focused) FocusText else if (selected) PanelText else PanelDim
-    Row(
-        modifier
-            .height(52.dp)
-            .background(if (focused) FocusBg else CardBg, RoundedCornerShape(16.dp))
-            // Disabled chips stay focusable so the grid doesn't jump, but do nothing.
-            .panelControl({ focused = it }) { if (enabled) onClick() }
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            T(text, 16.sp, color = if (enabled) fg else fg.copy(alpha = 0.5f))
-            note?.let { T(it, 12.sp, color = if (focused) FocusText else PanelDim) }
-        }
-        if (selected) {
-            Image(Icons.Rounded.Check, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(if (focused) FocusText else Accent))
-        }
-    }
-}
-
-@Composable
-private fun Swatch(brush: Brush, selected: Boolean, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.1f else 1f, tween(120), label = "swatch")
-    val shape = RoundedCornerShape(14.dp)
-    Box(
-        Modifier
-            .size(50.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .background(brush, shape)
-            .then(
-                when {
-                    focused -> Modifier.border(3.dp, FocusBg, shape)
-                    selected -> Modifier.border(3.dp, Accent, shape)
-                    else -> Modifier.border(1.dp, Color(0x33FFFFFF), shape)
-                },
-            )
-            .panelControl({ focused = it }, onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (selected) {
-            Box(Modifier.size(22.dp).background(Accent, CircleShape), contentAlignment = Alignment.Center) {
-                Image(Icons.Rounded.Check, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(FocusText))
-            }
-        }
-    }
-}
-
-@Composable
-private fun Toggle(text: String, checked: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val knob by animateFloatAsState(if (checked) 1f else 0f, tween(150), label = "knob")
-    Row(
-        modifier
-            .height(56.dp)
-            .background(if (focused) FocusBg else CardBg, RoundedCornerShape(16.dp))
-            .panelControl({ focused = it }, onClick)
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        T(text, 16.sp, Modifier.weight(1f), color = if (focused) FocusText else PanelText)
-        // Material 3 switch: filled track when on.
-        Box(
-            Modifier
-                .size(width = 50.dp, height = 30.dp)
-                .background(
-                    when {
-                        checked && focused -> FocusFill
-                        checked -> Accent
-                        else -> Color(0xFF5F6368)
-                    },
-                    CircleShape,
-                )
-                .padding(4.dp),
-        ) {
-            Box(
-                Modifier
-                    .offset(x = 20.dp * knob)
-                    .size(22.dp)
-                    .background(if (checked) (if (focused) FocusBg else OnText) else Color(0xFFC4C7C5), CircleShape),
-            )
-        }
-    }
-}
-
-
 /** The remote's voice key (F5 on the XGIMI remote, unused by the firmware) toggles the panel. */
 fun Modifier.panelKey(onToggle: () -> Unit): Modifier = onPreviewKeyEvent { event ->
     val code = event.nativeKeyEvent.keyCode
@@ -1480,297 +552,4 @@ fun Modifier.panelKey(onToggle: () -> Unit): Modifier = onPreviewKeyEvent { even
     if (PanelOverlay.running) return@onPreviewKeyEvent true
     if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) onToggle()
     true
-}
-
-/** Media volume, changed with left/right like the XGIMI sliders. */
-@Composable
-private fun VolumeSlider(modifier: Modifier) {
-    val context = LocalContext.current
-    val audio = remember { context.getSystemService(AudioManager::class.java) }
-    val max = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
-    var volume by remember { mutableStateOf(audio.getStreamVolume(AudioManager.STREAM_MUSIC)) }
-    LevelSlider(if (volume == 0) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, volume, max, modifier) {
-        volume = it
-        audio.setStreamVolume(AudioManager.STREAM_MUSIC, it, 0)
-    }
-}
-
-/** The projector's light-source brightness (0..10), the same setting as XGIMI's Brightness page. */
-@Composable
-private fun BrightnessSlider(modifier: Modifier) {
-    var level by remember { mutableStateOf(Lumens.level()) }
-    val current = level ?: return
-    LevelSlider(Icons.Rounded.BrightnessMedium, current, Lumens.MAX, modifier) {
-        // Level 0 would leave a nearly black picture; keep the image usable.
-        val value = it.coerceAtLeast(1)
-        level = value
-        Lumens.setLevel(value)
-    }
-}
-
-/** A focusable bar: left/right step it, taps and drags set it directly. */
-@Composable
-private fun LevelSlider(
-    icon: ImageVector,
-    value: Int,
-    max: Int,
-    modifier: Modifier,
-    label: String? = null,
-    onSet: (Int) -> Unit,
-) {
-    var focused by remember { mutableStateOf(false) }
-    fun set(target: Int) {
-        val clamped = target.coerceIn(0, max)
-        if (clamped != value) onSet(clamped)
-    }
-    Row(
-        modifier
-            .height(54.dp)
-            .background(if (focused) FocusBg else CardBg, RoundedCornerShape(16.dp))
-            .onPreviewKeyEvent { event ->
-                val code = event.nativeKeyEvent.keyCode
-                if (code != AndroidKeyEvent.KEYCODE_DPAD_LEFT && code != AndroidKeyEvent.KEYCODE_DPAD_RIGHT) {
-                    return@onPreviewKeyEvent false
-                }
-                if (event.type == KeyEventType.KeyDown) set(value + if (code == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
-                true
-            }
-            .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) Sounds.navigate()
-            }
-            .focusable()
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(if (focused) FocusText else PanelText))
-        Spacer(Modifier.width(14.dp))
-        label?.let {
-            T(it, 15.sp, Modifier.width(96.dp), color = if (focused) FocusText else PanelText)
-        }
-        fun setFraction(fraction: Float) = set((fraction.coerceIn(0f, 1f) * max).roundToInt())
-        Box(
-            Modifier
-                .weight(1f)
-                // Generous touch target around the thin bar.
-                .height(40.dp)
-                .pointerInput(max) { detectTapGestures { setFraction(it.x / size.width) } }
-                .pointerInput(max) {
-                    detectHorizontalDragGestures { change, _ -> setFraction(change.position.x / size.width) }
-                },
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .background(if (focused) FocusFill.copy(alpha = 0.3f) else Color(0xFF4A4E55), CircleShape),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(value / max.toFloat())
-                        .height(8.dp)
-                        .background(if (focused) FocusFill else Accent, CircleShape),
-                )
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        T("$value", 19.sp, color = if (focused) FocusText else PanelText)
-    }
-}
-
-private fun soundOutputName(device: Int) = when (device) {
-    SoundOutput.SPEAKER -> "Динамик"
-    SoundOutput.SPDIF -> "Оптика"
-    SoundOutput.ARC -> "HDMI ARC"
-    SoundOutput.BLUETOOTH -> "Bluetooth"
-    else -> "Другой выход"
-}
-
-/** Where the sound goes, like XGIMI's page: automatic on/off, and the devices to pick when off. */
-@Composable
-private fun SoundOutputSection() {
-    val context = LocalContext.current
-    LaunchedEffect(Unit) { SoundOutput.prepare(context) }
-    var auto by remember { mutableStateOf(SoundOutput.auto() ?: true) }
-    var output by remember { mutableStateOf(SoundOutput.output()) }
-    val connected = remember { listOf(SoundOutput.SPEAKER, SoundOutput.ARC, SoundOutput.BLUETOOTH).filter(SoundOutput::connected) }
-    val scope = rememberCoroutineScope()
-    var recheck by remember { mutableStateOf<Job?>(null) }
-    // The firmware applies a switch asynchronously, so show the choice right away and read the
-    // real state back a moment later.
-    fun recheckSoon() {
-        recheck?.cancel()
-        recheck = scope.launch {
-            delay(1200)
-            auto = SoundOutput.auto() ?: auto
-            output = SoundOutput.output()
-        }
-    }
-    fun select(device: Int) {
-        SoundOutput.setOutput(device)
-        output = device
-        recheckSoon()
-    }
-    Section("Выход звука")
-    Toggle("Автовыбор", auto, Modifier.fillMaxWidth()) {
-        auto = !auto
-        SoundOutput.setAuto(auto)
-        recheckSoon()
-    }
-    if (auto) {
-        output?.let {
-            Spacer(Modifier.height(8.dp))
-            T("Сейчас: ${soundOutputName(it)}", 14.sp, color = PanelDim)
-        }
-    } else {
-        Spacer(Modifier.height(10.dp))
-        PairRow {
-            OutputChip(SoundOutput.SPEAKER, output, connected, ::select)
-            OutputChip(SoundOutput.ARC, output, connected, ::select)
-        }
-        Spacer(Modifier.height(10.dp))
-        PairRow {
-            OutputChip(SoundOutput.BLUETOOTH, output, connected, ::select)
-            Spacer(Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun RowScope.OutputChip(device: Int, output: Int?, connected: List<Int>, select: (Int) -> Unit) {
-    val available = device in connected
-    Chip(
-        soundOutputName(device),
-        output == device,
-        Modifier.weight(1f),
-        note = if (available) null else "не подключено",
-        enabled = available,
-    ) { select(device) }
-}
-
-/** Assigns the remote's four shortcut keys; left/right cycles the action, like XGIMI's selectors. */
-@Composable
-private fun RemoteButtonsSection() {
-    val context = LocalContext.current
-    val options by produceState(listOf("" to "Ничего", RemoteButtons.PANEL to "Эта панель", RemoteButtons.HOME to "Главный экран")) {
-        val apps = withContext(Dispatchers.IO) { AppRepository(context).loadApps().sortedBy { it.label.lowercase() } }
-        value = value + apps.map { RemoteButtons.app(it.pkg) to it.label }
-    }
-    val requesters = remember { List(4) { FocusRequester() } }
-    val pressed = RemoteButtons.lastPressed.intValue
-    LaunchedEffect(pressed) {
-        if (pressed >= 0) {
-            runCatching { requesters[pressed].requestFocus() }
-            RemoteButtons.lastPressed.intValue = -1
-        }
-    }
-
-    Section("Кнопка настроек")
-    Toggle("Открывает панель Beam", LauncherSettings.settingsKeyPanel, Modifier.fillMaxWidth()) {
-        LauncherSettings.settingsKeyPanel = !LauncherSettings.settingsKeyPanel
-    }
-    T("Вместо быстрых настроек XGIMI (они на миг мелькнут и закроются)", 14.sp, color = PanelDim)
-    Section("Кнопки приложений")
-    T("Нажмите кнопку на пульте, чтобы перейти к ней. ← → — действие", 14.sp, color = PanelDim)
-    for (i in 0..3) {
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth()) {
-            val current = RemoteButtons.actions[i]
-            val index = options.indexOfFirst { it.first == current }.coerceAtLeast(0)
-            Selector(
-                label = "Кнопка ${i + 1}",
-                value = options.getOrNull(index)?.second ?: "Ничего",
-                modifier = Modifier.weight(1f).focusRequester(requesters[i]),
-            ) { delta ->
-                RemoteButtons.set(i, options[(index + delta).mod(options.size)].first)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Selector(label: String, value: String, modifier: Modifier, onChange: (Int) -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Row(
-        modifier
-            .height(54.dp)
-            .background(if (focused) FocusBg else CardBg, RoundedCornerShape(16.dp))
-            .onPreviewKeyEvent { event ->
-                val code = event.nativeKeyEvent.keyCode
-                if (code != AndroidKeyEvent.KEYCODE_DPAD_LEFT && code != AndroidKeyEvent.KEYCODE_DPAD_RIGHT) {
-                    return@onPreviewKeyEvent false
-                }
-                if (event.type == KeyEventType.KeyDown) {
-                    Sounds.activate()
-                    onChange(if (code == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
-                }
-                true
-            }
-            .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) Sounds.navigate()
-            }
-            .focusable()
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        T(label, 16.sp, color = if (focused) FocusText else PanelDim)
-        Spacer(Modifier.weight(1f))
-        T("‹  $value  ›", 17.sp, color = if (focused) FocusText else PanelText)
-    }
-}
-
-/** XMB colour (by month like the PS3, or fixed) and the animation switch. */
-@Composable
-private fun XmbOptions() {
-    Spacer(Modifier.height(12.dp))
-    Row(Modifier.fillMaxWidth()) {
-        Chip("Цвет по месяцу", LauncherSettings.xmbColor < 0, Modifier.weight(1f)) { LauncherSettings.xmbColor = -1 }
-    }
-    // Two rows of six: January-June, July-December.
-    XmbColors.chunked(6).forEachIndexed { row, colors ->
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            colors.forEachIndexed { col, color ->
-                val index = row * 6 + col
-                ColorDot(color, LauncherSettings.xmbColor == index) { LauncherSettings.xmbColor = index }
-            }
-        }
-    }
-    Spacer(Modifier.height(12.dp))
-    Row(Modifier.fillMaxWidth()) {
-        Toggle("Анимация фона", LauncherSettings.bgAnimation, Modifier.weight(1f)) {
-            LauncherSettings.bgAnimation = !LauncherSettings.bgAnimation
-        }
-    }
-}
-
-@Composable
-private fun ColorDot(color: Color, selected: Boolean, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.15f else 1f, tween(120), label = "dot")
-    Box(
-        Modifier
-            .size(46.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .then(
-                when {
-                    focused -> Modifier.border(3.dp, FocusBg, CircleShape)
-                    selected -> Modifier.border(3.dp, Accent, CircleShape)
-                    else -> Modifier
-                },
-            )
-            .padding(5.dp)
-            .background(color, CircleShape)
-            .panelControl({ focused = it }, onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (selected) {
-            Image(Icons.Rounded.Check, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(Color.White))
-        }
-    }
 }

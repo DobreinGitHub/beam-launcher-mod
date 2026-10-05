@@ -45,6 +45,6 @@ android {
     }
     lint {
         checkReleaseBuilds = false
-        abortOnError = false
+        abortOnError = project.hasProperty("lintStrict")
     }
 }
