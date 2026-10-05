@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" width="128" height="128" alt="Beam"></p>
+
 # Beam
 
 Домашний экран (лаунчер) для проектора **XGIMI Play 6** (Android 11), написанный на Jetpack Compose. Он заменяет

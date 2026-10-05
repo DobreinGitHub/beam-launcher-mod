@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" width="128" height="128" alt="Beam"></p>
+
 # Beam
 
 A home screen (launcher) for the **XGIMI Play 6** projector (Android 11), written in Jetpack Compose.
