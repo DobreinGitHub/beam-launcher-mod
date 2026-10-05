@@ -62,6 +62,11 @@ projector on the same network.
    .\tools\restore.ps1 -Device 192.168.1.50 -Reboot
    ```
 
+   **`192.168.1.50` is only an example: use your own projector's IP address.** You can find it in the
+   projector's network settings (Wi-Fi → connection details), in your router's client list, or, if
+   Beam is already installed, in its panel: "XGIMI settings" → "About the projector" → "IP address".
+   Or put it into `local.env` once (`DEVICE=…`) and you won't need the `-Device` parameter.
+
    The script can be run again; steps for apps that are absent are skipped. APKs to install along
    the way (SmartTube, LeanKey…) go into `tools\apks\`.
 
@@ -91,7 +96,7 @@ Read this before running it:
 ### Rolling back
 
 ```powershell
-.\tools\restore.ps1 -Device 192.168.1.50 -Revert        # add -Reboot to reboot afterwards
+.\tools\restore.ps1 -Device 192.168.1.50 -Revert        # use your own IP; add -Reboot to reboot afterwards
 ```
 
 The script enables everything it disabled (the stock launcher first), restores the system
