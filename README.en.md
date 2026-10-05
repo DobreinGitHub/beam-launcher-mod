@@ -169,6 +169,31 @@ To check: `--ez voice_status true`. To make the microphone buttons in other apps
 SmartTube) use Beam as well, set it as the system recognizer (optional):
 `adb shell settings put secure voice_recognition_service com.home.tiles/com.home.tiles.VoskRecognitionService`.
 
+## FAQ
+
+**Can I just install the APK, without the script?** It installs and runs, but it won't become the
+home screen (XGIMI's stock launcher stays enabled), and without the permissions the script grants
+the panel on the voice button after a reboot, "Now playing", the channel row, the tile order by
+usage, the screensaver delay and Bluetooth search won't work. The remote's app buttons need the
+stubs. Controlling the projector (brightness, picture, sound, keystone) doesn't depend on the
+permissions and works.
+
+**The panel doesn't open from the voice button.** Check that the accessibility service "Beam:
+панель" is on. The script turns it on, the firmware resets it on boot, and Beam turns it back on
+when it starts. That can't happen without the permission from the script (`WRITE_SECURE_SETTINGS`).
+
+**English interface?** Appearance → Language. This projector's system language can't be switched
+to English (the firmware refuses it), so the language is chosen inside Beam. Voice is Russian only.
+
+**Does it work on other XGIMI models?** Not tested: the launcher opens, but the projector functions
+(brightness, keystone, focus, battery) may not work.
+
+**How do I put everything back?** [Rolling back](#rolling-back): `restore.ps1 -Revert`.
+
+**What about privacy?** There are no ads or analytics, and the source is open. Network access is
+used for downloading the voice model (on your command, https only) and for the pictures of other
+apps' channels. For other apps' access to speech recognition see [Voice model](#voice-model).
+
 ## Building
 
 You need JDK 17 and the Android SDK (the path in `ANDROID_HOME` or `local.properties`).
