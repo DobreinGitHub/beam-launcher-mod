@@ -204,7 +204,7 @@ if ($Revert) {
         Expect (Adb shell pm uninstall $beamPackage) "Success"
     }
     Write-Host "`n  Язык, часовой пояс и Bluetooth-имя не менялись обратно: прежние значения неизвестны." -ForegroundColor Yellow
-    if ($Reboot) { Step "Перезагрузка" { Adb reboot | Out-Null } }
+    if ($Reboot) { Step "Перезагрузка" { Start-Sleep -Seconds 15; Adb reboot | Out-Null } }
     Write-Host ""
     if ($script:Failures -eq 0) {
         Write-Host "Откат выполнен." -ForegroundColor Green
@@ -384,7 +384,9 @@ if (-not (Installed "com.spocky.projengmenu")) {
 
 Write-Host "`n7. Запуск" -ForegroundColor Cyan
 if ($Reboot) {
-    Step "Перезагрузка" { Adb reboot | Out-Null }
+    # The package manager saves enabled/disabled states and the home app a few seconds late: a
+    # reboot right away can lose them and bring the stock launcher back.
+    Step "Перезагрузка" { Start-Sleep -Seconds 15; Adb reboot | Out-Null }
 } else {
     Step "Открыть лаунчер" { Adb shell am start -n com.home.tiles/.MainActivity | Out-Null }
 }

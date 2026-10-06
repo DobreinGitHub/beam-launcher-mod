@@ -159,6 +159,8 @@ class AdbCommandReceiver : BroadcastReceiver() {
                 Gmpf.call(cls, method, *args.toTypedArray()).fold({ it.toString() }, { "error $it" })
             }.getOrElse { "error: expected Class.method[:int,int] ($it)" }
         }
+        // --ez order_get true: the home row's saved order (row keys, comma-separated).
+        if (intent.hasExtra("order_get")) resultData = AppRepository(context).savedOrder().joinToString(",").ifEmpty { "none" }
         intent.getStringExtra("bt_name")?.let { name ->
             @Suppress("DEPRECATION", "MissingPermission")
             val ok = BluetoothAdapter.getDefaultAdapter()?.setName(name) == true

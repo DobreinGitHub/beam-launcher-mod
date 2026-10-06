@@ -69,6 +69,7 @@ class AppRepository(private val context: Context) {
             prefs.edit().putString(KEY_ORDER, value.joinToString(",")).apply()
         }
 
+    @Synchronized
     fun toggleHidden(pkg: String) {
         val wasHidden = pkg in hidden
         hidden = hidden.toMutableSet().apply { if (!remove(pkg)) add(pkg) }
@@ -88,6 +89,7 @@ class AppRepository(private val context: Context) {
     }
 
     /** The whole current order, as [arrange] would show it, so tiles not saved yet can be moved. */
+    @Synchronized
     fun beginMove(visible: List<String>): List<String> {
         val missing = visible.filter { it !in order }
         if (missing.isNotEmpty()) {
@@ -98,6 +100,7 @@ class AppRepository(private val context: Context) {
     }
 
     /** Swaps [key] with its visible neighbour [step] places away (-1 left, 1 right). */
+    @Synchronized
     fun move(visible: List<String>, key: String, step: Int): Boolean {
         val i = visible.indexOf(key)
         val neighbour = visible.getOrNull(i + step) ?: return false
@@ -111,12 +114,21 @@ class AppRepository(private val context: Context) {
         return true
     }
 
+    /** For the adb hook. */
+    fun savedOrder(): List<String> = order
+
     /** Puts back an order saved by [beginMove] (a cancelled move). */
+    @Synchronized
     fun restoreOrder(saved: List<String>) {
         order = saved
     }
 
-    /** Launchable apps in the home row's order; new apps go to its end. */
+    /**
+     * Launchable apps in the home row's order; new apps go to its end. Synchronized: reloads can
+     * overlap (resume, package broadcasts), and two of them seeding the order at once left the
+     * screen and the saved order different.
+     */
+    @Synchronized
     fun loadApps(): List<AppEntry> {
         val found = LinkedHashMap<String, Pair<ComponentName, String>>()
         // Leanback entries win over phone-style ones for the same package.

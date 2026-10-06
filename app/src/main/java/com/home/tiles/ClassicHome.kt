@@ -1,6 +1,8 @@
 package com.home.tiles
 
 import android.view.KeyEvent as AndroidKeyEvent
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -31,11 +34,14 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.coerceAtMost
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val ClassicPad = 108.dp
 private val ClassicGap = 14.dp
+private const val MoveSlideMs = 160
 
 /**
  * The Switch home screen: equal-size tiles in a normally scrolling row (tiles to the left stay in
@@ -68,18 +74,34 @@ internal fun ClassicHome(
         }
     }
 
-    // The moved tile keeps the focus and stays in view as it travels along the row.
+    // The moved tile keeps the focus and stays in view as it travels along the row. The list
+    // anchors its scroll on the first visible tile's key, so a swap with that tile would jump the
+    // whole row for a frame; the scroll from before the step is requested for the very next
+    // layout instead, and the tiles slide into their new places (animateItem below).
     val movingIndex = items.indexOfFirst { it.key == move.key }
+    val stepping = MoveControl(move.key, { key, step ->
+        val index = listState.firstVisibleItemIndex
+        val offset = listState.firstVisibleItemScrollOffset
+        move.step(key, step)
+        listState.requestScrollToItem(index, offset)
+    }, move.done, move.cancel)
+    // The last tile moved: a cancelled move sends it back to where it was, maybe out of view.
+    var lastMoved by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(move.key, movingIndex) {
-        if (move.key == null || movingIndex < 0) return@LaunchedEffect
+        if (move.key == null) {
+            val key = lastMoved ?: return@LaunchedEffect
+            lastMoved = null
+            withFrameNanos {}
+            listState.bringIntoRow(items.indexOfFirst { it.key == key })
+            return@LaunchedEffect
+        }
+        if (movingIndex < 0) return@LaunchedEffect
+        lastMoved = move.key
         withFrameNanos {}
         runCatching { movingFocus.requestFocus() }
-        val info = listState.layoutInfo
-        val shown = info.visibleItemsInfo.firstOrNull { it.index == movingIndex }
-        when {
-            shown == null || shown.offset < info.viewportStartOffset -> listState.animateScrollToItem(movingIndex)
-            shown.offset + shown.size > info.viewportEndOffset -> listState.animateScrollToItem((movingIndex - 3).coerceAtLeast(0))
-        }
+        // Let the slide finish before scrolling, so the two motions don't fight.
+        delay(MoveSlideMs.toLong())
+        listState.bringIntoRow(movingIndex)
     }
 
     BoxWithConstraints(modifier.fillMaxWidth()) {
@@ -94,7 +116,13 @@ internal fun ClassicHome(
                 itemsIndexed(items, key = { _, item -> item.key }) { i, item ->
                     val focused = focusedKey == item.key
                     val moving = move.key == item.key
-                    Column {
+                    Column(
+                        Modifier
+                            // Tiles slide to their new places when the order changes; the moved
+                            // one is drawn above the neighbour it passes.
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = tween(MoveSlideMs))
+                            .zIndex(if (moving) 1f else 0f),
+                    ) {
                         // Name above the selected tile; may run wider than the tile.
                         Box(Modifier.width(tile).height(40.dp)) {
                             if (focused || moving) {
@@ -112,7 +140,7 @@ internal fun ClassicHome(
                             lifted = moving,
                             modifier = Modifier
                                 .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
-                                .then(if (moving) Modifier.focusRequester(movingFocus).moveKeys(item.key, move) else Modifier)
+                                .then(if (moving) Modifier.focusRequester(movingFocus).moveKeys(item.key, stepping) else Modifier)
                                 .onFocusChanged {
                                     if (it.isFocused) focusedKey = item.key
                                     else if (focusedKey == item.key) focusedKey = null
@@ -128,6 +156,23 @@ internal fun ClassicHome(
                 ChannelRow(secondRow, ClassicPad)
             }
         }
+    }
+}
+
+/** Scrolls the row just enough to show the whole tile at [index] inside the row's padding. */
+private suspend fun LazyListState.bringIntoRow(index: Int) {
+    if (index < 0) return
+    val info = layoutInfo
+    val shown = info.visibleItemsInfo.firstOrNull { it.index == index }
+    if (shown == null) {
+        animateScrollToItem(index)
+        return
+    }
+    val start = info.viewportStartOffset + info.beforeContentPadding
+    val end = info.viewportEndOffset - info.afterContentPadding
+    when {
+        shown.offset < start -> animateScrollBy((shown.offset - start).toFloat(), tween(MoveSlideMs))
+        shown.offset + shown.size > end -> animateScrollBy((shown.offset + shown.size - end).toFloat(), tween(MoveSlideMs))
     }
 }
 
