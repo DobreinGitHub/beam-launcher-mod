@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -35,7 +36,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.zIndex
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -77,13 +80,19 @@ internal fun ClassicHome(
     // The moved tile keeps the focus and stays in view as it travels along the row. The list
     // anchors its scroll on the first visible tile's key, so a swap with that tile would jump the
     // whole row for a frame; the scroll from before the step is requested for the very next
-    // layout instead, and the tiles slide into their new places (animateItem below).
+    // layout instead, and the tiles slide into their new places (animateItem below). The row
+    // scrolls along with each step, not after it, so fast steps don't leave it behind.
     val movingIndex = items.indexOfFirst { it.key == move.key }
+    val scope = rememberCoroutineScope()
+    val follower = remember(listState) { MoveFollower(listState, scope) }
+    val lastMovable = items.lastIndex - 1 // "All apps" closes the row and doesn't move
     val stepping = MoveControl(move.key, { key, step ->
+        val from = items.indexOfFirst { it.key == key }
         val index = listState.firstVisibleItemIndex
         val offset = listState.firstVisibleItemScrollOffset
         move.step(key, step)
         listState.requestScrollToItem(index, offset)
+        if (from + step in 0..lastMovable) follower.follow(from + step)
     }, move.done, move.cancel)
     // The last tile moved: a cancelled move sends it back to where it was, maybe out of view.
     var lastMoved by remember { mutableStateOf<String?>(null) }
@@ -99,9 +108,6 @@ internal fun ClassicHome(
         lastMoved = move.key
         withFrameNanos {}
         runCatching { movingFocus.requestFocus() }
-        // Let the slide finish before scrolling, so the two motions don't fight.
-        delay(MoveSlideMs.toLong())
-        listState.bringIntoRow(movingIndex)
     }
 
     BoxWithConstraints(modifier.fillMaxWidth()) {
@@ -155,6 +161,36 @@ internal fun ClassicHome(
                 Spacer(Modifier.height(10.dp))
                 ChannelRow(secondRow, ClassicPad)
             }
+        }
+    }
+}
+
+/**
+ * Scrolls the row along with a moving tile. Each step aims at where the row must be for the
+ * tile's new place, counting from where an unfinished scroll was heading, so quick steps add up
+ * instead of waiting for each other. Tiles are equal, so a place is index × (tile + gap).
+ */
+private class MoveFollower(private val list: LazyListState, private val scope: CoroutineScope) {
+    private var job: Job? = null
+    private var target: Float? = null
+
+    fun follow(index: Int) {
+        val info = list.layoutInfo
+        val tile = info.visibleItemsInfo.firstOrNull()?.size ?: return
+        val stride = (tile + info.mainAxisItemSpacing).toFloat()
+        fun scrolled() = list.firstVisibleItemIndex * stride + list.firstVisibleItemScrollOffset
+        val tileStart = index * stride
+        // The least scroll that shows the tile's right edge, and the most that shows its left.
+        val least = info.beforeContentPadding + tileStart + tile - info.viewportSize.width + info.afterContentPadding
+        val base = target ?: scrolled()
+        val wanted = base.coerceAtLeast(least).coerceAtMost(tileStart)
+        if (target == null && wanted == base) return
+        job?.cancel()
+        target = wanted
+        job = scope.launch {
+            withFrameNanos {} // after the scroll requested for this step is in place
+            list.animateScrollBy(wanted - scrolled(), tween(MoveSlideMs))
+            target = null
         }
     }
 }
