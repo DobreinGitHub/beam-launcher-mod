@@ -44,30 +44,46 @@ private fun readXgimiBattery(): BatteryInfo? = runCatching {
     if (level in 0..100) BatteryInfo(level, charging = adapter) else null
 }.onFailure { android.util.Log.w("Battery", "XGIMI battery unavailable", it) }.getOrNull()
 
-/** No change broadcasts from the XGIMI side, so poll; a battery drains slowly. */
+/**
+ * No change broadcasts from the XGIMI side, so poll. Often enough that plugging the adapter in or
+ * out shows within seconds; the call is a cheap local one, and runs only while the bar is shown.
+ */
 @Composable
 private fun rememberBattery(): State<BatteryInfo?> = produceState(readXgimiBattery()) {
     while (true) {
-        delay(60_000)
+        delay(5_000)
         value = withContext(Dispatchers.IO) { readXgimiBattery() }
     }
 }
 
-/** Switch-style battery readout for the top bar; hidden when the device has no battery. */
+private val ChargingGreen = Color(0xFF2EB85C)
+
+/**
+ * Switch-style battery readout for the top bar; hidden when the device has no battery. On the
+ * adapter the battery turns green with a bolt beside it, plain to see at any charge level.
+ */
 @Composable
 fun BatteryIndicator(textSize: TextUnit = StatusTextSize, color: Color = Colors.Text) {
     val battery by rememberBattery()
     val info = battery ?: return
     val low = info.percent <= 15 && !info.charging
-    val tint = if (low) Color(0xFFE53935) else color
+    val tint = when {
+        info.charging -> ChargingGreen
+        low -> Color(0xFFE53935)
+        else -> color
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
+        if (info.charging) {
+            Image(Icons.Rounded.Bolt, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(ChargingGreen))
+            Spacer(Modifier.width(2.dp))
+        }
         BatteryGlyph(info, tint)
         Spacer(Modifier.width(8.dp))
-        T("${info.percent}%", textSize, color = tint, weight = FontWeight.Light)
+        T("${info.percent}%", textSize, color = if (low) tint else color, weight = FontWeight.Light)
     }
 }
 
-/** Horizontal battery like the Switch's: outline, fill proportional to charge, bolt when charging. */
+/** Horizontal battery like the Switch's: outline and a fill proportional to the charge. */
 @Composable
 private fun BatteryGlyph(info: BatteryInfo, tint: Color) {
     // Same height as the Wi-Fi glyph's visible part, so the two icons line up.
@@ -94,15 +110,6 @@ private fun BatteryGlyph(info: BatteryInfo, tint: Color) {
                     CornerRadius(2.dp.toPx()),
                 )
             }
-        }
-        if (info.charging) {
-            // Knocked out against the fill so it stays visible at any charge level.
-            Image(
-                Icons.Rounded.Bolt,
-                null,
-                Modifier.size(16.dp),
-                colorFilter = ColorFilter.tint(if (info.percent > 45) Colors.Background else tint),
-            )
         }
     }
 }

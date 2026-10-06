@@ -205,7 +205,7 @@ class AppRepository(private val context: Context) {
             360
         }
         val bitmap = drawable.toBitmap(w, h)
-        // Fill the square tile with the banner's own edge colour so it blends in.
+        // Behind the banner (seen through transparent parts): its own edge colour, so it blends in.
         val corner = bitmap.getPixel(4, 4)
         val edge = if (android.graphics.Color.alpha(corner) > 200) {
             Color(corner)
@@ -231,19 +231,26 @@ class AppRepository(private val context: Context) {
     }
 
     /**
-     * Draws an adaptive icon's background and foreground layers across the whole tile, so the
-     * tile is the icon itself (like a Switch game cover) instead of a badge on a colored card.
-     * Layers are 108dp with the visible icon in the middle 72dp; a slight zoom keeps the logo large.
+     * Draws an adaptive icon across the whole 16:9 tile, so the tile is the icon itself instead
+     * of a badge on a colored card: the background layer covers the tile (as a square as wide as
+     * it, cropped top and bottom), the foreground sits in the middle. Layers are 108dp with the
+     * visible icon in the middle 72dp, which is sized to 3/4 of the tile's height.
      */
     private fun adaptiveTile(icon: AdaptiveIconDrawable): TileArt? {
         val background = icon.background ?: return null
-        val size = 432
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val w = 768
+        val h = 432
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val bleed = (size * 0.08f).toInt()
-        for (layer in listOfNotNull(background, icon.foreground)) {
-            layer.setBounds(-bleed, -bleed, size + bleed, size + bleed)
-            layer.draw(canvas)
+        val top = (h - w) / 2
+        background.setBounds(0, top, w, top + w)
+        background.draw(canvas)
+        icon.foreground?.let { foreground ->
+            val side = (h * 0.75f * 108 / 72).toInt()
+            val left = (w - side) / 2
+            val fgTop = (h - side) / 2
+            foreground.setBounds(left, fgTop, left + side, fgTop + side)
+            foreground.draw(canvas)
         }
         val base = Color(Palette.from(bitmap).generate().getDominantColor(FALLBACK_TILE))
         return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = base, fullBleed = true)

@@ -47,6 +47,7 @@ object Sounds {
 
     fun activate() = play(activate)
 
+    /** Only the voice key's "listening" cue: menus and panels open silently. */
     fun popup() = play(popup)
 
     private fun play(id: Int) {

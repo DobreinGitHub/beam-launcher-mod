@@ -144,7 +144,6 @@ fun PanelScreen(onDismiss: () -> Unit) {
         PanelState.open = true
         onDispose { PanelState.open = false }
     }
-    LaunchedEffect(Unit) { Sounds.popup() }
     // Kept here, not in MainPage, so its tiles don't vanish and come back each time a sub-page is
     // left; re-read while the main page is showing, and so after a sub-page changed something.
     val context = LocalContext.current

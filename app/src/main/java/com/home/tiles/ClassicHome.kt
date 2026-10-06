@@ -111,8 +111,8 @@ internal fun ClassicHome(
     }
 
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        // About four and a half tiles across, 256dp at most like the Switch on a 1280dp screen.
-        val tile = ((maxWidth - ClassicPad) / 4.5f).coerceAtMost(256.dp)
+        // A little over four 16:9 tiles across, 280dp wide at most on a 1280dp screen.
+        val tile = ((maxWidth - ClassicPad) / 4.3f).coerceAtMost(280.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
             LazyRow(
                 state = listState,
@@ -141,7 +141,7 @@ internal fun ClassicHome(
                             }
                         }
                         Tile(
-                            size = tile,
+                            width = tile,
                             highlighted = focused || moving,
                             lifted = moving,
                             modifier = Modifier

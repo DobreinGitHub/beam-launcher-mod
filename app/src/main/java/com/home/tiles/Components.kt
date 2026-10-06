@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,8 +82,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Tile corners scale with the tile, so big and small tiles look equally rounded. */
-private const val TILE_CORNER = 0.08f
+/** Tile corners scale with the tile's height, so big and small tiles look equally rounded. */
+private const val TILE_CORNER = 0.1f
 
 private fun tileCorner(size: Dp) = size * TILE_CORNER
 
@@ -187,10 +189,13 @@ fun Modifier.dpadClick(
 fun rememberArt(repo: AppRepository, entry: AppEntry): State<TileArt?> =
     produceState(repo.cachedArt(entry), entry.pkg, entry.updated) { value = repo.loadArt(entry) }
 
+/** Tiles are 16:9, the shape of Android TV app banners, so a banner fills its tile exactly. */
+fun tileHeight(width: Dp) = width * 9f / 16f
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun Tile(
-    size: Dp,
+    width: Dp,
     highlighted: Boolean,
     modifier: Modifier = Modifier,
     dimmed: Boolean = false,
@@ -215,9 +220,11 @@ fun Tile(
         Sounds.activate()
         onClick()
     }
+    val height = tileHeight(width)
+    val corner = tileCorner(height)
     Box(
         modifier
-            .size(size)
+            .size(width, height)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -231,16 +238,16 @@ fun Tile(
         Box(
             Modifier
                 .fillMaxSize()
-                .shadow(if (lifted) 28.dp else if (highlighted) 14.dp else 3.dp, RoundedCornerShape(tileCorner(size)))
-                .clip(RoundedCornerShape(tileCorner(size))),
+                .shadow(if (lifted) 28.dp else if (highlighted) 14.dp else 3.dp, RoundedCornerShape(corner))
+                .clip(RoundedCornerShape(corner)),
         ) { content() }
         if (highlighted) {
             // Frame sits outside the tile with a small gap, like the Switch selection.
             Box(
                 Modifier
-                    .requiredSize(size + 16.dp)
+                    .requiredSize(width + 16.dp, height + 16.dp)
                     // The frame sits 8dp outside the tile, so its radius grows by the same amount.
-                    .pulseBorder(5.dp, RoundedCornerShape(tileCorner(size) + 8.dp)),
+                    .pulseBorder(5.dp, RoundedCornerShape(corner + 8.dp)),
             )
         }
     }
@@ -255,9 +262,9 @@ fun AppArt(art: TileArt?, label: String) {
     Box(Modifier.fillMaxSize().background(brush), contentAlignment = Alignment.Center) {
         when {
             art == null -> T(label.take(1).uppercase(), 64.sp, color = Color.White, weight = FontWeight.Light)
-            art.fullBleed -> Image(art.image, label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            art.isBanner -> Image(art.image, label, Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
-            else -> Image(art.image, label, Modifier.fillMaxSize(0.58f))
+            // Banners are 16:9 like the tile; Crop only trims an off-ratio banner's edges.
+            art.fullBleed || art.isBanner -> Image(art.image, label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            else -> Image(art.image, label, Modifier.fillMaxHeight(0.62f).aspectRatio(1f))
         }
     }
 }
@@ -272,7 +279,7 @@ fun AllAppsArt() {
         Image(
             Icons.Rounded.Apps,
             null,
-            Modifier.fillMaxSize(0.4f),
+            Modifier.fillMaxHeight(0.45f).aspectRatio(1f),
             colorFilter = ColorFilter.tint(Colors.TextDim),
         )
     }
@@ -404,7 +411,7 @@ fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
                 .padding(24.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(64.dp).clip(RoundedCornerShape(tileCorner(64.dp)))) { request.art() }
+                Box(Modifier.size(96.dp, tileHeight(96.dp)).clip(RoundedCornerShape(tileCorner(tileHeight(96.dp))))) { request.art() }
                 Spacer(Modifier.width(18.dp))
                 T(request.title, 26.sp)
             }
@@ -434,8 +441,5 @@ fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(Unit) {
-        Sounds.popup()
-        runCatching { first.requestFocus() }
-    }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 }

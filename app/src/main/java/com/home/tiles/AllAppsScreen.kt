@@ -61,7 +61,7 @@ fun AllAppsScreen(
         }
         Spacer(Modifier.height(18.dp))
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(150.dp),
+            columns = GridCells.Adaptive(200.dp),
             contentPadding = PaddingValues(12.dp, 14.dp, 12.dp, 40.dp),
             horizontalArrangement = Arrangement.spacedBy(30.dp),
             verticalArrangement = Arrangement.spacedBy(30.dp),
@@ -71,7 +71,7 @@ fun AllAppsScreen(
                 val focused = focusedKey == entry.pkg
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Tile(
-                        size = 150.dp,
+                        width = 200.dp,
                         highlighted = focused,
                         dimmed = entry.hidden,
                         modifier = Modifier
