@@ -35,7 +35,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 3
-        versionName = "0.3"
+        versionName = "0.3-ru1"
         // The projector is 32-bit ARM; keeps Vosk/JNA native libraries to the one ABI.
         ndk { abiFilters += "armeabi-v7a" }
     }

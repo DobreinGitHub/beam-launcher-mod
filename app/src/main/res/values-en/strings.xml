@@ -20,6 +20,9 @@
     <string name="menu_hide_home">Hide from home</string>
     <string name="menu_app_info">App info</string>
     <string name="menu_uninstall">Uninstall</string>
+    <string name="menu_move">Move</string>
+    <string name="move_hint">◀ %1$s ▶    OK — done · Back — cancel</string>
+    <string name="beam_settings">Beam settings</string>
     <string name="usb_drive">USB drive</string>
     <string name="device_connected">Device connected</string>
     <string name="quick_settings">Quick settings</string>

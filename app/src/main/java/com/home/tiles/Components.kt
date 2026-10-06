@@ -194,13 +194,23 @@ fun Tile(
     highlighted: Boolean,
     modifier: Modifier = Modifier,
     dimmed: Boolean = false,
+    /** Picked up to be moved: drawn a little larger, above its neighbours. */
+    lifted: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     var pressed by remember { mutableStateOf(false) }
     val press = remember { DpadPress() }
-    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, tween(90), label = "press")
+    val scale by animateFloatAsState(
+        when {
+            lifted -> 1.08f
+            pressed -> 0.95f
+            else -> 1f
+        },
+        tween(90),
+        label = "press",
+    )
     val click = {
         Sounds.activate()
         onClick()
@@ -221,7 +231,7 @@ fun Tile(
         Box(
             Modifier
                 .fillMaxSize()
-                .shadow(if (highlighted) 14.dp else 3.dp, RoundedCornerShape(tileCorner(size)))
+                .shadow(if (lifted) 28.dp else if (highlighted) 14.dp else 3.dp, RoundedCornerShape(tileCorner(size)))
                 .clip(RoundedCornerShape(tileCorner(size))),
         ) { content() }
         if (highlighted) {
@@ -341,34 +351,65 @@ fun NetworkIcon() {
     )
 }
 
-@Composable
-fun OptionsDialog(entry: AppEntry, repo: AppRepository, onDismiss: () -> Unit, onChanged: () -> Unit) {
-    val context = LocalContext.current
-    val art by rememberArt(repo, entry)
-    val first = remember { FocusRequester() }
-    val options = buildList<Pair<String, () -> Unit>> {
+/** What the OK-hold menu shows: a tile's name, its picture and the actions. */
+class MenuRequest(
+    val title: String,
+    val art: @Composable () -> Unit,
+    val options: List<Pair<String, () -> Unit>>,
+)
+
+/** The OK-hold menu of an app. [onMove] is null where the order can't change (All apps). */
+fun appMenu(
+    context: android.content.Context,
+    repo: AppRepository,
+    entry: AppEntry,
+    onChanged: () -> Unit,
+    onMove: (() -> Unit)?,
+) = MenuRequest(
+    title = entry.label,
+    art = {
+        val art by rememberArt(repo, entry)
+        AppArt(art, entry.label)
+    },
+    options = buildList<Pair<String, () -> Unit>> {
         add(tr(R.string.menu_open) to { context.launchApp(entry) })
-        add((if (entry.pinned) tr(R.string.menu_unpin) else tr(R.string.menu_pin_first)) to { repo.togglePinned(entry.pkg); onChanged() })
+        if (onMove != null && !entry.hidden) add(tr(R.string.menu_move) to onMove)
         add((if (entry.hidden) tr(R.string.menu_show_home) else tr(R.string.menu_hide_home)) to { repo.toggleHidden(entry.pkg); onChanged() })
-        add(tr(R.string.menu_app_info) to { context.openAppInfo(entry.pkg) })
         if (!entry.isSystem) add(tr(R.string.menu_uninstall) to { context.uninstall(entry.pkg) })
-    }
+    },
+)
+
+private fun isOkKey(code: Int) =
+    code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER || code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
+
+@Composable
+fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
+    val first = remember { FocusRequester() }
+    // The menu opens while OK is still held: its key repeats and the release belong to the long
+    // press, and would otherwise click the first item. OK counts only after a fresh press.
+    var okArmed by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .width(440.dp)
+                .onPreviewKeyEvent { event ->
+                    val native = event.nativeKeyEvent
+                    if (!isOkKey(native.keyCode)) return@onPreviewKeyEvent false
+                    if (event.type == KeyEventType.KeyDown && native.repeatCount == 0) okArmed = true
+                    !okArmed
+                }
                 .arrowSoundTracker()
                 .shadow(24.dp, RoundedCornerShape(18.dp))
                 .background(Colors.Surface, RoundedCornerShape(18.dp))
                 .padding(24.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(64.dp).clip(RoundedCornerShape(tileCorner(64.dp)))) { AppArt(art, entry.label) }
+                Box(Modifier.size(64.dp).clip(RoundedCornerShape(tileCorner(64.dp)))) { request.art() }
                 Spacer(Modifier.width(18.dp))
-                T(entry.label, 26.sp)
+                T(request.title, 26.sp)
             }
             Spacer(Modifier.height(18.dp))
-            options.forEachIndexed { i, (text, action) ->
+            request.options.forEachIndexed { i, (text, action) ->
                 var focused by remember { mutableStateOf(false) }
                 Box(
                     Modifier

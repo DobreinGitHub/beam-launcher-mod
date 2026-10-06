@@ -10,6 +10,7 @@ import android.graphics.Canvas
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.util.DisplayMetrics
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -53,16 +54,69 @@ class AppRepository(private val context: Context) {
         get() = prefs.getString(KEY_PINNED, "").orEmpty().split(',').filter { it.isNotEmpty() }
         set(value) = prefs.edit().putString(KEY_PINNED, value.joinToString(",")).apply()
 
+    /**
+     * The home row's order, set by hand with "Move": row keys (package names, "hdmi:…", "usb:…").
+     * A Compose state, so the row redraws as soon as a tile moves.
+     */
+    private val orderState = mutableStateOf(
+        prefs.getString(KEY_ORDER, null)?.split(',')?.filter { it.isNotEmpty() },
+    )
+
+    private var order: List<String>
+        get() = orderState.value.orEmpty()
+        set(value) {
+            orderState.value = value
+            prefs.edit().putString(KEY_ORDER, value.joinToString(",")).apply()
+        }
+
     fun toggleHidden(pkg: String) {
+        val wasHidden = pkg in hidden
         hidden = hidden.toMutableSet().apply { if (!remove(pkg)) add(pkg) }
+        // Shown again: it comes back at the end of the row, like a newly installed app.
+        if (wasHidden) order = order - pkg
     }
 
-    fun togglePinned(pkg: String) {
-        val current = pinned
-        pinned = if (pkg in current) current - pkg else listOf(pkg) + current
+    /**
+     * [keys] in the home row's order. Keys the order doesn't know yet keep their old default
+     * place: HDMI/USB tiles before everything, apps after everything.
+     */
+    fun arrange(keys: List<String>): List<String> {
+        val index = order.withIndex().associate { (i, key) -> key to i }
+        val (known, unknown) = keys.partition { it in index }
+        val (newSpecial, newApps) = unknown.partition { it.contains(':') }
+        return newSpecial + known.sortedBy { index.getValue(it) } + newApps
     }
 
-    /** Launchable apps: pinned first, then most recently used, then by name. */
+    /** The whole current order, as [arrange] would show it, so tiles not saved yet can be moved. */
+    fun beginMove(visible: List<String>): List<String> {
+        val missing = visible.filter { it !in order }
+        if (missing.isNotEmpty()) {
+            val (special, apps) = missing.partition { it.contains(':') }
+            order = special + order + apps
+        }
+        return order
+    }
+
+    /** Swaps [key] with its visible neighbour [step] places away (-1 left, 1 right). */
+    fun move(visible: List<String>, key: String, step: Int): Boolean {
+        val i = visible.indexOf(key)
+        val neighbour = visible.getOrNull(i + step) ?: return false
+        if (i < 0) return false
+        val full = beginMove(visible).toMutableList()
+        val a = full.indexOf(key)
+        val b = full.indexOf(neighbour)
+        full[a] = neighbour
+        full[b] = key
+        order = full
+        return true
+    }
+
+    /** Puts back an order saved by [beginMove] (a cancelled move). */
+    fun restoreOrder(saved: List<String>) {
+        order = saved
+    }
+
+    /** Launchable apps in the home row's order; new apps go to its end. */
     fun loadApps(): List<AppEntry> {
         val found = LinkedHashMap<String, Pair<ComponentName, String>>()
         // Leanback entries win over phone-style ones for the same package.
@@ -96,11 +150,19 @@ class AppRepository(private val context: Context) {
                 updated = updated,
             )
         }
-        return entries.sortedWith(
+        // The first start fixes the order once the old way: pinned, then recently used, then by name.
+        val byUse = entries.sortedWith(
             compareBy<AppEntry> { if (it.pinned) pins.indexOf(it.pkg) else Int.MAX_VALUE }
                 .thenByDescending { it.lastUsed }
                 .thenBy { it.label.lowercase() },
         )
+        if (orderState.value == null) order = byUse.map { it.pkg }
+        // Apps the order hasn't seen are saved at its end, so later ones line up behind them.
+        val saved = order.toSet()
+        val added = byUse.filter { it.pkg !in saved && !it.hidden }.map { it.pkg }
+        if (added.isNotEmpty()) order = order + added
+        val index = order.withIndex().associate { (i, key) -> key to i }
+        return byUse.sortedBy { index[it.pkg] ?: Int.MAX_VALUE }
     }
 
     /** Empty unless the usage-stats app-op was granted over adb. */
@@ -192,6 +254,7 @@ class AppRepository(private val context: Context) {
     companion object {
         private const val KEY_HIDDEN = "hidden"
         private const val KEY_PINNED = "pinned"
+        private const val KEY_ORDER = "order"
         private const val USAGE_WINDOW_MS = 60L * 24 * 60 * 60 * 1000
         private const val FALLBACK_TILE = 0xFF5A5A5A.toInt()
 
@@ -209,8 +272,6 @@ class AppRepository(private val context: Context) {
             "com.zacharee1.systemuituner",
             "io.github.sds100.keymapper",
             "org.liskovsoft.androidtv.rukeyboard",
-            "ru.vk.store",
-            "ru.vk.store.tv",
         )
     }
 }

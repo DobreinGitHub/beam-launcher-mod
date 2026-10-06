@@ -1,5 +1,6 @@
 package com.home.tiles
 
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,6 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,17 +50,35 @@ internal fun ClassicHome(
     modifier: Modifier,
     clickFor: (RowItem) -> () -> Unit,
     longClickFor: (RowItem) -> () -> Unit,
+    move: MoveControl,
 ) {
     val listState = rememberLazyListState()
     val first = remember { FocusRequester() }
+    val movingFocus = remember { FocusRequester() }
     var focusedKey by remember { mutableStateOf<String?>(null) }
 
-    // Coming home puts focus back on the first tile, like the row layout.
-    LaunchedEffect(resumeTick, items.map { it.key }) {
+    // Coming home puts focus back on the first tile, like the row layout. Keyed on the set of
+    // tiles, not their order, so moving a tile keeps the focus on it.
+    LaunchedEffect(resumeTick, items.map { it.key }.toSet()) {
+        if (move.key != null) return@LaunchedEffect
         listState.scrollToItem(0)
         repeat(10) {
             withFrameNanos {}
             if (runCatching { first.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
+
+    // The moved tile keeps the focus and stays in view as it travels along the row.
+    val movingIndex = items.indexOfFirst { it.key == move.key }
+    LaunchedEffect(move.key, movingIndex) {
+        if (move.key == null || movingIndex < 0) return@LaunchedEffect
+        withFrameNanos {}
+        runCatching { movingFocus.requestFocus() }
+        val info = listState.layoutInfo
+        val shown = info.visibleItemsInfo.firstOrNull { it.index == movingIndex }
+        when {
+            shown == null || shown.offset < info.viewportStartOffset -> listState.animateScrollToItem(movingIndex)
+            shown.offset + shown.size > info.viewportEndOffset -> listState.animateScrollToItem((movingIndex - 3).coerceAtLeast(0))
         }
     }
 
@@ -71,12 +93,13 @@ internal fun ClassicHome(
             ) {
                 itemsIndexed(items, key = { _, item -> item.key }) { i, item ->
                     val focused = focusedKey == item.key
+                    val moving = move.key == item.key
                     Column {
                         // Name above the selected tile; may run wider than the tile.
                         Box(Modifier.width(tile).height(40.dp)) {
-                            if (focused) {
+                            if (focused || moving) {
                                 T(
-                                    item.title,
+                                    if (moving) tr(R.string.move_hint, item.title) else item.title,
                                     22.sp,
                                     Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
                                     color = Colors.Accent,
@@ -85,9 +108,11 @@ internal fun ClassicHome(
                         }
                         Tile(
                             size = tile,
-                            highlighted = focused,
+                            highlighted = focused || moving,
+                            lifted = moving,
                             modifier = Modifier
                                 .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
+                                .then(if (moving) Modifier.focusRequester(movingFocus).moveKeys(item.key, move) else Modifier)
                                 .onFocusChanged {
                                     if (it.isFocused) focusedKey = item.key
                                     else if (focusedKey == item.key) focusedKey = null
@@ -103,5 +128,28 @@ internal fun ClassicHome(
                 ChannelRow(secondRow, ClassicPad)
             }
         }
+    }
+}
+
+/**
+ * The keys of a tile being moved: left/right move it, OK puts it down, Back puts it back where it
+ * was. Up/down are swallowed so the focus can't leave the tile mid-move.
+ */
+private fun Modifier.moveKeys(key: String, move: MoveControl) = onPreviewKeyEvent { event ->
+    val down = event.type == KeyEventType.KeyDown
+    val up = event.type == KeyEventType.KeyUp
+    when (event.nativeKeyEvent.keyCode) {
+        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (down) move.step(key, -1); true }
+        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) move.step(key, 1); true }
+        AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
+        AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> {
+            if (up) move.done()
+            true
+        }
+        AndroidKeyEvent.KEYCODE_BACK, AndroidKeyEvent.KEYCODE_ESCAPE -> {
+            if (up) move.cancel()
+            true
+        }
+        else -> false
     }
 }

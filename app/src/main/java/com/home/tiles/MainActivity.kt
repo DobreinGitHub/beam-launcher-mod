@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -112,7 +113,8 @@ private fun LauncherApp(
     onChanged: () -> Unit,
 ) {
     var screen by remember { mutableStateOf(Screen.Home) }
-    var optionsFor by remember { mutableStateOf<AppEntry?>(null) }
+    var menu by remember { mutableStateOf<MenuRequest?>(null) }
+    val context = LocalContext.current
     var panelOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(resumeTick) { screen = Screen.Home }
@@ -128,18 +130,20 @@ private fun LauncherApp(
                 // The overlay service's panel when it runs, so the remote key and this button
                 // always toggle the same single panel.
                 onOpenPanel = { if (!PanelOverlay.show()) panelOpen = true },
-                onOptions = { optionsFor = it },
+                onMenu = { menu = it },
+                onChanged = onChanged,
             )
             Screen.AllApps -> AllAppsScreen(
                 repo, apps,
                 onBack = { screen = Screen.Home },
-                onOptions = { optionsFor = it },
+                // All apps is sorted by name, so its menu has no "Move".
+                onOptions = { menu = appMenu(context, repo, it, onChanged, onMove = null) },
             )
         }
         }
         if (panelOpen) SettingsPanel(onDismiss = { panelOpen = false })
-        optionsFor?.let { entry ->
-            OptionsDialog(entry, repo, onDismiss = { optionsFor = null }, onChanged = onChanged)
+        menu?.let { request ->
+            OptionsDialog(request, onDismiss = { menu = null })
         }
     }
 }
