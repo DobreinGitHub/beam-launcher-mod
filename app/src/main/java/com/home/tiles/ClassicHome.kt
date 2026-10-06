@@ -188,9 +188,14 @@ private class MoveFollower(private val list: LazyListState, private val scope: C
         job?.cancel()
         target = wanted
         job = scope.launch {
-            withFrameNanos {} // after the scroll requested for this step is in place
+            // Frame callbacks run before layout, so the scroll requested for this step is in
+            // place only from the second frame on; measuring earlier aimed from a stale spot.
+            withFrameNanos {}
+            withFrameNanos {}
             list.animateScrollBy(wanted - scrolled(), tween(MoveSlideMs))
             target = null
+            // Whatever cut the scroll short, the tile ends up fully in view.
+            list.bringIntoRow(index)
         }
     }
 }
