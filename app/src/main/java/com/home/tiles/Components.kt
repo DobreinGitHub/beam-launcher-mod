@@ -4,6 +4,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.view.KeyEvent as AndroidKeyEvent
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -197,19 +198,36 @@ fun rememberArt(repo: AppRepository, entry: AppEntry): State<TileArt?> =
     produceState(repo.cachedArt(entry), entry.pkg, entry.updated) { value = repo.loadArt(entry) }
 
 /**
- * A soft pulse for placeholders while their content loads, so the launcher fills in calmly
- * instead of popping. Drawn behind the content; the pulse is read in the draw phase only.
+ * A placeholder while its content loads, so the launcher fills in calmly instead of popping:
+ * a faint shape with a soft band of light sweeping across it, left to right. Drawn behind the
+ * content; the sweep is read in the draw phase only.
  */
 @Composable
 fun Modifier.skeleton(shape: Shape): Modifier {
-    val pulse = rememberInfiniteTransition(label = "skeleton").animateFloat(
-        initialValue = 0.08f,
-        targetValue = 0.18f,
-        animationSpec = infiniteRepeatable(tween(850), RepeatMode.Reverse),
-        label = "pulse",
+    val sweep = rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
+        label = "sweep",
     )
     val base = Colors.TextDim
-    return drawBehind { drawOutline(shape.createOutline(size, layoutDirection, this), base.copy(alpha = pulse.value)) }
+    return drawBehind {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        drawOutline(outline, base.copy(alpha = 0.10f))
+        // The band is as wide as the shape and travels from fully left of it to fully right.
+        val band = size.width
+        val x = -band + (size.width + band) * sweep.value
+        drawOutline(
+            outline,
+            Brush.horizontalGradient(
+                0f to Color.Transparent,
+                0.5f to base.copy(alpha = 0.16f),
+                1f to Color.Transparent,
+                startX = x,
+                endX = x + band,
+            ),
+        )
+    }
 }
 
 /** A tile-sized placeholder for the row before the apps are known. */
