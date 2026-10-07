@@ -25,6 +25,14 @@
   Put extra APKs to install (SmartTube, LeanKey, ...) into tools\apks\.
   Split bundles (.apks/.apkm) are not handled here; install those by hand.
   Turn the VPN off first, otherwise adb cannot reach the projector.
+
+  Optional extras, off unless asked for:
+    -AerialViews         installs the Aerial Views screensaver (a pinned release from its author's GitHub,
+                         checked against its SHA-256) and makes it the screensaver; Beam -> Screensaver
+                         switches back to XGIMI's.
+    -KeepBackgroundApps  stops the firmware force-stopping background apps (VPN, music) on switching apps:
+                         persist.xgimi.restrictbackground.enable=false, from the next boot.
+  -Revert puts both back: XGIMI's screensaver (Aerial Views stays installed) and the firmware's default.
 #>
 param(
     [string]$Device,
@@ -37,7 +45,9 @@ param(
     [switch]$NoDownload,
     [switch]$SkipSystem,
     [switch]$Revert,
-    [switch]$Reboot
+    [switch]$Reboot,
+    [switch]$AerialViews,
+    [switch]$KeepBackgroundApps
 )
 
 $ErrorActionPreference = "Continue"
@@ -145,6 +155,12 @@ $beamPanelShort = "com.home.tiles/.PanelOverlay"
 $ime = "org.liskovsoft.androidtv.rukeyboard/com.liskovsoft.leankeyboard.ime.LeanbackImeService"
 # Package names the :stub module takes over (the firmware starts these apps for the remote's keys).
 $stubPackages = @("com.cibn.tv", "com.ktcp.tvvideo", "com.gitvjimi.video", "com.hunantv.license")
+# -AerialViews: a pinned release, so its checksum can be checked; and the firmware's own screensaver.
+$aerialPackage = "com.neilturner.aerialviews"
+$aerialDream = "com.neilturner.aerialviews/.ui.screensaver.DreamActivity"
+$aerialUrl = "https://github.com/theothernt/AerialViews/releases/download/1.8.5/aerial-views-1.8.5.apk"
+$aerialSha256 = "a20b4bc748da5ce890d96536494952aa4f50a6b589c50dee176415c021407070"
+$xgimiScreensaver = "com.xgimi.screensaver/.service.ScreenSaverDreamService"
 
 if ($Revert) {
     Write-Host "`nОткат: проектор возвращается к стоковому лаунчеру" -ForegroundColor Cyan
@@ -202,6 +218,15 @@ if ($Revert) {
         if (-not $script:StockBack) { throw "стоковый лаунчер не включён: Beam оставлен" }
         if (-not (Installed $beamPackage)) { return $false }
         Expect (Adb shell pm uninstall $beamPackage) "Success"
+    }
+    # 5. The optional extras, back to the firmware's own: its screensaver and its background-app limit.
+    Step "Заставка XGIMI" {
+        if ((Adb shell settings get secure screensaver_components) -notmatch [regex]::Escape($aerialPackage)) { return $false }
+        Check (Adb shell settings put secure screensaver_components $xgimiScreensaver)
+    }
+    Step "Фоновые приложения: как в прошивке" {
+        if ((Adb shell getprop persist.xgimi.restrictbackground.enable) -ne "false") { return $false }
+        Check (Adb shell setprop persist.xgimi.restrictbackground.enable true)
     }
     Write-Host "`n  Язык, часовой пояс и Bluetooth-имя не менялись обратно: прежние значения неизвестны." -ForegroundColor Yellow
     if ($Reboot) { Step "Перезагрузка" { Start-Sleep -Seconds 15; Adb reboot | Out-Null } }
@@ -392,6 +417,34 @@ if ($SkipSystem) {
     }
     Step "Bluetooth-имя «$BluetoothName»" {
         Expect (Adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es bt_name "'$BluetoothName'") 'data="ok"'
+    }
+}
+
+if ($AerialViews -or $KeepBackgroundApps) {
+    Write-Host "`n6a. Дополнительно" -ForegroundColor Cyan
+}
+if ($AerialViews) {
+    Step "Заставка Aerial Views" {
+        if (-not (Installed $aerialPackage)) {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+            $file = Join-Path ([IO.Path]::GetTempPath()) ("aerial-views-" + [Guid]::NewGuid().ToString("N") + ".apk")
+            try {
+                Invoke-WebRequest -Uri $aerialUrl -OutFile $file -Headers @{ "User-Agent" = "beam-restore" } -UseBasicParsing
+                $actual = (Get-FileHash -Algorithm SHA256 -Path $file).Hash.ToLower()
+                if ($actual -ne $aerialSha256) { throw "не прошла проверку SHA-256 (ожидалось $aerialSha256, получено $actual)" }
+                Expect (Adb install $file) "Success"
+            } finally {
+                Remove-Item -Force -Path $file -ErrorAction SilentlyContinue
+            }
+        }
+        Check (Adb shell settings put secure screensaver_components $aerialDream)
+        Check (Adb shell settings put secure screensaver_enabled 1)
+    }
+}
+if ($KeepBackgroundApps) {
+    Step "Фоновые приложения не закрываются (после перезагрузки)" {
+        Check (Adb shell setprop persist.xgimi.restrictbackground.enable false)
+        Expect (Adb shell getprop persist.xgimi.restrictbackground.enable) '^false$'
     }
 }
 

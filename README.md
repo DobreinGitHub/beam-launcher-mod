@@ -149,6 +149,21 @@ powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.5
 powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -SkipSystem -Reboot
 ```
 
+**Дополнительно (по желанию).** Два параметра, по умолчанию выключены:
+
+- `-AerialViews` — ставит заставку [Aerial Views](https://github.com/theothernt/AerialViews)
+  (4K-видео, часы и подписи на русском; версия 1.8.5 с GitHub автора, проверяется по SHA-256) и
+  делает её заставкой. Переключить обратно на заставку XGIMI можно в Beam → «Заставка». Учтите:
+  Aerial Views — стороннее приложение, оно берёт видео из интернета и отправляет разработчику
+  статистику (отключается в его настройках).
+- `-KeepBackgroundApps` — прошивка перестаёт закрывать фоновые приложения (VPN, музыку) при
+  переключении. Действует после перезагрузки. На этом проекторе мало памяти, поэтому Android
+  всё равно может выгрузить что-то при нехватке, но уже не всё подряд.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -AerialViews -KeepBackgroundApps -Reboot
+```
+
 Свой часовой пояс можно задать и без пересчёта всего остального, в PowerShell из папки `C:\adb`
 (пояс в формате `Europe/Berlin`, `Europe/Kyiv`, `Asia/Almaty`):
 
@@ -207,6 +222,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.5
 - ставит русский язык, часовой пояс **Europe/Moscow** и Bluetooth-имя «XGIMI Play 6». Другое
   задают параметры `-Locale`, `-TimeZone`, `-BluetoothName` (или `LOCALE`, `TIMEZONE`, `BT_NAME` в
   `local.env`), а `-SkipSystem` не трогает эти три настройки.
+- по желанию: `-AerialViews` ставит и включает заставку Aerial Views, `-KeepBackgroundApps`
+  отключает закрытие фоновых приложений прошивкой (`persist.xgimi.restrictbackground.enable`).
 
 ### Откат
 
@@ -219,7 +236,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.5
 затем удаляет заглушки кнопок пульта (только свои, настоящие приложения с теми же именами пакетов
 остаются) и сам Beam. Если стоковый лаунчер включить не удалось, Beam не удаляется, чтобы не
 остаться без домашнего экрана. Язык, часовой пояс и Bluetooth-имя назад не меняются: прежние
-значения неизвестны. Если установлен Projectivy, он тоже снова включается, и при первом нажатии
+значения неизвестны. Заставка возвращается на XGIMI (Aerial Views остаётся
+установленной), закрытие фоновых приложений прошивкой включается обратно. Если установлен Projectivy, он тоже снова включается, и при первом нажатии
 «Домой» система может спросить, какой лаунчер использовать.
 
 Вручную то же самое:

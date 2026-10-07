@@ -142,6 +142,21 @@ that, add `-SkipSystem` (before `-Reboot`): the three settings stay as they were
 powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -SkipSystem -Reboot
 ```
 
+**Extras (optional).** Two switches, off by default:
+
+- `-AerialViews` installs the [Aerial Views](https://github.com/theothernt/AerialViews) screensaver
+  (4K videos, clock and captions; release 1.8.5 from its author's GitHub, checked against its
+  SHA-256) and makes it the screensaver. Beam → Screensaver switches back to XGIMI's. Note that
+  Aerial Views is a third-party app: it streams its videos and sends its developer usage statistics
+  (can be turned off in its settings).
+- `-KeepBackgroundApps` stops the firmware closing background apps (VPN, music) when you switch
+  apps, from the next boot. The projector has little memory, so Android may still unload
+  something when it runs out, but no longer everything.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -AerialViews -KeepBackgroundApps -Reboot
+```
+
 You can set your own time zone separately, in PowerShell from the `C:\adb` folder (the zone in the
 form `Europe/Berlin`, `Europe/Kyiv`, `Asia/Almaty`):
 
@@ -201,6 +216,8 @@ Read this before running it:
 - sets the system language to Russian, the time zone to **Europe/Moscow** and the Bluetooth name to
   "XGIMI Play 6". Other values are set with `-Locale`, `-TimeZone`, `-BluetoothName` (or `LOCALE`,
   `TIMEZONE`, `BT_NAME` in `local.env`); `-SkipSystem` leaves these three settings alone. Note
+- optionally: `-AerialViews` installs and turns on the Aerial Views screensaver, `-KeepBackgroundApps`
+  stops the firmware closing background apps (`persist.xgimi.restrictbackground.enable`).
   that the firmware won't accept English as the system language; use Beam's own language setting
   instead.
 
@@ -215,7 +232,8 @@ keyboard, removes Beam from the accessibility services (the others stay) and fro
 recognizers, and then removes the remote button stubs (only its own; real apps with the same
 package names stay) and Beam itself. If the stock launcher can't be enabled, Beam is not removed,
 so you don't end up without a home screen. The language, time zone and Bluetooth name are not
-reverted: the previous values are unknown. If Projectivy is installed, it is enabled again too,
+reverted: the previous values are unknown. The screensaver goes back to XGIMI's (Aerial Views stays
+installed) and the firmware closes background apps again. If Projectivy is installed, it is enabled again too,
 and the first time you press Home the system may ask which launcher to use.
 
 The same by hand:
