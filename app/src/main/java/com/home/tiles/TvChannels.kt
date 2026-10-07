@@ -6,6 +6,9 @@ import android.content.Intent
 import android.database.ContentObserver
 import android.graphics.BitmapFactory
 import android.media.tv.TvContract
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -263,26 +266,53 @@ private val posterCache = ConcurrentHashMap<Uri, ImageBitmap>()
 /**
  * Some apps (VoKino) publish posters as plain http:// links, hence usesCleartextTraffic in the
  * manifest: without it Android refuses them and those cards stay grey.
+ * Russian services (VoKino, Kinopoisk) refuse foreign addresses and send an error page instead,
+ * so behind a VPN the cards stayed grey: a poster that doesn't come through the default network
+ * is fetched again straight over Wi-Fi, past the VPN (unless the VPN app forbids that).
  */
 private suspend fun loadPoster(context: Context, uri: Uri): ImageBitmap? = withContext(Dispatchers.IO) {
     posterCache[uri]?.let { return@withContext it }
     runCatching {
-        fun open() = when (uri.scheme) {
-            "http", "https" -> (URL(uri.toString()).openConnection() as HttpURLConnection).run {
-                connectTimeout = 10_000
-                readTimeout = 15_000
-                inputStream
+        val bytes = when (uri.scheme) {
+            "http", "https" -> {
+                val url = URL(uri.toString())
+                runCatching { download(url, null) }.getOrNull()
+                    ?: directNetwork(context)?.let { network -> runCatching { download(url, network) }.getOrNull() }
             }
-            else -> context.contentResolver.openInputStream(uri)
-        }
+            else -> context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } ?: return@runCatching null
         // Posters can be full-size artwork; sample down to card size to spare this device's small RAM.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        open()?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         var sample = 1
         while (bounds.outWidth / (sample * 2) >= 480) sample *= 2
-        open()?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
             ?.asImageBitmap()
     }.getOrNull()?.also { posterCache[uri] = it }
+}
+
+/** The image at [url] over [network] (the default one when null); null for an error or a web page. */
+private fun download(url: URL, network: Network?): ByteArray? {
+    val connection = (network?.openConnection(url) ?: url.openConnection()) as HttpURLConnection
+    return try {
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 15_000
+        if (connection.responseCode != HttpURLConnection.HTTP_OK || connection.contentType?.startsWith("text/") == true) null
+        else connection.inputStream.use { it.readBytes() }
+    } finally {
+        connection.disconnect()
+    }
+}
+
+/** A network to the internet that isn't a VPN (the Wi-Fi), or null. */
+private fun directNetwork(context: Context): Network? {
+    val cm = context.getSystemService(ConnectivityManager::class.java)
+    @Suppress("DEPRECATION")
+    return cm.allNetworks.firstOrNull { network ->
+        cm.getNetworkCapabilities(network)?.let {
+            it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+        } == true
+    }
 }
 
 // ---- UI ----
