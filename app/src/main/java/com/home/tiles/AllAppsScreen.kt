@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 
 private val TileWidth = 200.dp
+private val GridPad = 12.dp
 
 @Composable
 fun AllAppsScreen(
@@ -84,11 +85,15 @@ fun AllAppsScreen(
                 val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return@drawBehind
                 val w = TileWidth.toPx()
                 val h = tileHeight(TileWidth).toPx()
-                val center = Offset(info.offset.x + info.size.width / 2f, info.offset.y + h / 2f)
+                // Item offsets count from the content's start: add the paddings back.
+                val center = Offset(
+                    info.offset.x + GridPad.toPx() + info.size.width / 2f,
+                    info.offset.y - gridState.layoutInfo.viewportStartOffset + h / 2f,
+                )
                 drawFocusGlow(glowColor, glowStrength, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
             },
             columns = GridCells.Adaptive(TileWidth),
-            contentPadding = PaddingValues(12.dp, 14.dp, 12.dp, 40.dp),
+            contentPadding = PaddingValues(GridPad, 14.dp, GridPad, 40.dp),
             horizontalArrangement = Arrangement.spacedBy(30.dp),
             verticalArrangement = Arrangement.spacedBy(30.dp),
         ) {

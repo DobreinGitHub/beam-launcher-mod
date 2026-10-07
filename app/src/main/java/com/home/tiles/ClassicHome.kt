@@ -172,7 +172,9 @@ internal fun ClassicHome(
                     val w = tile.toPx()
                     val h = tileHeight(tile).toPx()
                     val s = if (move.key == key) FOCUS_SCALE_LIFTED else FOCUS_SCALE
-                    val center = Offset(info.offset + w / 2f, (RowTop + NameHeight).toPx() + h / 2f)
+                    // Item offsets count from the content's start: add the start padding back.
+                    val x = info.offset - listState.layoutInfo.viewportStartOffset
+                    val center = Offset(x + w / 2f, (RowTop + NameHeight).toPx() + h / 2f)
                     drawFocusGlow(glowColor, glowStrength, center, w * s / 2f, h * s / 2f, FocusGlowSpread.toPx())
                 },
                 contentPadding = PaddingValues(start = ClassicPad, end = ClassicPad, top = RowTop, bottom = 14.dp),

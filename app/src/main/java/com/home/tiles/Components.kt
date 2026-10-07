@@ -7,6 +7,7 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -346,11 +347,16 @@ fun AllAppsArt() {
     }
 }
 
+/**
+ * A top-bar button in the same language as the tiles: a bare icon, dimmed until selected; then
+ * it grows and brightens with a soft light behind it, and its name shows underneath.
+ */
 @Composable
-fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Unit) {
+fun TopButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.12f else 1f, tween(150), label = "focus")
+    val scale by animateFloatAsState(if (focused) 1.15f else 1f, tween(150), label = "focus")
     val glowStrength by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "glow")
+    val tint by animateColorAsState(if (focused) Colors.Text else Colors.TextDim, tween(150), label = "tint")
     Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
@@ -359,9 +365,7 @@ fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Un
                     scaleX = scale
                     scaleY = scale
                 }
-                // Flat, no shadow; selected, it grows with a soft neutral light, like the tiles.
-                .focusGlow(Colors.Text, spread = 10.dp) { glowStrength * 0.8f }
-                .background(Colors.Button, CircleShape)
+                .focusGlow(Colors.Text, spread = 14.dp) { glowStrength * 0.7f }
                 .onFocusChanged {
                     focused = it.isFocused
                     if (it.isFocused) Sounds.navigate()
@@ -372,7 +376,7 @@ fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Un
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Image(icon, label, Modifier.size(34.dp), colorFilter = ColorFilter.tint(tint))
+            Image(icon, label, Modifier.size(38.dp), colorFilter = ColorFilter.tint(tint))
         }
         Spacer(Modifier.height(8.dp))
         T(

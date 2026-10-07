@@ -378,7 +378,9 @@ fun ChannelRow(channel: TvChannel, startPad: Dp) {
                 val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return@drawBehind
                 val w = CARD_W_DP.dp.toPx()
                 val h = CARD_H_DP.dp.toPx()
-                val center = Offset(info.offset + w / 2f, CARD_TOP.toPx() + h / 2f)
+                // Item offsets count from the content's start: add the start padding back.
+                val x = info.offset - listState.layoutInfo.viewportStartOffset
+                val center = Offset(x + w / 2f, CARD_TOP.toPx() + h / 2f)
                 drawFocusGlow(glowColor, glowStrength * 0.7f, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
             },
             contentPadding = PaddingValues(start = startPad, end = 60.dp, top = CARD_TOP, bottom = 8.dp),

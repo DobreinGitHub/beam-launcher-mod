@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.SettingsSuggest
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -200,15 +199,17 @@ private fun TopBar(onOpenAll: () -> Unit, onOpenPanel: () -> Unit) {
     }
 }
 
-/** The round shortcut buttons in the top bar. */
+/**
+ * The shortcut buttons in the top bar: all apps, XGIMI's quick settings (its full settings are
+ * one step from there) and Beam's panel.
+ */
 @Composable
 internal fun ActionButtons(onOpenAll: () -> Unit, onOpenPanel: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    Row(horizontalArrangement = Arrangement.spacedBy(22.dp), modifier = modifier) {
-        RoundButton(Icons.Rounded.Apps, Color(0xFF1E88E5), tr(R.string.all_apps), onOpenAll)
-        RoundButton(Icons.Rounded.Tune, Color(0xFF2EB85C), tr(R.string.quick_settings)) { context.openQuickPanel() }
-        RoundButton(Icons.Rounded.Settings, Color(0xFF8A8A8A), tr(R.string.settings)) { context.openSettings() }
-        RoundButton(Icons.Rounded.SettingsSuggest, Color(0xFF8E44AD), tr(R.string.beam_settings), onOpenPanel)
+    Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = modifier) {
+        TopButton(Icons.Rounded.Apps, tr(R.string.all_apps), onOpenAll)
+        TopButton(Icons.Rounded.Settings, tr(R.string.xgimi_settings)) { context.openQuickPanel() }
+        TopButton(Icons.Rounded.Tune, tr(R.string.beam_settings), onOpenPanel)
     }
 }
 
