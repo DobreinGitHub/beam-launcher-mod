@@ -9,8 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.EnterTransition
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.basicMarquee
@@ -112,7 +111,7 @@ private enum class PanelPage(@StringRes val titleRes: Int) {
     val title: String get() = tr(titleRes)
 }
 
-/** Our quick settings, styled after the Google TV panel; slides in from the right. */
+/** Our quick settings, styled after the Google TV panel, on the right; no slide-in, like XGIMI's. */
 @Composable
 fun SettingsPanel(onDismiss: () -> Unit) {
     Dialog(
@@ -198,7 +197,8 @@ fun PanelScreen(onDismiss: () -> Unit) {
     ) {
         AnimatedVisibility(
             visibleState = shown,
-            enter = slideInHorizontally(tween(220)) { it } + fadeIn(tween(220)),
+            // Appears at once, like XGIMI's own quick panel.
+            enter = EnterTransition.None,
         ) {
             Column(
                 Modifier
