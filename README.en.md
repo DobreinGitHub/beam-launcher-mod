@@ -31,7 +31,7 @@ settings start over.
 
 ## What it does
 
-- **Home screen**: a row of app tiles ordered by how often you use them, plus HDMI and USB drive
+- **Home screen**: a row of app tiles in the order you set, plus HDMI and USB drive
   tiles. Below it a second row with other apps' channels (SmartTube subscriptions, recent Spotify,
   "Continue watching"). Also a "Now playing" widget and the projector's battery level.
 - **Quick settings panel** over any app, opened with the remote's voice button: picture, sound,
@@ -49,15 +49,15 @@ The screenshots show the Russian interface.
 
 | Home screen | Quick settings panel |
 |---|---|
-| ![Home screen](docs/screenshots/home.webp) | ![Quick settings panel](docs/screenshots/panel.webp) |
+| ![Home screen](docs/screenshots/home.jpg) | ![Quick settings panel](docs/screenshots/panel.jpg) |
 
 | Picture | Sound |
 |---|---|
-| ![Picture](docs/screenshots/picture.webp) | ![Sound](docs/screenshots/sound.webp) |
+| ![Picture](docs/screenshots/picture.jpg) | ![Sound](docs/screenshots/sound.jpg) |
 
 | Keystone and size | On-screen keystone setup |
 |---|---|
-| ![Keystone and size](docs/screenshots/keystone.webp) | ![On-screen keystone setup](docs/screenshots/keystone-screen.webp) |
+| ![Keystone and size](docs/screenshots/keystone.jpg) | ![On-screen keystone setup](docs/screenshots/keystone-screen.webp) |
 
 ## Installation
 
