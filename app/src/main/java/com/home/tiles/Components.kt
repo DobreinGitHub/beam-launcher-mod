@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.runtime.Composable
@@ -333,6 +334,41 @@ fun Clock(size: TextUnit = 36.sp) {
         }
     }
     T(time, size, weight = FontWeight.Light)
+}
+
+/**
+ * A key in the status cluster while a VPN is up (Happ, Amnezia...), with the gap after it;
+ * nothing otherwise. Only VPNs that carry Beam's own traffic are visible to it, i.e. the usual
+ * whole-device ones.
+ */
+@Composable
+fun VpnIcon() {
+    val context = LocalContext.current
+    val active by produceState(initialValue = false) {
+        val cm = context.getSystemService(ConnectivityManager::class.java)
+        val request = android.net.NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
+        val up = java.util.Collections.synchronizedSet(mutableSetOf<Network>())
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                up += network
+                value = true
+            }
+
+            override fun onLost(network: Network) {
+                up -= network
+                value = up.isNotEmpty()
+            }
+        }
+        cm.registerNetworkCallback(request, callback)
+        awaitDispose { cm.unregisterNetworkCallback(callback) }
+    }
+    if (active) {
+        Image(Icons.Rounded.VpnKey, null, Modifier.size(StatusIconSize), colorFilter = ColorFilter.tint(Colors.Text))
+        Spacer(Modifier.width(StatusGap))
+    }
 }
 
 @Composable

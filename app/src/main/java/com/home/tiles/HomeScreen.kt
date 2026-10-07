@@ -174,6 +174,7 @@ private fun TopBar(onOpenAll: () -> Unit, onOpenPanel: () -> Unit) {
             // Clock, network and battery share one text size, icon height and spacing.
             Clock(StatusTextSize)
             Spacer(Modifier.width(StatusGap))
+            VpnIcon()
             NetworkIcon()
             Spacer(Modifier.width(StatusGap))
             BatteryIndicator()
