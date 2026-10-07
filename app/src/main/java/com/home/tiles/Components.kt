@@ -4,8 +4,14 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.view.KeyEvent as AndroidKeyEvent
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -189,6 +195,39 @@ fun Modifier.dpadClick(
 @Composable
 fun rememberArt(repo: AppRepository, entry: AppEntry): State<TileArt?> =
     produceState(repo.cachedArt(entry), entry.pkg, entry.updated) { value = repo.loadArt(entry) }
+
+/**
+ * A soft pulse for placeholders while their content loads, so the launcher fills in calmly
+ * instead of popping. Drawn behind the content; the pulse is read in the draw phase only.
+ */
+@Composable
+fun Modifier.skeleton(shape: Shape): Modifier {
+    val pulse = rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0.08f,
+        targetValue = 0.18f,
+        animationSpec = infiniteRepeatable(tween(850), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val base = Colors.TextDim
+    return drawBehind { drawOutline(shape.createOutline(size, layoutDirection, this), base.copy(alpha = pulse.value)) }
+}
+
+/** A tile-sized placeholder for the row before the apps are known. */
+@Composable
+fun SkeletonTile(width: Dp) {
+    val height = tileHeight(width)
+    Box(Modifier.size(width, height).skeleton(RoundedCornerShape(tileCorner(height))))
+}
+
+/** An app's tile picture, a placeholder until it has loaded (the letter only if it can't). */
+@Composable
+fun AppTileArt(repo: AppRepository, entry: AppEntry) {
+    val cached = repo.cachedArt(entry)
+    val loaded by produceState(cached to (cached != null), entry.pkg, entry.updated) {
+        value = repo.loadArt(entry) to true
+    }
+    if (loaded.second) AppArt(loaded.first, entry.label) else Box(Modifier.fillMaxSize().skeleton(RectangleShape))
+}
 
 /** Tiles are 16:9, the shape of Android TV app banners, so a banner fills its tile exactly. */
 fun tileHeight(width: Dp) = width * 9f / 16f

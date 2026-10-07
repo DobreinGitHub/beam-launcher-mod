@@ -47,7 +47,7 @@ internal sealed class RowItem(val key: String, val title: String, val subtitle: 
 @Composable
 fun HomeScreen(
     repo: AppRepository,
-    apps: List<AppEntry>,
+    loadedApps: List<AppEntry>?,
     resumeTick: Int,
     onOpenAll: () -> Unit,
     onOpenPanel: () -> Unit,
@@ -55,8 +55,16 @@ fun HomeScreen(
     onChanged: () -> Unit,
 ) {
     val context = LocalContext.current
+    val apps = loadedApps.orEmpty()
     val channels by rememberTvChannels(resumeTick)
-    val channelRows = pickChannelRows(channels, LauncherSettings.secondRow)
+    val channelRows = pickChannelRows(channels.orEmpty(), LauncherSettings.secondRow)
+    // Until the channels are read, the chosen rows' places are held by placeholders, so the
+    // apps row doesn't jump when they arrive.
+    val placeholderRows = if (channels != null) 0 else when (LauncherSettings.secondRow) {
+        SECOND_ROW_OFF -> 0
+        SECOND_ROW_AUTO -> 1
+        else -> channelRowKeys(LauncherSettings.secondRow).size
+    }
     LaunchedEffect(resumeTick) { context.requestChannelRefresh() }
     val drives by rememberUsbDrives()
     val hdmi by rememberLiveHdmi()
@@ -65,9 +73,10 @@ fun HomeScreen(
         if (LauncherSettings.hdmiTile) hdmi.forEach { add(RowItem.Hdmi(it)) }
         apps.filter { !it.hidden }.forEach { add(RowItem.App(it)) }
     }
-    // The order set with "Move"; "All apps" always closes the row.
+    // The order set with "Move"; "All apps" always closes the row. Before the apps are read the
+    // row is placeholders (see ClassicHome).
     val byKey = rowItems.associateBy { it.key }
-    val items = repo.arrange(rowItems.map { it.key }).mapNotNull { byKey[it] } + RowItem.All(apps.size)
+    val items = if (loadedApps == null) emptyList() else repo.arrange(rowItems.map { it.key }).mapNotNull { byKey[it] } + RowItem.All(apps.size)
     val keys = items.map { it.key }
 
     // Move mode: the tile being moved and the order to go back to if it's cancelled.
@@ -122,11 +131,12 @@ fun HomeScreen(
 
     Column(Modifier.fillMaxSize()) {
         // With a channel row below there is no spare height to lift into.
-        val lift = if (channelRows.isNotEmpty()) 0.dp else RowLift
+        val lift = if (channelRows.isNotEmpty() || placeholderRows > 0) 0.dp else RowLift
         TopBar(onOpenAll, onOpenPanel)
         // The Switch layout: equal tiles in a normally scrolling row.
         ClassicHome(
-            repo, items, resumeTick, channelRows, Modifier.weight(1f).padding(bottom = lift), ::clickFor, ::longClickFor,
+            repo, items, loadedApps != null, resumeTick, channelRows, placeholderRows,
+            Modifier.weight(1f).padding(bottom = lift), ::clickFor, ::longClickFor,
             MoveControl(moving, ::moveStep, ::moveDone, ::moveCancel),
         )
     }
@@ -145,10 +155,7 @@ private const val ALL_KEY = "__all__"
 @Composable
 internal fun RowItemArt(repo: AppRepository, item: RowItem) {
     when (item) {
-        is RowItem.App -> {
-            val art by rememberArt(repo, item.entry)
-            AppArt(art, item.entry.label)
-        }
+        is RowItem.App -> AppTileArt(repo, item.entry)
         is RowItem.Usb -> UsbArt()
         is RowItem.Hdmi -> HdmiArt()
         is RowItem.All -> AllAppsArt()

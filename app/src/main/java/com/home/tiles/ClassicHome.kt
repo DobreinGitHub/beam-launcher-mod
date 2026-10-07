@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -64,8 +65,12 @@ private const val MoveSlideMs = 160
 internal fun ClassicHome(
     repo: AppRepository,
     items: List<RowItem>,
+    /** False until the apps are read: the row shows placeholder tiles meanwhile. */
+    appsLoaded: Boolean,
     resumeTick: Int,
     channelRows: List<TvChannel>,
+    /** Channel rows still being read, held as placeholders. */
+    placeholderRows: Int,
     modifier: Modifier,
     clickFor: (RowItem) -> () -> Unit,
     longClickFor: (RowItem) -> () -> Unit,
@@ -73,7 +78,7 @@ internal fun ClassicHome(
 ) {
     val listState = rememberLazyListState()
     val pageScroll = rememberScrollState()
-    val scrolls = channelRows.size > 1
+    val scrolls = channelRows.size + placeholderRows > 1
     val first = remember { FocusRequester() }
     val movingFocus = remember { FocusRequester() }
     var focusedKey by remember { mutableStateOf<String?>(null) }
@@ -141,6 +146,16 @@ internal fun ClassicHome(
                 contentPadding = PaddingValues(start = ClassicPad, end = ClassicPad, top = 8.dp, bottom = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(ClassicGap),
             ) {
+                // Before the apps are read: placeholder tiles where the row will be (under the
+                // same 40dp as the name above a selected tile), so it fills in instead of popping.
+                if (!appsLoaded) {
+                    items(5) {
+                        Column {
+                            Spacer(Modifier.height(40.dp))
+                            SkeletonTile(tile)
+                        }
+                    }
+                }
                 itemsIndexed(items, key = { _, item -> item.key }) { i, item ->
                     val focused = focusedKey == item.key
                     val moving = move.key == item.key
@@ -183,6 +198,10 @@ internal fun ClassicHome(
                 // A clear gap between the apps and the first channel, a smaller one between channels.
                 Spacer(Modifier.height(if (i == 0) 32.dp else 18.dp))
                 ChannelRow(channel, ClassicPad)
+            }
+            repeat(placeholderRows) { i ->
+                Spacer(Modifier.height(if (i == 0 && channelRows.isEmpty()) 32.dp else 18.dp))
+                ChannelRowSkeleton(ClassicPad)
             }
             if (scrolls) Spacer(Modifier.height(40.dp))
         }

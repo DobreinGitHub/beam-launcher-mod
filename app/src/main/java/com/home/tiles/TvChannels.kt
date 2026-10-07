@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -84,12 +85,19 @@ const val SECOND_ROW_AUTO = "auto"
 
 private const val MAX_ITEMS = 20
 
-/** Reloads when the TV provider changes and whenever [refreshKey] changes (e.g. coming back home). */
+/** The channels as last read, so coming back home doesn't flash the placeholders again. */
+@Volatile
+private var lastChannels: List<TvChannel>? = null
+
+/**
+ * Reloads when the TV provider changes and whenever [refreshKey] changes (e.g. coming back home).
+ * Null until the first load, so the home screen can hold the rows' places meanwhile.
+ */
 @Composable
-fun rememberTvChannels(refreshKey: Any): State<List<TvChannel>> {
+fun rememberTvChannels(refreshKey: Any): State<List<TvChannel>?> {
     val context = LocalContext.current
-    return produceState(emptyList(), refreshKey) {
-        suspend fun load() { value = withContext(Dispatchers.IO) { queryTvChannels(context) } }
+    return produceState<List<TvChannel>?>(lastChannels, refreshKey) {
+        suspend fun load() { value = withContext(Dispatchers.IO) { queryTvChannels(context) }.also { lastChannels = it } }
         load()
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
@@ -330,6 +338,21 @@ fun ChannelRow(channel: TvChannel, startPad: Dp) {
             items(channel.items, key = { it.key }) { item ->
                 TvCard(item) { context.openTvItem(item) }
             }
+        }
+    }
+}
+
+/** A channel row's place while the channels are being read: a title bar and a run of cards. */
+@Composable
+fun ChannelRowSkeleton(startPad: Dp) {
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.padding(start = startPad).size(240.dp, 20.dp).skeleton(RoundedCornerShape(6.dp)))
+        Spacer(Modifier.height(10.dp))
+        Row(
+            Modifier.padding(start = startPad, top = 8.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            repeat(6) { Box(Modifier.size(208.dp, 117.dp).skeleton(RoundedCornerShape(12.dp))) }
         }
     }
 }

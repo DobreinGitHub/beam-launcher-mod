@@ -126,7 +126,7 @@ private fun AboutRow(label: String, value: String) {
 }
 
 private const val BEAM_REPO = "github.com/tonisaf/beam-launcher"
-private const val BUILD_REPO = "github.com/DobreinGitHub/beam-launcher"
+private const val BUILD_REPO = "github.com/DobreinGitHub/beam-launcher-mod"
 
 /** Table, ceiling or automatic mounting, rear projection, and a fine tilt of the picture. */
 @Composable

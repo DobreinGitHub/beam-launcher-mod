@@ -74,7 +74,7 @@ as the computer. About 15 minutes.
   Unzip it into `C:\adb`.
 - **Beam**: *Code* → *Download ZIP* on this page. Unzip it, for example into `C:\beam`. You don't need
   to download the Beam APK: the script fetches Beam and the remote button stubs from the latest
-  [release](https://github.com/DobreinGitHub/beam-launcher/releases) and verifies them against
+  [release](https://github.com/DobreinGitHub/beam-launcher-mod/releases) and verifies them against
   `SHA256SUMS.txt` (the computer needs internet access).
 - **The LeanKey keyboard (required):** the script disables the Chinese Sogou keyboard, and without a
   replacement there would be nothing to type with. Download
@@ -179,7 +179,7 @@ panel. The four app buttons on the remote are assigned in the panel: "Remote but
 - **"Running scripts is disabled":** run it with `-ExecutionPolicy Bypass`, as in step 6.
 - **The script can't find adb:** check the path in `-Adb`.
 - **The script can't download the APKs:** check the internet connection. You can put the APKs from the
-  [release](https://github.com/DobreinGitHub/beam-launcher/releases/latest) into `tools\apks\` by hand.
+  [release](https://github.com/DobreinGitHub/beam-launcher-mod/releases/latest) into `tools\apks\` by hand.
 
 ### What `restore.ps1` changes
 

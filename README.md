@@ -81,7 +81,7 @@
   Распакуйте в `C:\adb`.
 - **Beam**: *Code* → *Download ZIP* на этой странице. Распакуйте, например, в `C:\beam`. APK Beam
   скачивать не нужно: скрипт сам возьмёт Beam и заглушки кнопок пульта из последнего
-  [релиза](https://github.com/DobreinGitHub/beam-launcher/releases) и проверит их по `SHA256SUMS.txt`
+  [релиза](https://github.com/DobreinGitHub/beam-launcher-mod/releases) и проверит их по `SHA256SUMS.txt`
   (нужен интернет на компьютере).
 - **Клавиатура LeanKey (обязательно):** скрипт отключает китайскую клавиатуру Sogou, и без замены
   вводить текст будет нечем. Скачайте
@@ -186,7 +186,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.5
 - **«Выполнение сценариев отключено»:** запускайте командой с `-ExecutionPolicy Bypass`, как в шаге 6.
 - **Скрипт не находит adb:** проверьте путь в `-Adb`.
 - **Скрипт не может скачать APK:** проверьте интернет. Можно положить APK из
-  [релиза](https://github.com/DobreinGitHub/beam-launcher/releases/latest) в `tools\apks\` вручную.
+  [релиза](https://github.com/DobreinGitHub/beam-launcher-mod/releases/latest) в `tools\apks\` вручную.
 
 ### Что меняет `restore.ps1`
 

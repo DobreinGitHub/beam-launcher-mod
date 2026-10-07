@@ -217,7 +217,7 @@ if ($Revert) {
 Write-Host "`n1. Установка приложений" -ForegroundColor Cyan
 $apkDir = Join-Path $PSScriptRoot "apks"
 # This build's releases (the original Beam is tonisaf/beam-launcher).
-$releaseRepo = "DobreinGitHub/beam-launcher"
+$releaseRepo = "DobreinGitHub/beam-launcher-mod"
 
 # Downloads the named files of a GitHub release into $apkDir, each checked against the release's
 # SHA256SUMS.txt (a file that is not listed there, or does not match, is thrown away).

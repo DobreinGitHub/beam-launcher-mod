@@ -27,7 +27,8 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var repo: AppRepository
-    private val apps = mutableStateOf<List<AppEntry>>(emptyList())
+    /** Null until the first load: the row shows placeholders instead of a lone "All apps" tile. */
+    private val apps = mutableStateOf<List<AppEntry>?>(null)
     private val resumeTick = mutableIntStateOf(0)
 
     private val packageReceiver = object : BroadcastReceiver() {
@@ -107,7 +108,7 @@ private enum class Screen { Home, AllApps }
 @Composable
 private fun LauncherApp(
     repo: AppRepository,
-    apps: List<AppEntry>,
+    apps: List<AppEntry>?,
     resumeTick: Int,
     panelRequest: Int,
     onChanged: () -> Unit,
@@ -134,7 +135,7 @@ private fun LauncherApp(
                 onChanged = onChanged,
             )
             Screen.AllApps -> AllAppsScreen(
-                repo, apps,
+                repo, apps.orEmpty(),
                 onBack = { screen = Screen.Home },
                 // All apps is sorted by name, so its menu has no "Move".
                 onOptions = { menu = appMenu(context, repo, it, onChanged, onMove = null) },

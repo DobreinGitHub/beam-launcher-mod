@@ -67,7 +67,6 @@ fun AllAppsScreen(
             verticalArrangement = Arrangement.spacedBy(30.dp),
         ) {
             itemsIndexed(sorted, key = { _, e -> e.pkg }) { i, entry ->
-                val art by rememberArt(repo, entry)
                 val focused = focusedKey == entry.pkg
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Tile(
@@ -79,7 +78,7 @@ fun AllAppsScreen(
                             .onFocusChanged { if (it.isFocused) focusedKey = entry.pkg },
                         onClick = { context.launchApp(entry) },
                         onLongClick = { onOptions(entry) },
-                    ) { AppArt(art, entry.label) }
+                    ) { AppTileArt(repo, entry) }
                     Spacer(Modifier.height(12.dp))
                     T(
                         entry.label,
