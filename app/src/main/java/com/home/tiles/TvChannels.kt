@@ -365,29 +365,30 @@ fun ChannelRow(channel: TvChannel, startPad: Dp) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
     var focusedKey by remember { mutableStateOf<String?>(null) }
-    // Neutral light (posters are many-coloured), behind the whole row like the apps row's.
-    val glowStrength by animateFloatAsState(if (focusedKey != null) 1f else 0f, tween(200), label = "glow")
-    val glowColor = Colors.Text
+    // Neutral lights (posters are many-coloured), behind the whole row like the apps row's.
+    val glows = rememberTileGlows()
     Column(Modifier.fillMaxWidth()) {
         T(channel.name, 20.sp, Modifier.padding(start = startPad), color = Colors.TextDim)
         Spacer(Modifier.height(10.dp))
         LazyRow(
             state = listState,
             modifier = Modifier.drawBehind {
-                val key = focusedKey ?: return@drawBehind
-                val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return@drawBehind
                 val w = CARD_W_DP.dp.toPx()
                 val h = CARD_H_DP.dp.toPx()
-                // Item offsets count from the content's start: add the start padding back.
-                val x = info.offset - listState.layoutInfo.viewportStartOffset
-                val center = Offset(x + w / 2f, CARD_TOP.toPx() + h / 2f)
-                drawFocusGlow(glowColor, glowStrength * 0.7f, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
+                for (info in listState.layoutInfo.visibleItemsInfo) {
+                    val glow = glows[info.key] ?: continue
+                    // Item offsets count from the content's start: add the start padding back.
+                    val x = info.offset - listState.layoutInfo.viewportStartOffset
+                    val center = Offset(x + w / 2f, CARD_TOP.toPx() + h / 2f)
+                    drawFocusGlow(glow.color.value, glow.level.value * 0.7f, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
+                }
             },
             contentPadding = PaddingValues(start = startPad, end = 60.dp, top = CARD_TOP, bottom = 8.dp),
             // Room for a selected card, grown by FOCUS_SCALE, to stay clear of its neighbours.
             horizontalArrangement = Arrangement.spacedBy(CARD_GAP),
         ) {
             items(channel.items, key = { it.key }) { item ->
+                RegisterTileGlow(glows, item.key, focusedKey == item.key, Colors.Text)
                 TvCard(
                     item,
                     onFocus = { on -> if (on) focusedKey = item.key else if (focusedKey == item.key) focusedKey = null },

@@ -15,7 +15,8 @@ import android.util.Log
 class AdbCommandReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         LauncherSettings.init(context)
-        // Appearance, for testing without the remote: --es background XMB, --ez bg_animation false
+        // Appearance, for testing without the remote: --es background XMB, --ez bg_animation false,
+        // --ez ambient_tint false
         intent.getStringExtra("background")?.let { name ->
             val index = Backgrounds.indexOfFirst { it.name.equals(name, ignoreCase = true) }
             if (index >= 0) LauncherSettings.background = index
@@ -23,6 +24,10 @@ class AdbCommandReceiver : BroadcastReceiver() {
         }
         if (intent.hasExtra("bg_animation")) {
             LauncherSettings.bgAnimation = intent.getBooleanExtra("bg_animation", true)
+            resultData = "ok"
+        }
+        if (intent.hasExtra("ambient_tint")) {
+            LauncherSettings.ambientTint = intent.getBooleanExtra("ambient_tint", true)
             resultData = "ok"
         }
         // Light-source brightness: --ez lumens true reads it, --ei lumens_level N sets it (0..10).

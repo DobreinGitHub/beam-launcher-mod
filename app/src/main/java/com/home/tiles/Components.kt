@@ -45,8 +45,11 @@ import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -145,6 +148,30 @@ fun DrawScope.drawFocusGlow(color: Color, strength: Float, center: Offset, halfW
             radius = ry,
             center = center,
         )
+    }
+}
+
+/**
+ * One tile's light, which its row draws behind all the tiles. It fades in and out with the
+ * tile's growth, so moving the selection crossfades from one tile to the next, each in its own
+ * colour (one light carried over would arrive in the previous tile's colour and blend: a flicker).
+ */
+class TileGlow(val level: State<Float>, val color: State<Color>, val target: State<Color>)
+
+/** A row's tile lights by item key. Snapshot state, so the row redraws as tiles come and go. */
+@Composable
+fun rememberTileGlows(): MutableMap<Any, TileGlow> = remember { mutableStateMapOf() }
+
+/** Puts this tile's light in [glows]: lit while [lit], in [color]. */
+@Composable
+fun RegisterTileGlow(glows: MutableMap<Any, TileGlow>, key: Any, lit: Boolean, color: Color) {
+    // As long as the tile takes to grow (see Tile).
+    val level = animateFloatAsState(if (lit) 1f else 0f, tween(150), label = "glow")
+    val animated = animateColorAsState(color, tween(250), label = "glow")
+    val target = rememberUpdatedState(color)
+    DisposableEffect(glows, key) {
+        glows[key] = TileGlow(level, animated, target)
+        onDispose { glows.remove(key) }
     }
 }
 

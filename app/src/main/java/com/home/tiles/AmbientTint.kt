@@ -9,12 +9,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.IntSize
 
 /**
  * The colour the home screen's background leans towards: the selected app's, set by the apps
@@ -46,27 +54,47 @@ fun AmbientWash() {
     if (target != null) last[0] = target
     val color by animateColorAsState(last[0], tween(500), label = "ambient")
     val strength by animateFloatAsState(if (target != null) 1f else 0f, tween(500), label = "ambient")
+    val mask = remember { washMask() }
     Box(
         Modifier.fillMaxSize().drawBehind {
             if (strength <= 0f) return@drawBehind
-            val alpha = strength * if (LauncherSettings.dark) 0.14f else 0.10f
-            val center = Offset(size.width * 0.35f, size.height * 0.32f)
-            val radius = size.width * 0.7f
-            // A circle flattened into a wide oval: reaches the screen's sides, not its bottom.
-            scale(scaleX = 1f, scaleY = 0.6f, pivot = center) {
-                drawCircle(
-                    Brush.radialGradient(
-                        0f to color.copy(alpha = alpha),
-                        0.45f to color.copy(alpha = alpha * 0.6f),
-                        0.8f to color.copy(alpha = alpha * 0.15f),
-                        1f to Color.Transparent,
-                        center = center,
-                        radius = radius,
-                    ),
-                    radius = radius,
-                    center = center,
-                )
-            }
+            // The shape is a small picture made once, stretched over the screen and coloured as
+            // it is drawn: a full-screen gradient worked out per pixel every frame was too much
+            // for the projector's GPU (frames took twice as long).
+            drawImage(
+                mask,
+                dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+                alpha = strength * if (LauncherSettings.dark) 0.14f else 0.10f,
+                colorFilter = ColorFilter.tint(color, BlendMode.SrcIn),
+                filterQuality = FilterQuality.Low,
+            )
         },
     )
+}
+
+/**
+ * The wash's shape, at a tenth of the screen's size (smooth enough to stretch): a soft oval,
+ * strongest a third of the way across and down, reaching the screen's sides but not its bottom.
+ */
+private fun washMask(): ImageBitmap {
+    val w = 192
+    val h = 108
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val cx = w * 0.35f
+    val cy = h * 0.32f
+    val radius = w * 0.7f
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(
+            cx, cy, radius,
+            intArrayOf(0xFFFFFFFF.toInt(), 0x99FFFFFF.toInt(), 0x26FFFFFF, 0x00FFFFFF),
+            floatArrayOf(0f, 0.45f, 0.8f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+    }
+    Canvas(bitmap).apply {
+        // A circle flattened into a wide oval.
+        scale(1f, 0.6f, cx, cy)
+        drawCircle(cx, cy, radius, paint)
+    }
+    return bitmap.asImageBitmap()
 }

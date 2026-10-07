@@ -1,9 +1,7 @@
 package com.home.tiles
 
 import android.view.KeyEvent as AndroidKeyEvent
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.core.Spring
@@ -92,22 +90,11 @@ internal fun ClassicHome(
     val first = remember { FocusRequester() }
     val movingFocus = remember { FocusRequester() }
     var focusedKey by remember { mutableStateOf<String?>(null) }
-    // The selected tile's light: its app's colour, blending over as the selection moves, and
-    // fading out when the selection leaves the row.
-    val focusedItem = items.firstOrNull { it.key == focusedKey }
-    // Usually already known (the tile's picture is cached); otherwise once the picture has loaded.
-    val glowTarget by produceState(focusedItem?.let { glowFor(repo, it) } ?: Colors.Text, focusedItem?.key) {
-        value = when (val item = focusedItem) {
-            null -> Colors.Text
-            is RowItem.App -> repo.loadArt(item.entry)?.glow ?: Colors.Text
-            else -> glowFor(repo, item)
-        }
-    }
-    val glowColor by animateColorAsState(glowTarget, tween(250), label = "glow")
-    val glowStrength by animateFloatAsState(if (focusedItem != null) 1f else 0f, tween(200), label = "glow")
-    // The background leans towards the same colour; it fades back when the selection leaves the
-    // row or the home screen closes.
-    val tint = AmbientTint.of(focusedItem?.let { glowTarget })
+    // Each tile's light, in its app's colour (see TileGlow).
+    val glows = rememberTileGlows()
+    // The background leans towards the selected tile's colour; it fades back when the selection
+    // leaves the row or the home screen closes.
+    val tint = AmbientTint.of(focusedKey?.let { glows[it] }?.target?.value)
     SideEffect { AmbientTint.target.value = tint }
     DisposableEffect(Unit) { onDispose { AmbientTint.target.value = null } }
 
@@ -171,18 +158,19 @@ internal fun ClassicHome(
         CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec) {
             LazyRow(
                 state = listState,
-                // The selected tile's light, behind the whole row so the neighbours stay on top of
-                // it; it follows the tile as the row scrolls (read at draw time).
+                // The tiles' lights, behind the whole row so the neighbours stay on top of them;
+                // they follow the tiles as the row scrolls (read at draw time).
                 modifier = Modifier.drawBehind {
-                    val key = focusedKey ?: return@drawBehind
-                    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return@drawBehind
                     val w = tile.toPx()
                     val h = tileHeight(tile).toPx()
-                    val s = if (move.key == key) FOCUS_SCALE_LIFTED else FOCUS_SCALE
-                    // Item offsets count from the content's start: add the start padding back.
-                    val x = info.offset - listState.layoutInfo.viewportStartOffset
-                    val center = Offset(x + w / 2f, (RowTop + NameHeight).toPx() + h / 2f)
-                    drawFocusGlow(glowColor, glowStrength, center, w * s / 2f, h * s / 2f, FocusGlowSpread.toPx())
+                    for (info in listState.layoutInfo.visibleItemsInfo) {
+                        val glow = glows[info.key] ?: continue
+                        val s = if (move.key == info.key) FOCUS_SCALE_LIFTED else FOCUS_SCALE
+                        // Item offsets count from the content's start: add the start padding back.
+                        val x = info.offset - listState.layoutInfo.viewportStartOffset
+                        val center = Offset(x + w / 2f, (RowTop + NameHeight).toPx() + h / 2f)
+                        drawFocusGlow(glow.color.value, glow.level.value, center, w * s / 2f, h * s / 2f, FocusGlowSpread.toPx())
+                    }
                 },
                 contentPadding = PaddingValues(start = ClassicPad, end = ClassicPad, top = RowTop, bottom = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(ClassicGap),
@@ -200,6 +188,11 @@ internal fun ClassicHome(
                 itemsIndexed(items, key = { _, item -> item.key }) { i, item ->
                     val focused = focusedKey == item.key
                     val moving = move.key == item.key
+                    // Usually known at once (the tile's picture is cached), else once it has loaded.
+                    val glowColor by produceState(glowFor(repo, item), item.key) {
+                        if (item is RowItem.App) repo.loadArt(item.entry)?.glow?.let { value = it }
+                    }
+                    RegisterTileGlow(glows, item.key, focused || moving, glowColor)
                     Column(
                         Modifier
                             // Tiles slide to their new places when the order changes; the moved

@@ -31,9 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.draw.drawBehind
@@ -71,26 +68,22 @@ fun AllAppsScreen(
             Clock(30.sp)
         }
         Spacer(Modifier.height(18.dp))
-        // The selected tile's light, behind the whole grid like on the home row.
-        val focusedEntry = sorted.firstOrNull { it.pkg == focusedKey }
-        val glowTarget by produceState(focusedEntry?.let { repo.cachedArt(it)?.glow } ?: Colors.Text, focusedKey) {
-            value = focusedEntry?.let { repo.loadArt(it)?.glow } ?: Colors.Text
-        }
-        val glowColor by animateColorAsState(glowTarget, tween(250), label = "glow")
-        val glowStrength by animateFloatAsState(if (focusedEntry != null) 1f else 0f, tween(200), label = "glow")
+        // The tiles' lights, behind the whole grid like on the home row.
+        val glows = rememberTileGlows()
         LazyVerticalGrid(
             state = gridState,
             modifier = Modifier.drawBehind {
-                val key = focusedKey ?: return@drawBehind
-                val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return@drawBehind
                 val w = TileWidth.toPx()
                 val h = tileHeight(TileWidth).toPx()
-                // Item offsets count from the content's start: add the paddings back.
-                val center = Offset(
-                    info.offset.x + GridPad.toPx() + info.size.width / 2f,
-                    info.offset.y - gridState.layoutInfo.viewportStartOffset + h / 2f,
-                )
-                drawFocusGlow(glowColor, glowStrength, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
+                for (info in gridState.layoutInfo.visibleItemsInfo) {
+                    val glow = glows[info.key] ?: continue
+                    // Item offsets count from the content's start: add the paddings back.
+                    val center = Offset(
+                        info.offset.x + GridPad.toPx() + info.size.width / 2f,
+                        info.offset.y - gridState.layoutInfo.viewportStartOffset + h / 2f,
+                    )
+                    drawFocusGlow(glow.color.value, glow.level.value, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
+                }
             },
             columns = GridCells.Adaptive(TileWidth),
             contentPadding = PaddingValues(GridPad, 14.dp, GridPad, 40.dp),
@@ -99,6 +92,10 @@ fun AllAppsScreen(
         ) {
             itemsIndexed(sorted, key = { _, e -> e.pkg }) { i, entry ->
                 val focused = focusedKey == entry.pkg
+                val glowColor by produceState(repo.cachedArt(entry)?.glow ?: Colors.Text, entry.pkg) {
+                    repo.loadArt(entry)?.glow?.let { value = it }
+                }
+                RegisterTileGlow(glows, entry.pkg, focused, glowColor)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Tile(
                         width = TileWidth,
