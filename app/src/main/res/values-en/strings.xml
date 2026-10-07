@@ -91,7 +91,7 @@
     <string name="color_by_month">Colour by month</string>
     <string name="background_animation">Background animation</string>
     <string name="ambient_tint">Background in app colour</string>
-    <string name="ambient_tint_hint">The background takes on a faint tint of the selected app\'s colour</string>
+    <string name="ambient_tint_hint">A faint tint of the selected app\'s colour</string>
     <string name="kst_unavailable">Keystone is unavailable</string>
     <string name="kst_on_screen">Adjust on screen</string>
     <string name="kst_auto_section">Auto correction</string>

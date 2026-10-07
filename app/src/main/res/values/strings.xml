@@ -91,7 +91,7 @@
     <string name="color_by_month">Цвет по месяцу</string>
     <string name="background_animation">Анимация фона</string>
     <string name="ambient_tint">Фон в цвет приложения</string>
-    <string name="ambient_tint_hint">Фон слегка окрашивается в цвет выбранного приложения</string>
+    <string name="ambient_tint_hint">Лёгкий оттенок цвета выбранного приложения</string>
     <string name="kst_unavailable">Трапеция недоступна</string>
     <string name="kst_on_screen">Настроить на экране</string>
     <string name="kst_auto_section">Автокоррекция</string>

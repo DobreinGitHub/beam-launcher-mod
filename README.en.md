@@ -19,11 +19,58 @@ refuses English as a system language. Voice commands are Russian only.
 
 A modification of Beam by **Dobrein**, based on the original
 [tonisaf/beam-launcher](https://github.com/tonisaf/beam-launcher) by tonisaf (version and credits:
-panel → "About Beam"). Differences: tiles are ordered by hand ("Move" in the OK-hold menu, no
-automatic sorting), the OK-hold menu no longer opens the app on release, 16:9 tiles, several
-channel rows with Google TV style paging, posters load behind a VPN, charging state / time left /
-low-battery warnings / VPN icon in the status bar, and a panel matched to XGIMI's (scrim, opens at
-once and complete, silent), with a screensaver choice and an "About Beam" page.
+panel → "About Beam"). What's changed compared to Beam 0.3:
+
+**Home screen**
+
+- **Google TV style selection**: the selected tile grows a little, with a soft light behind it in
+  the app's colour (red for YouTube, orange for Kinopoisk). Moving the selection crossfades the
+  light from tile to tile. The cyan frame and cyan captions are gone.
+- **Background in the app's colour**: the background takes on a faint tint of the selected app's
+  colour. Can be turned off in Appearance.
+- **Tiles are ordered by hand**: hold OK → "Move", ◀ ▶ move the tile, OK to finish, Back to cancel.
+  Tiles slide into place and the row scrolls along. No automatic sorting by usage, like Google TV;
+  new apps go to the end. The HDMI and USB tiles can be moved and hidden too.
+- **OK-hold menu**: Open · Move · Hide from home · Uninstall. Releasing OK no longer opens the app
+  (in All apps either).
+- **16:9 tiles** to fit Android TV banners, with no bars at the top and bottom.
+- **Three top buttons**, without the grey circles: All apps, XGIMI settings (opens XGIMI's quick
+  settings, which lead on to all settings) and Beam settings.
+- **Several channel rows** (Beam settings → Home screen → "Channel rows") with Google TV style
+  paging between rows. VoKino and Kinopoisk posters load even with a VPN on.
+- **Smooth loading**: while the apps and channels are read, placeholders with a moving shine hold
+  their places, so the screen doesn't jump.
+- **Smoother scrolling**: posters are kept downscaled, shadows and needless redraws are gone.
+- **RuStore is no longer hidden** by default.
+
+**Status bar**
+
+- **Charging state**: charging / plugged in but draining / full.
+- **Battery time left**, and low-battery warnings at 15% and 5% over any app.
+- **A VPN icon** while a VPN is on.
+
+**Appearance**
+
+- **Six new backgrounds**: Graphite, Midnight, Burgundy, Emerald, Aurora, Sand (each with a light
+  and a dark version).
+- **A "Background in app colour" switch.**
+
+**Beam settings panel**
+
+- **Darkening like XGIMI's panel**; it opens at once and complete, with no animation and no sound.
+- **Screensaver choice**: XGIMI's or an installed one (for example Aerial Views).
+- **An "About Beam" page**: version and credits.
+
+**Installation (`restore.ps1`)**
+
+- **Replaces the original Beam by itself** (this build is signed with another key, see below).
+- **Optional**: `-AerialViews` installs the Aerial Views screensaver, `-KeepBackgroundApps` stops the
+  firmware closing background apps (VPN, music).
+
+**Fixes**
+
+- The stock XGIMI launcher could come back after the reboot right after installing.
+- The tile order could be saved differently from what was on screen.
 
 **Coming from the original Beam:** this build is signed with another key, so the install script
 replaces it (stock launcher back first, then the old Beam and its button stubs out); Beam's own
@@ -47,17 +94,17 @@ settings start over.
 
 The screenshots show the Russian interface.
 
-| Home screen | Quick settings panel |
+| Home screen | Beam settings panel |
 |---|---|
-| ![Home screen](docs/screenshots/home.jpg) | ![Quick settings panel](docs/screenshots/panel.jpg) |
+| ![Home screen](docs/screenshots/home.jpg) | ![Beam settings panel](docs/screenshots/panel.jpg) |
 
-| Picture | Sound |
+| Appearance | Moving a tile |
 |---|---|
-| ![Picture](docs/screenshots/picture.jpg) | ![Sound](docs/screenshots/sound.jpg) |
+| ![Appearance](docs/screenshots/appearance.jpg) | ![Moving a tile](docs/screenshots/move.jpg) |
 
-| Keystone and size | On-screen keystone setup |
+| All apps | OK-hold menu |
 |---|---|
-| ![Keystone and size](docs/screenshots/keystone.jpg) | ![On-screen keystone setup](docs/screenshots/keystone-screen.webp) |
+| ![All apps](docs/screenshots/all-apps.jpg) | ![OK-hold menu](docs/screenshots/menu.jpg) |
 
 ## Installation
 
@@ -216,10 +263,10 @@ Read this before running it:
 - sets the system language to Russian, the time zone to **Europe/Moscow** and the Bluetooth name to
   "XGIMI Play 6". Other values are set with `-Locale`, `-TimeZone`, `-BluetoothName` (or `LOCALE`,
   `TIMEZONE`, `BT_NAME` in `local.env`); `-SkipSystem` leaves these three settings alone. Note
+  that the firmware won't accept English as the system language; use Beam's own language setting
+  instead;
 - optionally: `-AerialViews` installs and turns on the Aerial Views screensaver, `-KeepBackgroundApps`
   stops the firmware closing background apps (`persist.xgimi.restrictbackground.enable`).
-  that the firmware won't accept English as the system language; use Beam's own language setting
-  instead.
 
 ### Rolling back
 
@@ -373,6 +420,7 @@ the way you'd expect: [docs/xgimi-firmware.en.md](docs/xgimi-firmware.en.md).
 
 ```sh
 adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es background XMB --ez bg_animation true
+adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --ez ambient_tint false   # background in app colour
 adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es bt_name "XGIMI Play 6"
 adb shell am start -n com.home.tiles/.MicTestActivity --ei seconds 6   # test the remote's microphone
 ```
