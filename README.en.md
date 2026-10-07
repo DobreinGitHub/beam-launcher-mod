@@ -23,9 +23,10 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 
 **Home screen**
 
-- **Google TV style selection**: the selected tile grows a little, with a soft light behind it in
-  the app's colour (red for YouTube, orange for Kinopoisk). Moving the selection crossfades the
-  light from tile to tile. The cyan frame and cyan captions are gone.
+- **Google TV style selection**: the selected tile grows a little and gets a white outline, with a
+  soft light behind it in the app's colour (red for YouTube, orange for Kinopoisk). Moving the
+  selection crossfades the light from tile to tile. Channel cards and All apps tiles are selected
+  the same way. The cyan frame and cyan captions are gone.
 - **Background in the app's colour**: the background takes on a faint tint of the selected app's
   colour. Can be turned off in Appearance.
 - **Tiles are ordered by hand**: hold OK → "Move", ◀ ▶ move the tile, OK to finish, Back to cancel.
@@ -34,14 +35,21 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 - **OK-hold menu**: Open · Move · Hide from home · Uninstall. Releasing OK no longer opens the app
   (in All apps either).
 - **16:9 tiles** to fit Android TV banners, with no bars at the top and bottom.
-- **Three top buttons**, without the grey circles: All apps, XGIMI settings (opens XGIMI's quick
-  settings, which lead on to all settings) and Beam settings.
+- **Three top buttons** in the quick settings style (the selected one fills blue): All apps,
+  XGIMI settings (opens XGIMI's quick settings, which lead on to all settings) and Beam settings.
 - **Several channel rows** (Beam settings → Home screen → "Channel rows") with Google TV style
   paging between rows. VoKino and Kinopoisk posters load even with a VPN on.
 - **Smooth loading**: while the apps and channels are read, placeholders with a moving shine hold
   their places, so the screen doesn't jump.
 - **Smoother scrolling**: posters are kept downscaled, shadows and needless redraws are gone.
 - **RuStore is no longer hidden** by default.
+
+**All apps**
+
+- **Apps on the home screen first, then the hidden ones**, each by name.
+- **Hidden apps carry a mark** in the tile's corner.
+- **The name shows only under the selected tile**, so the rows sit closer.
+- **The grid pages a whole row at a time**, like Google TV, and stays put on moves sideways.
 
 **Status bar**
 
