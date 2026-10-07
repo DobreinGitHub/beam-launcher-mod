@@ -44,6 +44,11 @@ internal fun AppearancePage() {
         }
     }
     if (Colors.isXmb) XmbOptions()
+    Spacer(Modifier.height(12.dp))
+    Toggle(tr(R.string.ambient_tint), LauncherSettings.ambientTint, Modifier.fillMaxWidth()) {
+        LauncherSettings.ambientTint = !LauncherSettings.ambientTint
+    }
+    T(tr(R.string.ambient_tint_hint), 14.sp, color = PanelDim)
     // Each language is named in itself, so it can be found whatever the interface is set to.
     Section(tr(R.string.language))
     PairRow {

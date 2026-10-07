@@ -123,6 +123,7 @@ private fun LauncherApp(
 
     Box(Modifier.fillMaxSize().background(Colors.backgroundBrush()).arrowSoundTracker().panelKey { panelOpen = !panelOpen }) {
         if (Colors.isXmb) XmbBackground()
+        AmbientWash()
         Box {
         when (screen) {
             Screen.Home -> HomeScreen(

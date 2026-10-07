@@ -21,6 +21,7 @@ object LauncherSettings {
     private val secondRowState = mutableStateOf(SECOND_ROW_AUTO)
     private val xmbColorState = mutableStateOf(-1)
     private val bgAnimationState = mutableStateOf(true)
+    private val ambientTintState = mutableStateOf(true)
 
     fun init(context: Context) {
         // Shared by the launcher activity and the overlay service in the same process.
@@ -36,6 +37,7 @@ object LauncherSettings {
         secondRowState.value = prefs.getString("secondRow", SECOND_ROW_AUTO) ?: SECOND_ROW_AUTO
         xmbColorState.value = prefs.getInt("xmbColor", -1)
         bgAnimationState.value = prefs.getBoolean("bgAnimation", true)
+        ambientTintState.value = prefs.getBoolean("ambientTint", true)
     }
 
     var dark: Boolean
@@ -80,6 +82,11 @@ object LauncherSettings {
     var bgAnimation: Boolean
         get() = bgAnimationState.value
         set(value) { bgAnimationState.value = value; prefs.edit().putBoolean("bgAnimation", value).apply() }
+
+    /** The background takes on a faint tint of the selected app's colour (see [AmbientWash]). */
+    var ambientTint: Boolean
+        get() = ambientTintState.value
+        set(value) { ambientTintState.value = value; prefs.edit().putBoolean("ambientTint", value).apply() }
 }
 
 /** Switch-like light and dark palettes, picked by [LauncherSettings.dark]. */

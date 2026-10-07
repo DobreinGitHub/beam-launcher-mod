@@ -33,7 +33,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -103,6 +105,11 @@ internal fun ClassicHome(
     }
     val glowColor by animateColorAsState(glowTarget, tween(250), label = "glow")
     val glowStrength by animateFloatAsState(if (focusedItem != null) 1f else 0f, tween(200), label = "glow")
+    // The background leans towards the same colour; it fades back when the selection leaves the
+    // row or the home screen closes.
+    val tint = AmbientTint.of(focusedItem?.let { glowTarget })
+    SideEffect { AmbientTint.target.value = tint }
+    DisposableEffect(Unit) { onDispose { AmbientTint.target.value = null } }
 
     // Coming home puts focus back on the first tile, like the row layout. Keyed on the set of
     // tiles, not their order, so moving a tile keeps the focus on it.
