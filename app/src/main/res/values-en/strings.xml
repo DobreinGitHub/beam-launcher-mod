@@ -192,6 +192,9 @@
     <string name="sound">Sound</string>
     <string name="remote_buttons">Remote buttons</string>
     <string name="xgimi_settings">XGIMI settings</string>
+    <string name="battery_low">Low battery: %1$d%%. Plug in the adapter</string>
+    <string name="battery_left_hm">≈ %1$dh %2$02dm</string>
+    <string name="battery_left_m">≈ %1$d min</string>
     <string name="screensaver">Screensaver</string>
     <string name="screensaver_which">Show</string>
     <string name="screensaver_setup">Set up the screensaver</string>

@@ -1,7 +1,13 @@
 package com.home.tiles
 
 import android.view.KeyEvent as AndroidKeyEvent
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +58,7 @@ private const val MoveSlideMs = 160
  * The Switch home screen: equal-size tiles in a normally scrolling row (tiles to the left stay in
  * view), the selected one framed with its name above; the chosen channel rows underneath.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ClassicHome(
     repo: AppRepository,
@@ -119,11 +126,15 @@ internal fun ClassicHome(
         // A little over four 16:9 tiles across, 280dp wide at most on a 1280dp screen.
         val tile = ((maxWidth - ClassicPad) / 4.3f).coerceAtMost(280.dp)
         // One channel row fits under the tiles; with more the page scrolls down to them (the
-        // focused card scrolls itself into view) and back up when coming home.
+        // focused card scrolls itself into view, see RowKeyline) and back up when coming home.
+        // The keyline is only for the page: the rows inside keep their own sideways scrolling.
+        val rowSpec = LocalBringIntoViewSpec.current
+        CompositionLocalProvider(LocalBringIntoViewSpec provides if (scrolls) RowKeyline else rowSpec) {
         Column(
             if (scrolls) Modifier.fillMaxSize().verticalScroll(pageScroll) else Modifier.fillMaxSize(),
             verticalArrangement = if (scrolls) Arrangement.Top else Arrangement.Center,
         ) {
+        CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec) {
             LazyRow(
                 state = listState,
                 contentPadding = PaddingValues(start = ClassicPad, end = ClassicPad, top = 8.dp, bottom = 14.dp),
@@ -167,13 +178,29 @@ internal fun ClassicHome(
                     }
                 }
             }
-            channelRows.forEach { channel ->
-                Spacer(Modifier.height(10.dp))
+            channelRows.forEachIndexed { i, channel ->
+                // A clear gap between the apps and the first channel, a smaller one between channels.
+                Spacer(Modifier.height(if (i == 0) 32.dp else 18.dp))
                 ChannelRow(channel, ClassicPad)
             }
             if (scrolls) Spacer(Modifier.height(40.dp))
         }
+        }
+        }
     }
+}
+
+/**
+ * Google TV style paging between rows: the page glides so the focused card's row settles on a
+ * line near the top, instead of scrolling just enough to show it. Near the top it can't go above
+ * the start, so the apps row stays where it is.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private val RowKeyline = object : BringIntoViewSpec {
+    override val scrollAnimationSpec: AnimationSpec<Float> = tween(380, easing = FastOutSlowInEasing)
+
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        offset - containerSize * 0.18f
 }
 
 /**

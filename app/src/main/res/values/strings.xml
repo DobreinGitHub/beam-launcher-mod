@@ -192,6 +192,9 @@
     <string name="sound">Звук</string>
     <string name="remote_buttons">Кнопки пульта</string>
     <string name="xgimi_settings">Настройки XGIMI</string>
+    <string name="battery_low">Низкий заряд: %1$d%%. Подключите питание</string>
+    <string name="battery_left_hm">≈ %1$d ч %2$02d мин</string>
+    <string name="battery_left_m">≈ %1$d мин</string>
     <string name="screensaver">Заставка</string>
     <string name="screensaver_which">Показывать</string>
     <string name="screensaver_setup">Настроить заставку</string>
