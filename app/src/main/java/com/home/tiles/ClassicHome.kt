@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -48,20 +50,22 @@ private const val MoveSlideMs = 160
 
 /**
  * The Switch home screen: equal-size tiles in a normally scrolling row (tiles to the left stay in
- * view), the selected one framed with its name above; the channel row, if any, underneath.
+ * view), the selected one framed with its name above; the chosen channel rows underneath.
  */
 @Composable
 internal fun ClassicHome(
     repo: AppRepository,
     items: List<RowItem>,
     resumeTick: Int,
-    secondRow: TvChannel?,
+    channelRows: List<TvChannel>,
     modifier: Modifier,
     clickFor: (RowItem) -> () -> Unit,
     longClickFor: (RowItem) -> () -> Unit,
     move: MoveControl,
 ) {
     val listState = rememberLazyListState()
+    val pageScroll = rememberScrollState()
+    val scrolls = channelRows.size > 1
     val first = remember { FocusRequester() }
     val movingFocus = remember { FocusRequester() }
     var focusedKey by remember { mutableStateOf<String?>(null) }
@@ -70,6 +74,7 @@ internal fun ClassicHome(
     // tiles, not their order, so moving a tile keeps the focus on it.
     LaunchedEffect(resumeTick, items.map { it.key }.toSet()) {
         if (move.key != null) return@LaunchedEffect
+        pageScroll.scrollTo(0)
         listState.scrollToItem(0)
         repeat(10) {
             withFrameNanos {}
@@ -113,7 +118,12 @@ internal fun ClassicHome(
     BoxWithConstraints(modifier.fillMaxWidth()) {
         // A little over four 16:9 tiles across, 280dp wide at most on a 1280dp screen.
         val tile = ((maxWidth - ClassicPad) / 4.3f).coerceAtMost(280.dp)
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+        // One channel row fits under the tiles; with more the page scrolls down to them (the
+        // focused card scrolls itself into view) and back up when coming home.
+        Column(
+            if (scrolls) Modifier.fillMaxSize().verticalScroll(pageScroll) else Modifier.fillMaxSize(),
+            verticalArrangement = if (scrolls) Arrangement.Top else Arrangement.Center,
+        ) {
             LazyRow(
                 state = listState,
                 contentPadding = PaddingValues(start = ClassicPad, end = ClassicPad, top = 8.dp, bottom = 14.dp),
@@ -157,10 +167,11 @@ internal fun ClassicHome(
                     }
                 }
             }
-            if (secondRow != null) {
+            channelRows.forEach { channel ->
                 Spacer(Modifier.height(10.dp))
-                ChannelRow(secondRow, ClassicPad)
+                ChannelRow(channel, ClassicPad)
             }
+            if (scrolls) Spacer(Modifier.height(40.dp))
         }
     }
 }

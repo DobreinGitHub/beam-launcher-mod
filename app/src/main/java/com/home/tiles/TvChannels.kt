@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 
@@ -100,6 +101,27 @@ fun rememberTvChannels(refreshKey: Any): State<List<TvChannel>> {
         }
         awaitDispose { resolver.unregisterContentObserver(observer) }
     }
+}
+
+/**
+ * The channel rows under the tiles. The setting is [SECOND_ROW_AUTO] (one row, picked),
+ * [SECOND_ROW_OFF], or channel keys one per line, shown in that order.
+ */
+fun pickChannelRows(channels: List<TvChannel>, setting: String): List<TvChannel> = when (setting) {
+    SECOND_ROW_OFF -> emptyList()
+    SECOND_ROW_AUTO -> listOfNotNull(pickSecondRow(channels, setting))
+    else -> channelRowKeys(setting).mapNotNull { key -> channels.firstOrNull { it.key == key } }.filter { it.items.isNotEmpty() }
+}
+
+/** The channels chosen by hand; empty for auto and off. */
+fun channelRowKeys(setting: String): List<String> =
+    if (setting == SECOND_ROW_OFF || setting == SECOND_ROW_AUTO) emptyList() else setting.split('\n').filter { it.isNotEmpty() }
+
+/** [setting] with [key]'s row added at the end, or taken out; no rows left means off. */
+fun toggleChannelRow(setting: String, key: String): String {
+    val keys = channelRowKeys(setting)
+    val next = if (key in keys) keys - key else keys + key
+    return if (next.isEmpty()) SECOND_ROW_OFF else next.joinToString("\n")
 }
 
 /** The channel chosen for the second row; "auto" prefers SmartTube subscriptions. */
@@ -238,11 +260,19 @@ private const val REFRESH_INTERVAL_MS = 30L * 60 * 1000
 
 private val posterCache = ConcurrentHashMap<Uri, ImageBitmap>()
 
+/**
+ * Some apps (VoKino) publish posters as plain http:// links, hence usesCleartextTraffic in the
+ * manifest: without it Android refuses them and those cards stay grey.
+ */
 private suspend fun loadPoster(context: Context, uri: Uri): ImageBitmap? = withContext(Dispatchers.IO) {
     posterCache[uri]?.let { return@withContext it }
     runCatching {
         fun open() = when (uri.scheme) {
-            "http", "https" -> URL(uri.toString()).openStream()
+            "http", "https" -> (URL(uri.toString()).openConnection() as HttpURLConnection).run {
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                inputStream
+            }
             else -> context.contentResolver.openInputStream(uri)
         }
         // Posters can be full-size artwork; sample down to card size to spare this device's small RAM.

@@ -541,6 +541,40 @@ object ScreensaverTimeout {
     }.onFailure { Log.w("Screensaver", "can't set timeout", it) }.getOrDefault(false)
 }
 
+/**
+ * Which screensaver Android runs: the installed ones (Aerial Views...) and XGIMI's own. Written
+ * to the secure setting the system reads, which the WRITE_SECURE_SETTINGS grant allows.
+ */
+object Screensavers {
+    private const val KEY = "screensaver_components"
+
+    /** XGIMI's default: it opens the "Any Door" scenes. */
+    val XGIMI = android.content.ComponentName("com.xgimi.screensaver", "com.xgimi.screensaver.service.ScreenSaverDreamService")
+
+    class Choice(val component: android.content.ComponentName, val label: String)
+
+    /** XGIMI's other dream service (the scenes themselves) is left out: it is what its default opens. */
+    fun installed(context: Context): List<Choice> {
+        val pm = context.packageManager
+        return pm.queryIntentServices(android.content.Intent(android.service.dreams.DreamService.SERVICE_INTERFACE), 0)
+            .map { android.content.ComponentName(it.serviceInfo.packageName, it.serviceInfo.name) to it }
+            .filter { (component, _) -> !component.packageName.startsWith("com.xgimi.") || component == XGIMI }
+            .map { (component, info) ->
+                Choice(component, if (component == XGIMI) tr(R.string.screensaver_xgimi) else info.loadLabel(pm).toString())
+            }
+    }
+
+    fun current(context: Context): android.content.ComponentName? =
+        android.provider.Settings.Secure.getString(context.contentResolver, KEY)
+            ?.split(',')?.firstOrNull()?.let(android.content.ComponentName::unflattenFromString)
+
+    fun set(context: Context, component: android.content.ComponentName): Boolean = runCatching {
+        val resolver = context.contentResolver
+        android.provider.Settings.Secure.putString(resolver, KEY, component.flattenToString()) &&
+            android.provider.Settings.Secure.putInt(resolver, "screensaver_enabled", 1)
+    }.onFailure { Log.w("Screensaver", "can't choose the screensaver", it) }.getOrDefault(false)
+}
+
 /** XGIMI's sound modes (GmAudioManager.set/getSoundeffect), numbered as its settings page sets them. */
 object SoundMode {
     val modes get() = listOf(3 to "AI", 1 to tr(R.string.pm_movie), 2 to tr(R.string.sm_music), 12 to tr(R.string.pm_sport), 4 to tr(R.string.sm_karaoke))

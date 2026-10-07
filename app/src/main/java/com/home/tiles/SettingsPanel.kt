@@ -530,7 +530,12 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
             onOff = { projector { Power.off(context) } },
             onXgimiMenu = { projector { Xgimi.powerMenu(context) } },
         )
-        PanelPage.Screensaver -> ScreensaverPage(onScenes = { projector { context.launchPackage(Xgimi.SCREENSAVER_APP) } })
+        // XGIMI's screensaver is set up in its scenes app; others in their own app.
+        PanelPage.Screensaver -> ScreensaverPage(onSetup = { component ->
+            projector {
+                context.launchPackage(if (component == Screensavers.XGIMI) Xgimi.SCREENSAVER_APP else component.packageName)
+            }
+        })
         PanelPage.Remote -> RemoteButtonsSection()
         PanelPage.Bluetooth -> BluetoothPage(onXgimiPage = { projector { Xgimi.openSettingsPage(context, Xgimi.PAGE_BLUETOOTH) } })
         PanelPage.Xgimi -> {

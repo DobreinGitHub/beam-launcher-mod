@@ -56,8 +56,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val channels by rememberTvChannels(resumeTick)
-    val secondRow = pickSecondRow(channels, LauncherSettings.secondRow)
-    val showContinue = secondRow != null
+    val channelRows = pickChannelRows(channels, LauncherSettings.secondRow)
     LaunchedEffect(resumeTick) { context.requestChannelRefresh() }
     val drives by rememberUsbDrives()
     val hdmi by rememberLiveHdmi()
@@ -123,11 +122,11 @@ fun HomeScreen(
 
     Column(Modifier.fillMaxSize()) {
         // With a channel row below there is no spare height to lift into.
-        val lift = if (secondRow != null) 0.dp else RowLift
+        val lift = if (channelRows.isNotEmpty()) 0.dp else RowLift
         TopBar(onOpenAll, onOpenPanel)
         // The Switch layout: equal tiles in a normally scrolling row.
         ClassicHome(
-            repo, items, resumeTick, secondRow, Modifier.weight(1f).padding(bottom = lift), ::clickFor, ::longClickFor,
+            repo, items, resumeTick, channelRows, Modifier.weight(1f).padding(bottom = lift), ::clickFor, ::longClickFor,
             MoveControl(moving, ::moveStep, ::moveDone, ::moveCancel),
         )
     }

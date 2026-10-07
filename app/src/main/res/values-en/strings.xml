@@ -78,7 +78,7 @@
     <string name="now_playing">Now playing</string>
     <string name="usb_tile">USB drive tile</string>
     <string name="hdmi_tile">HDMI tile</string>
-    <string name="second_row">Second row</string>
+    <string name="second_row">Channel rows</string>
     <string name="auto">Auto</string>
     <string name="off">Off</string>
     <string name="nothing">Nothing</string>
@@ -193,6 +193,9 @@
     <string name="remote_buttons">Remote buttons</string>
     <string name="xgimi_settings">XGIMI settings</string>
     <string name="screensaver">Screensaver</string>
+    <string name="screensaver_which">Show</string>
+    <string name="screensaver_setup">Set up the screensaver</string>
+    <string name="screensaver_xgimi">XGIMI Any Door</string>
     <string name="power">Power</string>
     <string name="projection">Projection</string>
     <string name="kst_and_size">Keystone and size</string>

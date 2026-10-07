@@ -173,12 +173,26 @@ internal fun PowerPage(onOff: () -> Unit, onXgimiMenu: () -> Unit) {
 }
 
 /**
- * XGIMI's screensaver: how long the projector waits before starting it, and its "Any Door"
- * scenes app, where the scene itself is chosen.
+ * The screensaver: which one runs (XGIMI's "Any Door" or an installed one like Aerial Views),
+ * its own settings, and how long the projector waits before starting it.
  */
 @Composable
-internal fun ScreensaverPage(onScenes: () -> Unit) {
+internal fun ScreensaverPage(onSetup: (android.content.ComponentName) -> Unit) {
     val context = LocalContext.current
+    val choices by produceState(emptyList<Screensavers.Choice>()) {
+        value = withContext(Dispatchers.IO) { Screensavers.installed(context) }
+    }
+    var current by remember { mutableStateOf(Screensavers.current(context)) }
+    if (choices.isNotEmpty()) {
+        Section(tr(R.string.screensaver))
+        val index = choices.indexOfFirst { it.component == current }.coerceAtLeast(0)
+        Selector(tr(R.string.screensaver_which), choices[index].label, Modifier.fillMaxWidth()) { step ->
+            val next = choices[(index + step).mod(choices.size)]
+            if (Screensavers.set(context, next.component)) current = Screensavers.current(context)
+        }
+        Spacer(Modifier.height(10.dp))
+        ListRow(tr(R.string.screensaver_setup)) { onSetup(choices[index].component) }
+    }
     var timeout by remember { mutableStateOf(ScreensaverTimeout.current(context)) }
     val options = ScreensaverTimeout.options
     Section(tr(R.string.start_after))
@@ -192,6 +206,4 @@ internal fun ScreensaverPage(onScenes: () -> Unit) {
     } else {
         T(tr(R.string.no_write_settings), 14.sp, color = PanelDim)
     }
-    Section(tr(R.string.scenes))
-    ListRow(tr(R.string.choose_screensaver), onScenes)
 }

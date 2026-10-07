@@ -159,6 +159,12 @@ class AdbCommandReceiver : BroadcastReceiver() {
                 Gmpf.call(cls, method, *args.toTypedArray()).fold({ it.toString() }, { "error $it" })
             }.getOrElse { "error: expected Class.method[:int,int] ($it)" }
         }
+        // --ez channels_get true: other apps' channels with their item count and first poster URI.
+        if (intent.hasExtra("channels_get")) {
+            resultData = queryTvChannels(context).joinToString("\n") { ch ->
+                "${ch.key} [${ch.items.size}] ${ch.items.firstOrNull()?.poster ?: "-"}"
+            }.ifEmpty { "none" }
+        }
         // --ez order_get true: the home row's saved order (row keys, comma-separated).
         if (intent.hasExtra("order_get")) resultData = AppRepository(context).savedOrder().joinToString(",").ifEmpty { "none" }
         intent.getStringExtra("bt_name")?.let { name ->

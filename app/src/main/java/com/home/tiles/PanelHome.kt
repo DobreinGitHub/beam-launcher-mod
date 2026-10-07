@@ -120,10 +120,12 @@ internal fun HomePage(onHdmiPage: () -> Unit) {
             LauncherSettings.secondRow = SECOND_ROW_OFF
         }
     }
+    // Any number of channels, each its own row, in the order they were switched on.
+    val chosen = channelRowKeys(LauncherSettings.secondRow)
     channels.forEach { channel ->
         Spacer(Modifier.height(10.dp))
-        Chip(channel.name, LauncherSettings.secondRow == channel.key, Modifier.fillMaxWidth()) {
-            LauncherSettings.secondRow = channel.key
+        Toggle(channel.name, channel.key in chosen, Modifier.fillMaxWidth()) {
+            LauncherSettings.secondRow = toggleChannelRow(LauncherSettings.secondRow, channel.key)
         }
     }
 }

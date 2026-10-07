@@ -78,7 +78,7 @@
     <string name="now_playing">Сейчас играет</string>
     <string name="usb_tile">Плитка флешки</string>
     <string name="hdmi_tile">Плитка HDMI</string>
-    <string name="second_row">Второй ряд</string>
+    <string name="second_row">Ряды каналов</string>
     <string name="auto">Авто</string>
     <string name="off">Выкл</string>
     <string name="nothing">Ничего</string>
@@ -193,6 +193,9 @@
     <string name="remote_buttons">Кнопки пульта</string>
     <string name="xgimi_settings">Настройки XGIMI</string>
     <string name="screensaver">Заставка</string>
+    <string name="screensaver_which">Показывать</string>
+    <string name="screensaver_setup">Настроить заставку</string>
+    <string name="screensaver_xgimi">XGIMI «Любая дверь»</string>
     <string name="power">Питание</string>
     <string name="projection">Проекция</string>
     <string name="kst_and_size">Трапеция и размер</string>
