@@ -31,9 +31,16 @@ internal fun AppearancePage() {
         Chip(tr(R.string.theme_dark), dark, Modifier.weight(1f)) { LauncherSettings.dark = true }
     }
     Section(tr(R.string.background_name, Backgrounds[LauncherSettings.background].name))
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Backgrounds.forEachIndexed { i, preset ->
-            Swatch(Colors.presetBrush(preset), LauncherSettings.background == i) { LauncherSettings.background = i }
+    // Gradients first, the animated XMB one last, six to a row.
+    val order = Backgrounds.indices.sortedBy { Backgrounds[it].xmb }
+    order.chunked(6).forEachIndexed { row, indices ->
+        if (row > 0) Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            indices.forEach { i ->
+                Swatch(Colors.presetBrush(Backgrounds[i]), LauncherSettings.background == i) { LauncherSettings.background = i }
+            }
+            // A short last row keeps the swatches in their columns.
+            repeat(6 - indices.size) { Spacer(Modifier.size(50.dp)) }
         }
     }
     if (Colors.isXmb) XmbOptions()
@@ -43,6 +50,7 @@ internal fun AppearancePage() {
         Chip(tr(R.string.language_system), AppLanguage.current == AppLanguage.SYSTEM, Modifier.weight(1f)) { AppLanguage.current = AppLanguage.SYSTEM }
         Chip("Русский", AppLanguage.current == AppLanguage.RU, Modifier.weight(1f)) { AppLanguage.current = AppLanguage.RU }
     }
+    Spacer(Modifier.height(10.dp))
     PairRow {
         Chip("English", AppLanguage.current == AppLanguage.EN, Modifier.weight(1f)) { AppLanguage.current = AppLanguage.EN }
     }

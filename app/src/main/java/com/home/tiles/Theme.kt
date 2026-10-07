@@ -127,5 +127,12 @@ val Backgrounds = listOf(
     BackgroundPreset(R.string.bg_forest, listOf(Color(0xFFDDF3E4), Color(0xFFFAFAFA)), listOf(Color(0xFF10251C), Color(0xFF24493A))),
     BackgroundPreset(R.string.bg_lavender, listOf(Color(0xFFEAE3FF), Color(0xFFFAFAFA)), listOf(Color(0xFF1D1830), Color(0xFF3A3060))),
     BackgroundPreset(R.string.bg_xmb, emptyList(), emptyList(), xmb = true),
+    // Added later: appended, since the choice is saved as an index (the panel shows XMB last).
+    BackgroundPreset(R.string.bg_graphite, listOf(Color(0xFFF2F2F2), Color(0xFFDCDCDC)), listOf(Color(0xFF1C1C1E), Color(0xFF3A3A3C))),
+    BackgroundPreset(R.string.bg_midnight, listOf(Color(0xFFE3E8FF), Color(0xFFFAFAFA)), listOf(Color(0xFF0B1026), Color(0xFF1E2A5A))),
+    BackgroundPreset(R.string.bg_burgundy, listOf(Color(0xFFFBE3E8), Color(0xFFFFF6F7)), listOf(Color(0xFF2A0E16), Color(0xFF5C1A2B))),
+    BackgroundPreset(R.string.bg_emerald, listOf(Color(0xFFD9F7EE), Color(0xFFFAFAFA)), listOf(Color(0xFF062B26), Color(0xFF0E5A4E))),
+    BackgroundPreset(R.string.bg_aurora, listOf(Color(0xFFDDF7F0), Color(0xFFE8E6FF), Color(0xFFFFE9F3)), listOf(Color(0xFF0B1B2B), Color(0xFF1C4B5A), Color(0xFF3B2A5E))),
+    BackgroundPreset(R.string.bg_sand, listOf(Color(0xFFFFF3DC), Color(0xFFFAFAFA)), listOf(Color(0xFF2A2216), Color(0xFF4D3E28))),
 )
 

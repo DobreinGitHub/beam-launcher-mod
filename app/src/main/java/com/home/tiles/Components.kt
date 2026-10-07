@@ -58,6 +58,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.draw.drawWithContent
@@ -130,6 +131,33 @@ private fun rememberPulse(): State<Color> {
         }
     }
     return remember { derivedStateOf { lerp(Colors.Accent, Colors.AccentGlow, glow.value) } }
+}
+
+/**
+ * Google TV style focus light: a soft oval of [color] behind the element, strongest at its edge
+ * and fading out [spread] beyond it. A radial gradient, not a blur (blur needs Android 12; the
+ * projector has 11), drawn only while [strength] is above zero, so unfocused elements cost nothing.
+ */
+fun Modifier.focusGlow(color: Color, spread: Dp, strength: () -> Float): Modifier = drawBehind {
+    val s = strength()
+    if (s <= 0f) return@drawBehind
+    val g = spread.toPx()
+    val ry = size.height / 2 + g
+    val rx = size.width / 2 + g
+    // A circle stretched sideways into an oval as wide as the element plus the spread.
+    scale(scaleX = rx / ry, scaleY = 1f, pivot = center) {
+        drawCircle(
+            Brush.radialGradient(
+                0f to color.copy(alpha = 0.55f * s),
+                ((ry - g) / ry) to color.copy(alpha = 0.42f * s),
+                1f to Color.Transparent,
+                center = center,
+                radius = ry,
+            ),
+            radius = ry,
+            center = center,
+        )
+    }
 }
 
 /**
@@ -257,23 +285,29 @@ fun Tile(
     highlighted: Boolean,
     modifier: Modifier = Modifier,
     dimmed: Boolean = false,
-    /** Picked up to be moved: drawn a little larger, above its neighbours. */
+    /** Picked up to be moved: drawn larger still than a selected tile. */
     lifted: Boolean = false,
+    /** The light around the tile while selected (the app's colour, see [TileArt.glow]). */
+    glow: Color = Color.White,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     var pressed by remember { mutableStateOf(false) }
     val press = remember { DpadPress() }
+    // Google TV style selection: the selected tile grows over its neighbours and glows in its
+    // app's colour; no frame.
     val scale by animateFloatAsState(
         when {
-            lifted -> 1.08f
-            pressed -> 0.95f
+            lifted -> 1.15f
+            pressed -> 1.04f
+            highlighted -> 1.1f
             else -> 1f
         },
-        tween(90),
-        label = "press",
+        tween(150),
+        label = "focus",
     )
+    val glowStrength by animateFloatAsState(if (highlighted || lifted) 1f else 0f, tween(150), label = "glow")
     val click = {
         Sounds.activate()
         onClick()
@@ -288,31 +322,15 @@ fun Tile(
                 scaleY = scale
                 alpha = if (dimmed) 0.45f else 1f
             }
+            // No shadows: under every tile they cost the projector's GPU more than the frame
+            // budget; the glow is one gradient, for the selected tile only.
+            .focusGlow(glow, spread = 18.dp) { glowStrength }
             .onFocusChanged { if (it.isFocused) Sounds.navigate() else pressed = false }
             .dpadClick(press, onPress = { pressed = it }, onClick = click, onLongClick = onLongClick)
             .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = click),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                // Only the selected (or moved) tile casts a shadow: a soft shadow under every tile
-                // cost the projector's GPU more than the frame budget while moving along the row.
-                .then(
-                    if (lifted || highlighted) Modifier.shadow(if (lifted) 28.dp else 14.dp, RoundedCornerShape(corner))
-                    else Modifier,
-                )
-                .clip(RoundedCornerShape(corner)),
-        ) { content() }
-        if (highlighted) {
-            // Frame sits outside the tile with a small gap, like the Switch selection.
-            Box(
-                Modifier
-                    .requiredSize(width + 16.dp, height + 16.dp)
-                    // The frame sits 8dp outside the tile, so its radius grows by the same amount.
-                    .pulseBorder(5.dp, RoundedCornerShape(corner + 8.dp)),
-            )
-        }
+        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(corner))) { content() }
     }
 }
 
@@ -351,7 +369,8 @@ fun AllAppsArt() {
 @Composable
 fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.08f else 1f, tween(120), label = "focus")
+    val scale by animateFloatAsState(if (focused) 1.12f else 1f, tween(150), label = "focus")
+    val glowStrength by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "glow")
     Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
@@ -360,9 +379,9 @@ fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Un
                     scaleX = scale
                     scaleY = scale
                 }
-                // Flat, no shadow: the focus frame and the slight zoom mark the selected one.
+                // Flat, no shadow; selected, it grows with a soft neutral light, like the tiles.
+                .focusGlow(Colors.Text, spread = 12.dp) { glowStrength * 0.6f }
                 .background(Colors.Button, CircleShape)
-                .then(if (focused) Modifier.pulseBorder(3.dp, CircleShape) else Modifier)
                 .onFocusChanged {
                     focused = it.isFocused
                     if (it.isFocused) Sounds.navigate()

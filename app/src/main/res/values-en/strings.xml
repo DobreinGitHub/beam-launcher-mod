@@ -227,6 +227,12 @@
     <string name="bg_sunset">Sunset</string>
     <string name="bg_forest">Forest</string>
     <string name="bg_lavender">Lavender</string>
+    <string name="bg_graphite">Graphite</string>
+    <string name="bg_midnight">Midnight</string>
+    <string name="bg_burgundy">Burgundy</string>
+    <string name="bg_emerald">Emerald</string>
+    <string name="bg_aurora">Aurora</string>
+    <string name="bg_sand">Sand</string>
     <string name="continue_watching">Continue watching</string>
     <string name="pm_ai">AI picture</string>
     <string name="pm_movie">Movie</string>

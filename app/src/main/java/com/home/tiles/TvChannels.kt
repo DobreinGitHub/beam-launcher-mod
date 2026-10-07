@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -393,23 +394,25 @@ fun ChannelRowSkeleton(startPad: Dp) {
 private fun TvCard(item: TvItem, onClick: () -> Unit) {
     val context = LocalContext.current
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.06f else 1f, tween(120), label = "card")
+    // Like the tiles: the selected card grows over its neighbours with a soft light around it
+    // (neutral: posters are many-coloured), no frame and no shadows (they overloaded the GPU).
+    val scale by animateFloatAsState(if (focused) 1.1f else 1f, tween(150), label = "card")
+    val glowStrength by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "glow")
     val poster by produceState<ImageBitmap?>(item.poster?.let { posterCache.get(it) }, item.poster) {
         item.poster?.let { value = loadPoster(context, it) }
     }
     val shape = RoundedCornerShape(12.dp)
     Box(
         Modifier
+            .zIndex(if (focused) 1f else 0f)
             .size(CARD_W_DP.dp, CARD_H_DP.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            // Only the focused card casts a shadow (one under every card overloaded the GPU).
-            .then(if (focused) Modifier.shadow(10.dp, shape) else Modifier)
+            .focusGlow(Colors.Text, spread = 14.dp) { glowStrength * 0.5f }
             .clip(shape)
             .background(Color(0xFF3A3A3A))
-            .then(if (focused) Modifier.pulseBorder(4.dp, shape) else Modifier)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) Sounds.navigate()

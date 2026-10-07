@@ -152,6 +152,15 @@ internal class MoveControl(
 
 private const val ALL_KEY = "__all__"
 
+/** The colour a row tile glows in while selected: its app's, the HDMI/USB tile's own, or neutral. */
+@Composable
+internal fun rowItemGlow(repo: AppRepository, item: RowItem): Color = when (item) {
+    is RowItem.App -> rememberArt(repo, item.entry).value?.glow ?: Colors.Text
+    is RowItem.Usb -> Color(0xFFFF9F43)
+    is RowItem.Hdmi -> Color(0xFF8B7CF6)
+    is RowItem.All -> Colors.Text
+}
+
 @Composable
 internal fun RowItemArt(repo: AppRepository, item: RowItem) {
     when (item) {

@@ -164,7 +164,8 @@ internal fun ClassicHome(
                             // Tiles slide to their new places when the order changes; the moved
                             // one is drawn above the neighbour it passes.
                             .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = tween(MoveSlideMs))
-                            .zIndex(if (moving) 1f else 0f),
+                            // The selected (or moved) tile grows over its neighbours.
+                            .zIndex(if (moving || focused) 1f else 0f),
                     ) {
                         // Name above the selected tile; may run wider than the tile.
                         Box(Modifier.width(tile).height(40.dp)) {
@@ -181,6 +182,7 @@ internal fun ClassicHome(
                             width = tile,
                             highlighted = focused || moving,
                             lifted = moving,
+                            glow = rowItemGlow(repo, item),
                             modifier = Modifier
                                 .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
                                 .then(if (moving) Modifier.focusRequester(movingFocus).moveKeys(item.key, stepping) else Modifier)

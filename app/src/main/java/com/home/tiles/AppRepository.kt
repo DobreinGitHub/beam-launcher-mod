@@ -39,7 +39,25 @@ class TileArt(
     val bottom: Color,
     /** The image is the whole tile (an adaptive icon's layers), not a logo on a colored card. */
     val fullBleed: Boolean = false,
+    /** The light around the tile when selected: the picture's liveliest colour, see [glowOf]. */
+    val glow: Color = Color.White,
 )
+
+/**
+ * The colour a selected tile glows in, Google TV style: the picture's most vivid colour (YouTube
+ * red, Kinopoisk orange) rather than its edge, which banners often leave black. Lifted towards
+ * white when dark, so the glow shows on a dark background; white when the picture has no colour.
+ */
+private fun glowOf(bitmap: Bitmap): Color {
+    val palette = Palette.from(bitmap).generate()
+    val rgb = palette.vibrantSwatch?.rgb
+        ?: palette.lightVibrantSwatch?.rgb
+        ?: palette.darkVibrantSwatch?.rgb
+        ?: palette.mutedSwatch?.rgb
+        ?: return Color.White
+    val color = Color(rgb)
+    return if (color.luminance() < 0.12f) lerp(color, Color.White, 0.5f) else color
+}
 
 class AppRepository(private val context: Context) {
     private val pm = context.packageManager
@@ -212,7 +230,7 @@ class AppRepository(private val context: Context) {
         } else {
             Color(Palette.from(bitmap).generate().getDominantColor(FALLBACK_TILE))
         }
-        return TileArt(bitmap.asImageBitmap(), isBanner = true, top = edge, bottom = edge)
+        return TileArt(bitmap.asImageBitmap(), isBanner = true, top = edge, bottom = edge, glow = glowOf(bitmap))
     }
 
     private fun icon(entry: AppEntry): TileArt {
@@ -227,7 +245,7 @@ class AppRepository(private val context: Context) {
         )
         // Keep white/pale icons readable.
         if (base.luminance() > 0.6f) base = lerp(base, Color.Black, 0.45f)
-        return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = lerp(base, Color.Black, 0.3f))
+        return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = lerp(base, Color.Black, 0.3f), glow = glowOf(bitmap))
     }
 
     /**
@@ -253,7 +271,7 @@ class AppRepository(private val context: Context) {
             foreground.draw(canvas)
         }
         val base = Color(Palette.from(bitmap).generate().getDominantColor(FALLBACK_TILE))
-        return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = base, fullBleed = true)
+        return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = base, fullBleed = true, glow = glowOf(bitmap))
     }
 
     private fun highResIcon(entry: AppEntry): Drawable? = runCatching {

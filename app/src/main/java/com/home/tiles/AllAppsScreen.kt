@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 
 @Composable
 fun AllAppsScreen(
@@ -68,11 +69,16 @@ fun AllAppsScreen(
         ) {
             itemsIndexed(sorted, key = { _, e -> e.pkg }) { i, entry ->
                 val focused = focusedKey == entry.pkg
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    // The selected tile grows over its neighbours.
+                    Modifier.zIndex(if (focused) 1f else 0f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     Tile(
                         width = 200.dp,
                         highlighted = focused,
                         dimmed = entry.hidden,
+                        glow = rememberArt(repo, entry).value?.glow ?: Colors.Text,
                         modifier = Modifier
                             .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
                             .onFocusChanged { if (it.isFocused) focusedKey = entry.pkg },
