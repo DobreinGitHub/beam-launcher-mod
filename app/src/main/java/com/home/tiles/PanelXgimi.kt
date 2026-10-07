@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -69,13 +70,7 @@ internal fun AboutSection() {
     if (rows.isEmpty()) return
     Section(tr(R.string.about_projector))
     Column(Modifier.fillMaxWidth().background(CardBg, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
-        rows.forEach { (label, value) ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-                T(label, 15.sp, color = PanelDim)
-                Spacer(Modifier.weight(1f))
-                T(value, 15.sp, color = PanelText)
-            }
-        }
+        rows.forEach { (label, value) -> AboutRow(label, value) }
     }
 }
 
@@ -91,7 +86,6 @@ private fun aboutRows(context: Context): List<Pair<String, String>> {
             .flatMap { it.inetAddresses.toList() }
             .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }?.hostAddress
     }.getOrNull()
-    val beam = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
     fun gb(bytes: Long) = String.format(Locale.US, "%.1f", bytes / 1e9)
     return listOfNotNull(
         prop("ro.boot.xgimi.modelname")?.let { tr(R.string.model) to "XGIMI · $it" },
@@ -102,9 +96,35 @@ private fun aboutRows(context: Context): List<Pair<String, String>> {
         tr(R.string.uptime) to if (uptime >= 60) tr(R.string.hours_minutes, uptime / 60, uptime % 60) else tr(R.string.minutes_short, uptime),
         tr(R.string.free_memory) to tr(R.string.memory_of, memory.availMem / 1_048_576, memory.totalMem / 1_048_576),
         tr(R.string.free_storage) to tr(R.string.storage_of, gb(storage.availableBytes), gb(storage.totalBytes)),
-        beam?.let { "Beam" to it },
     )
 }
+
+/** Beam's version and who made it: the original author and this build's modifications. */
+@Composable
+internal fun AboutBeamPage() {
+    val context = LocalContext.current
+    val version = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+    }
+    Spacer(Modifier.height(12.dp))
+    Column(Modifier.fillMaxWidth().background(CardBg, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
+        version?.let { AboutRow(tr(R.string.version), it) }
+        AboutRow(tr(R.string.made_by), "tonisaf")
+        T(BEAM_REPO, 14.sp, Modifier.fillMaxWidth().padding(bottom = 5.dp), color = PanelDim, align = TextAlign.End)
+        AboutRow(tr(R.string.modified_by), "Dobrein")
+    }
+}
+
+@Composable
+private fun AboutRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        T(label, 15.sp, color = PanelDim)
+        Spacer(Modifier.weight(1f))
+        T(value, 15.sp, color = PanelText)
+    }
+}
+
+private const val BEAM_REPO = "github.com/tonisaf/beam-launcher"
 
 /** Table, ceiling or automatic mounting, rear projection, and a fine tilt of the picture. */
 @Composable

@@ -162,6 +162,10 @@
     <string name="af_on_move">Автофокус при сдвиге</string>
     <string name="eye_protection">Защита глаз</string>
     <string name="about_projector">О проекторе</string>
+    <string name="about_beam">О Beam</string>
+    <string name="version">Версия</string>
+    <string name="made_by">Автор</string>
+    <string name="modified_by">Модификация</string>
     <string name="model">Модель</string>
     <string name="firmware">Прошивка</string>
     <string name="serial">Серийный номер</string>

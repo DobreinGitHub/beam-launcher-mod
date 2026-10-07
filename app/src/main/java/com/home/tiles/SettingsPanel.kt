@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.CropFree
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.FilterCenterFocus
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Landscape
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PowerSettingsNew
@@ -106,7 +107,8 @@ private enum class PanelPage(@StringRes val titleRes: Int) {
     Screensaver(R.string.screensaver),
     Power(R.string.power),
     Projection(R.string.projection),
-    Keystone(R.string.kst_and_size);
+    Keystone(R.string.kst_and_size),
+    About(R.string.about_beam);
 
     val title: String get() = tr(titleRes)
 }
@@ -326,6 +328,7 @@ private fun ColumnScope.MainPage(
         add(QuickItem(Icons.Rounded.Dashboard, tr(R.string.home_screen), PanelPage.Home))
         add(QuickItem(Icons.Rounded.SettingsRemote, tr(R.string.remote_buttons), PanelPage.Remote))
         add(QuickItem(Icons.Rounded.SettingsApplications, "XGIMI", PanelPage.Xgimi))
+        add(QuickItem(Icons.Rounded.Info, tr(R.string.about_beam), PanelPage.About))
     }
 
     // Every tile fits on one screen: a 4-unit grid of wide (2 units) and square (1 unit) tiles.
@@ -561,6 +564,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
             ListRow(tr(R.string.all_settings)) { projector { context.openSettings() } }
             AboutSection()
         }
+        PanelPage.About -> AboutBeamPage()
     }
 }
 

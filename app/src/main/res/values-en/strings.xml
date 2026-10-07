@@ -162,6 +162,10 @@
     <string name="af_on_move">Autofocus on movement</string>
     <string name="eye_protection">Eye protection</string>
     <string name="about_projector">About the projector</string>
+    <string name="about_beam">About Beam</string>
+    <string name="version">Version</string>
+    <string name="made_by">Author</string>
+    <string name="modified_by">Modified by</string>
     <string name="model">Model</string>
     <string name="firmware">Firmware</string>
     <string name="serial">Serial number</string>
