@@ -2,7 +2,8 @@ package com.home.tiles
 
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.BringIntoViewSpec
@@ -197,7 +198,10 @@ internal fun ClassicHome(
  */
 @OptIn(ExperimentalFoundationApi::class)
 private val RowKeyline = object : BringIntoViewSpec {
-    override val scrollAnimationSpec: AnimationSpec<Float> = tween(380, easing = FastOutSlowInEasing)
+    // A spring, not a tween: the scroll is re-aimed every frame, and a tween restarted each time
+    // only creeps (it took about 2 s). Critically damped, settles in about 0.4 s.
+    override val scrollAnimationSpec: AnimationSpec<Float> =
+        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f)
 
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
         offset - containerSize * 0.18f
