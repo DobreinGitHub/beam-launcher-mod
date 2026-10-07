@@ -58,7 +58,8 @@ fun AllAppsScreen(
     onOptions: (AppEntry) -> Unit,
 ) {
     val context = LocalContext.current
-    val sorted = remember(apps) { apps.sortedBy { it.label.lowercase() } }
+    // The apps on the home screen first, then the hidden ones; each by name.
+    val sorted = remember(apps) { apps.sortedWith(compareBy({ it.hidden }, { it.label.lowercase() })) }
     var focusedKey by remember { mutableStateOf<String?>(null) }
     val first = remember { FocusRequester() }
     val gridState = rememberLazyGridState()
@@ -114,7 +115,7 @@ fun AllAppsScreen(
                     Tile(
                         width = TileWidth,
                         highlighted = focused,
-                        dimmed = entry.hidden,
+                        hiddenMark = entry.hidden,
                         modifier = Modifier
                             .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
                             .onFocusChanged { if (it.isFocused) focusedKey = entry.pkg },

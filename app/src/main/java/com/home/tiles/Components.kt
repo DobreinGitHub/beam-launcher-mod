@@ -178,10 +178,6 @@ fun RegisterTileGlow(glows: MutableMap<Any, TileGlow>, key: Any, lit: Boolean, c
     }
 }
 
-/** [drawFocusGlow] behind this element itself, for lone controls (the top buttons). */
-fun Modifier.focusGlow(color: Color, spread: Dp, strength: () -> Float): Modifier = drawBehind {
-    drawFocusGlow(color, strength(), center, size.width / 2, size.height / 2, spread.toPx())
-}
 
 /**
  * OK click and OK long-press / Menu key for D-pad focus targets.
@@ -321,7 +317,8 @@ fun Tile(
     width: Dp,
     highlighted: Boolean,
     modifier: Modifier = Modifier,
-    dimmed: Boolean = false,
+    /** Hidden from the home screen: marked with a crossed-out eye in the corner. */
+    hiddenMark: Boolean = false,
     /** Picked up to be moved: drawn larger still than a selected tile. */
     lifted: Boolean = false,
     onClick: () -> Unit,
@@ -365,15 +362,8 @@ fun Tile(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .focusBorder(corner) { border }
-                .clip(RoundedCornerShape(corner))
-                .graphicsLayer { alpha = if (dimmed) 0.45f else 1f },
-        ) { content() }
-        // A hidden app's mark, at full strength over its dimmed picture.
-        if (dimmed) {
+        Box(Modifier.fillMaxSize().focusBorder(corner) { border }.clip(RoundedCornerShape(corner))) { content() }
+        if (hiddenMark) {
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
@@ -421,24 +411,19 @@ fun AllAppsArt() {
 }
 
 /**
- * A top-bar button in the same language as the tiles: a bare icon, dimmed until selected; then
- * it grows and brightens with a soft light behind it, and its name shows underneath.
+ * A top-bar button like the quick settings panel's: a bare icon, dimmed until selected; then a
+ * rounded square fills with the panel's blue under a white icon, and its name shows underneath.
  */
 @Composable
 fun TopButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.15f else 1f, tween(150), label = "focus")
-    val glowStrength by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "glow")
-    val tint by animateColorAsState(if (focused) Colors.Text else Colors.TextDim, tween(150), label = "tint")
+    val fill by animateColorAsState(if (focused) FocusBg else FocusBg.copy(alpha = 0f), tween(150), label = "fill")
+    val tint by animateColorAsState(if (focused) FocusText else Colors.TextDim, tween(150), label = "tint")
     Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
                 .size(64.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }
-                .focusGlow(Colors.Text, spread = 14.dp) { glowStrength * 0.7f }
+                .background(fill, RoundedCornerShape(16.dp))
                 .onFocusChanged {
                     focused = it.isFocused
                     if (it.isFocused) Sounds.navigate()
@@ -449,7 +434,7 @@ fun TopButton(icon: ImageVector, label: String, onClick: () -> Unit) {
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Image(icon, label, Modifier.size(38.dp), colorFilter = ColorFilter.tint(tint))
+            Image(icon, label, Modifier.size(34.dp), colorFilter = ColorFilter.tint(tint))
         }
         Spacer(Modifier.height(8.dp))
         T(
