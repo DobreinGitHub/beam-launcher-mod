@@ -296,7 +296,12 @@ fun Tile(
         Box(
             Modifier
                 .fillMaxSize()
-                .shadow(if (lifted) 28.dp else if (highlighted) 14.dp else 3.dp, RoundedCornerShape(corner))
+                // Only the selected (or moved) tile casts a shadow: a soft shadow under every tile
+                // cost the projector's GPU more than the frame budget while moving along the row.
+                .then(
+                    if (lifted || highlighted) Modifier.shadow(if (lifted) 28.dp else 14.dp, RoundedCornerShape(corner))
+                    else Modifier,
+                )
                 .clip(RoundedCornerShape(corner)),
         ) { content() }
         if (highlighted) {
@@ -355,7 +360,7 @@ fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Un
                     scaleX = scale
                     scaleY = scale
                 }
-                .shadow(if (focused) 8.dp else 3.dp, CircleShape)
+                // Flat, no shadow: the focus frame and the slight zoom mark the selected one.
                 .background(Colors.Button, CircleShape)
                 .then(if (focused) Modifier.pulseBorder(3.dp, CircleShape) else Modifier)
                 .onFocusChanged {

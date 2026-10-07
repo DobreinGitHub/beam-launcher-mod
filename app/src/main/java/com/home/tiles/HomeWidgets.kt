@@ -145,7 +145,6 @@ fun NowPlayingBar(np: NowPlaying) {
     Row(
         Modifier
             .height(66.dp)
-            .shadow(3.dp, CircleShape)
             .background(Colors.Button, CircleShape)
             .padding(start = 8.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -4,7 +4,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
+import androidx.compose.ui.graphics.asAndroidBitmap
 import android.media.tv.TvContract
 import android.net.ConnectivityManager
 import android.net.Network
@@ -269,7 +272,20 @@ private const val REFRESH_INTERVAL_MS = 30L * 60 * 1000
 
 // ---- Posters ----
 
-private val posterCache = ConcurrentHashMap<Uri, ImageBitmap>()
+/**
+ * Posters kept decoded, by size and dropping the least recently seen: with several channel rows
+ * an unbounded cache held a hundred of them, and on this 1.3 GB device the garbage collector's
+ * pauses showed as stutter while moving along the home row.
+ */
+private val posterCache = object : LruCache<Uri, ImageBitmap>(POSTER_CACHE_BYTES) {
+    override fun sizeOf(key: Uri, value: ImageBitmap) = value.asAndroidBitmap().allocationByteCount
+}
+
+private const val POSTER_CACHE_BYTES = 12 * 1024 * 1024
+
+/** A card's size ([TvCard]); posters are decoded to just cover it. */
+private const val CARD_W_DP = 208f
+private const val CARD_H_DP = 117f
 
 /**
  * Some apps (VoKino) publish posters as plain http:// links, hence usesCleartextTraffic in the
@@ -279,7 +295,7 @@ private val posterCache = ConcurrentHashMap<Uri, ImageBitmap>()
  * is fetched again straight over Wi-Fi, past the VPN (unless the VPN app forbids that).
  */
 private suspend fun loadPoster(context: Context, uri: Uri): ImageBitmap? = withContext(Dispatchers.IO) {
-    posterCache[uri]?.let { return@withContext it }
+    posterCache.get(uri)?.let { return@withContext it }
     runCatching {
         val bytes = when (uri.scheme) {
             "http", "https" -> {
@@ -289,14 +305,30 @@ private suspend fun loadPoster(context: Context, uri: Uri): ImageBitmap? = withC
             }
             else -> context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         } ?: return@runCatching null
-        // Posters can be full-size artwork; sample down to card size to spare this device's small RAM.
+        // Posters can be full-size artwork: decode them straight to the size that covers a card
+        // (the card crops them), at 2 bytes a pixel, to spare this device's small RAM.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val w = bounds.outWidth
+        val h = bounds.outHeight
+        if (w <= 0 || h <= 0) return@runCatching null
+        val density = context.resources.displayMetrics.density
+        val scale = maxOf(CARD_W_DP * density / w, CARD_H_DP * density / h).coerceAtMost(1f)
+        val targetW = kotlin.math.ceil(w * scale).toInt().coerceAtLeast(1)
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= 480) sample *= 2
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-            ?.asImageBitmap()
-    }.getOrNull()?.also { posterCache[uri] = it }
+        while (w / (sample * 2) >= targetW) sample *= 2
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+            val sampledW = w / sample
+            if (sampledW > targetW) {
+                inScaled = true
+                inDensity = sampledW
+                inTargetDensity = targetW
+            }
+        }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap()
+    }.getOrNull()?.also { posterCache.put(uri, it) }
 }
 
 /** The image at [url] over [network] (the default one when null); null for an error or a web page. */
@@ -362,18 +394,19 @@ private fun TvCard(item: TvItem, onClick: () -> Unit) {
     val context = LocalContext.current
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.06f else 1f, tween(120), label = "card")
-    val poster by produceState<ImageBitmap?>(item.poster?.let { posterCache[it] }, item.poster) {
+    val poster by produceState<ImageBitmap?>(item.poster?.let { posterCache.get(it) }, item.poster) {
         item.poster?.let { value = loadPoster(context, it) }
     }
     val shape = RoundedCornerShape(12.dp)
     Box(
         Modifier
-            .size(208.dp, 117.dp)
+            .size(CARD_W_DP.dp, CARD_H_DP.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(if (focused) 10.dp else 3.dp, shape)
+            // Only the focused card casts a shadow (one under every card overloaded the GPU).
+            .then(if (focused) Modifier.shadow(10.dp, shape) else Modifier)
             .clip(shape)
             .background(Color(0xFF3A3A3A))
             .then(if (focused) Modifier.pulseBorder(4.dp, shape) else Modifier)
