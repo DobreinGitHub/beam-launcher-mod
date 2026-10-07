@@ -65,10 +65,20 @@ internal val PanelDim = Color(0xFFA8ACB3)
  * Projector: like XGIMI's panel, darkest along the panel's edge and fading across the picture
  * (theirs is on the left, ours on the right).
  */
+/**
+ * The darkening behind the panel, matched to XGIMI's own quick panel (measured off its screen and
+ * mirrored, as Beam's panel is on the right): nearly black behind the panel for easy reading,
+ * fading smoothly to nothing at the far edge.
+ */
 internal val TvScrim = Brush.horizontalGradient(
-    0f to Color(0x26000000),
-    0.5f to Color(0x8C000000),
-    1f to Color(0xD9000000),
+    0f to Color(0x00000000),
+    0.125f to Color(0x24000000),
+    0.25f to Color(0x47000000),
+    0.375f to Color(0x70000000),
+    0.5f to Color(0x99000000),
+    0.75f to Color(0xCC000000),
+    0.94f to Color(0xEB000000),
+    1f to Color(0xF5000000),
 )
 
 internal val NoScrim = Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
