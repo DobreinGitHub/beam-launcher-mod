@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -35,10 +36,20 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 
 private val TileWidth = 200.dp
 private val GridPad = 12.dp
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AllAppsScreen(
     repo: AppRepository,
@@ -70,6 +81,9 @@ fun AllAppsScreen(
         Spacer(Modifier.height(18.dp))
         // The tiles' lights, behind the whole grid like on the home row.
         val glows = rememberTileGlows()
+        val density = LocalDensity.current
+        val keyline = remember(density) { GridKeyline(with(density) { (GridTop + RowPitch + tileHeight(TileWidth) / 2).toPx() }) }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides keyline) {
         LazyVerticalGrid(
             state = gridState,
             modifier = Modifier.drawBehind {
@@ -86,9 +100,9 @@ fun AllAppsScreen(
                 }
             },
             columns = GridCells.Adaptive(TileWidth),
-            contentPadding = PaddingValues(GridPad, 14.dp, GridPad, 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(30.dp),
-            verticalArrangement = Arrangement.spacedBy(30.dp),
+            contentPadding = PaddingValues(GridPad, GridTop, GridPad, 40.dp),
+            horizontalArrangement = Arrangement.spacedBy(ColumnGap),
+            verticalArrangement = Arrangement.spacedBy(RowGap),
         ) {
             itemsIndexed(sorted, key = { _, e -> e.pkg }) { i, entry ->
                 val focused = focusedKey == entry.pkg
@@ -96,7 +110,7 @@ fun AllAppsScreen(
                     repo.loadArt(entry)?.glow?.let { value = it }
                 }
                 RegisterTileGlow(glows, entry.pkg, focused, glowColor)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                     Tile(
                         width = TileWidth,
                         highlighted = focused,
@@ -107,16 +121,41 @@ fun AllAppsScreen(
                         onClick = { context.launchApp(entry) },
                         onLongClick = { onOptions(entry) },
                     ) { AppTileArt(repo, entry) }
-                    Spacer(Modifier.height(12.dp))
-                    T(
-                        entry.label,
-                        17.sp,
-                        Modifier.fillMaxWidth(),
-                        color = if (focused) Colors.Text else Colors.TextDim,
-                        align = TextAlign.Center,
-                    )
+                    // The name only under the selected tile, like Google TV, in the gap to the next
+                    // row: offset, so it takes no room and the rows stay put.
+                    if (focused) {
+                        T(
+                            entry.label,
+                            17.sp,
+                            Modifier.fillMaxWidth().offset(y = tileHeight(TileWidth) + NameGap),
+                            align = TextAlign.Center,
+                        )
+                    }
                 }
             }
         }
+        }
     }
+}
+
+private val GridTop = 14.dp
+private val ColumnGap = 30.dp
+// Room for the selected tile's name between the rows.
+private val RowGap = 40.dp
+private val NameGap = 9.dp
+// From one row's top to the next: every row is the same height (the name takes no room).
+private val RowPitch = tileHeight(TileWidth) + RowGap
+
+/**
+ * Google TV style paging: the selected row settles on the second row's line, so the grid moves a
+ * whole row at a time (scrolling just enough left the rows at odd heights, and they bobbed).
+ * The first row stays at the top: the grid can't scroll above its start.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private class GridKeyline(private val centerLine: Float) : BringIntoViewSpec {
+    override val scrollAnimationSpec: AnimationSpec<Float> =
+        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f)
+
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        offset + size / 2 - centerLine
 }

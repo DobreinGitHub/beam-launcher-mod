@@ -41,6 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.WifiOff
@@ -61,7 +62,9 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.scale
@@ -291,6 +294,27 @@ const val FOCUS_SCALE_LIFTED = 1.12f
 /** How far the light around a selected tile or card reaches past its edge. */
 val FocusGlowSpread = 44.dp
 
+private val FocusBorderWidth = 3.dp
+
+/**
+ * Google TV's selection outline: a line along the rounded edge of a tile or card, drawn over its
+ * picture, fading in and out with the tile's growth ([alpha] is read at draw time).
+ */
+fun Modifier.focusBorder(corner: Dp, alpha: () -> Float): Modifier = drawWithContent {
+    drawContent()
+    val a = alpha()
+    if (a <= 0f) return@drawWithContent
+    val w = FocusBorderWidth.toPx()
+    val r = (corner.toPx() - w / 2).coerceAtLeast(0f)
+    drawRoundRect(
+        Colors.Text.copy(alpha = a),
+        topLeft = Offset(w / 2, w / 2),
+        size = Size(size.width - w, size.height - w),
+        cornerRadius = CornerRadius(r, r),
+        style = Stroke(w),
+    )
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun Tile(
@@ -306,8 +330,9 @@ fun Tile(
 ) {
     var pressed by remember { mutableStateOf(false) }
     val press = remember { DpadPress() }
-    // Google TV style selection: the selected tile grows a little, no frame; the row draws the
-    // light behind it (see drawFocusGlow), under the neighbours.
+    // Google TV style selection: the selected tile grows a little and gets an outline; the row
+    // draws the light behind it (see drawFocusGlow), under the neighbours.
+    val border by animateFloatAsState(if (highlighted || lifted) 1f else 0f, tween(150), label = "border")
     val scale by animateFloatAsState(
         when {
             lifted -> FOCUS_SCALE_LIFTED
@@ -327,18 +352,39 @@ fun Tile(
     Box(
         modifier
             .size(width, height)
+            .onFocusChanged { if (it.isFocused) Sounds.navigate() else pressed = false }
+            .dpadClick(press, onPress = { pressed = it }, onClick = click, onLongClick = onLongClick)
+            .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = click)
+            // Grown inside the focus target, not around it: scrolling to the selected tile then
+            // sees its real place. Grown, its edges moved as it animated, and the grid scrolled
+            // a few pixels on every move sideways.
+            // No shadows: under every tile they cost the projector's GPU more than the frame budget.
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                alpha = if (dimmed) 0.45f else 1f
-            }
-            // No shadows: under every tile they cost the projector's GPU more than the frame budget.
-            .onFocusChanged { if (it.isFocused) Sounds.navigate() else pressed = false }
-            .dpadClick(press, onPress = { pressed = it }, onClick = click, onLongClick = onLongClick)
-            .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = click),
+            },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(corner))) { content() }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .focusBorder(corner) { border }
+                .clip(RoundedCornerShape(corner))
+                .graphicsLayer { alpha = if (dimmed) 0.45f else 1f },
+        ) { content() }
+        // A hidden app's mark, at full strength over its dimmed picture.
+        if (dimmed) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(30.dp)
+                    .background(Color(0xB3000000), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(Icons.Rounded.VisibilityOff, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(Color.White))
+            }
+        }
     }
 }
 

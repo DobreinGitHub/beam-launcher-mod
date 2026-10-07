@@ -423,6 +423,7 @@ private fun TvCard(item: TvItem, onFocus: (Boolean) -> Unit, onClick: () -> Unit
     // Like the tiles: the selected card grows a little, no frame and no shadows (they overloaded
     // the GPU); the row draws the light behind it.
     val scale by animateFloatAsState(if (focused) FOCUS_SCALE else 1f, tween(150), label = "card")
+    val border by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "border")
     val poster by produceState<ImageBitmap?>(item.poster?.let { posterCache.get(it) }, item.poster) {
         item.poster?.let { value = loadPoster(context, it) }
     }
@@ -430,12 +431,6 @@ private fun TvCard(item: TvItem, onFocus: (Boolean) -> Unit, onClick: () -> Unit
     Box(
         Modifier
             .size(CARD_W_DP.dp, CARD_H_DP.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(shape)
-            .background(Color(0xFF3A3A3A))
             .onFocusChanged {
                 focused = it.isFocused
                 onFocus(it.isFocused)
@@ -444,7 +439,15 @@ private fun TvCard(item: TvItem, onFocus: (Boolean) -> Unit, onClick: () -> Unit
             .clickable(remember { MutableInteractionSource() }, null) {
                 Sounds.activate()
                 onClick()
-            },
+            }
+            // Grown inside the focus target, so paging to the card sees its real place (see Tile).
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .focusBorder(12.dp) { border }
+            .clip(shape)
+            .background(Color(0xFF3A3A3A)),
     ) {
         poster?.let { Image(it, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
         // Title over a dark fade so it reads on any artwork.
