@@ -32,7 +32,7 @@ settings start over.
 ## What it does
 
 - **Home screen**: a row of app tiles in the order you set, plus HDMI and USB drive
-  tiles. Below it a second row with other apps' channels (SmartTube subscriptions, recent Spotify,
+  tiles. Below it rows with other apps' channels (SmartTube subscriptions, recent Spotify,
   "Continue watching"). Also a "Now playing" widget and the projector's battery level.
 - **Quick settings panel** over any app, opened with the remote's voice button: picture, sound,
   appearance, Bluetooth (including searching for and pairing speakers), screensaver, power and
@@ -241,6 +241,9 @@ projector, the stubs won't install.
 
 ### Voice model
 
+> **Installing the model doesn't work in this build:** the command below crashes Beam (a bug of the
+> original Beam 0.3, not fixed here). The voice button opens the panel as usual.
+
 The Vosk model (~45 MB) is not part of the APK and is not downloaded automatically: without it
 the voice button only opens the panel. Install it once over adb (the microphone permission is
 needed; `restore.ps1` grants it):
@@ -281,8 +284,8 @@ SmartTube) use Beam as well, set it as the system recognizer (optional):
 
 **Can I just install the APK, without the script?** It installs and runs, but it won't become the
 home screen (XGIMI's stock launcher stays enabled), and without the permissions the script grants
-the panel on the voice button after a reboot, "Now playing", the channel row, the tile order by
-usage, the screensaver delay and Bluetooth search won't work. The remote's app buttons need the
+the panel on the voice button after a reboot, "Now playing", the channel rows, the starting tile
+order, the screensaver delay and Bluetooth search won't work. The remote's app buttons need the
 stubs. Controlling the projector (brightness, picture, sound, keystone) doesn't depend on the
 permissions and works.
 
@@ -329,8 +332,8 @@ The key is created once: `keytool -genkeypair -alias beam -keyalg RSA -keysize 4
 -keystore beam-release.jks`. Keep a copy: if the key is lost, everyone has to uninstall Beam and
 install it again. Without this file (in CI, for example) the build is signed with the computer's
 debug key: it installs, but can't update a Beam signed with the real key, and vice versa. The
-SHA-256 fingerprint of the release certificate:
-`B0:A3:37:70:07:0C:3C:84:00:29:E1:D4:B3:4F:F3:CF:05:F0:A3:4B:97:41:7D:62:22:38:3E:95:9E:8C:20:F9`.
+SHA-256 fingerprint of this build's release certificate:
+`DC:F7:75:50:94:E8:9D:D1:41:7F:2C:17:00:B1:F1:B0:7E:06:13:B3:07:60:5E:09:C0:AB:07:96:EC:33:09:67` (the original Beam uses another key).
 
 ### Quick install during development
 
