@@ -31,7 +31,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+
+private val TileWidth = 200.dp
 
 @Composable
 fun AllAppsScreen(
@@ -44,6 +52,7 @@ fun AllAppsScreen(
     val sorted = remember(apps) { apps.sortedBy { it.label.lowercase() } }
     var focusedKey by remember { mutableStateOf<String?>(null) }
     val first = remember { FocusRequester() }
+    val gridState = rememberLazyGridState()
 
     BackHandler(onBack = onBack)
 
@@ -61,24 +70,35 @@ fun AllAppsScreen(
             Clock(30.sp)
         }
         Spacer(Modifier.height(18.dp))
+        // The selected tile's light, behind the whole grid like on the home row.
+        val focusedEntry = sorted.firstOrNull { it.pkg == focusedKey }
+        val glowTarget by produceState(focusedEntry?.let { repo.cachedArt(it)?.glow } ?: Colors.Text, focusedKey) {
+            value = focusedEntry?.let { repo.loadArt(it)?.glow } ?: Colors.Text
+        }
+        val glowColor by animateColorAsState(glowTarget, tween(250), label = "glow")
+        val glowStrength by animateFloatAsState(if (focusedEntry != null) 1f else 0f, tween(200), label = "glow")
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(200.dp),
+            state = gridState,
+            modifier = Modifier.drawBehind {
+                val key = focusedKey ?: return@drawBehind
+                val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return@drawBehind
+                val w = TileWidth.toPx()
+                val h = tileHeight(TileWidth).toPx()
+                val center = Offset(info.offset.x + info.size.width / 2f, info.offset.y + h / 2f)
+                drawFocusGlow(glowColor, glowStrength, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
+            },
+            columns = GridCells.Adaptive(TileWidth),
             contentPadding = PaddingValues(12.dp, 14.dp, 12.dp, 40.dp),
             horizontalArrangement = Arrangement.spacedBy(30.dp),
             verticalArrangement = Arrangement.spacedBy(30.dp),
         ) {
             itemsIndexed(sorted, key = { _, e -> e.pkg }) { i, entry ->
                 val focused = focusedKey == entry.pkg
-                Column(
-                    // The selected tile grows over its neighbours.
-                    Modifier.zIndex(if (focused) 1f else 0f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Tile(
-                        width = 200.dp,
+                        width = TileWidth,
                         highlighted = focused,
                         dimmed = entry.hidden,
-                        glow = rememberArt(repo, entry).value?.glow ?: Colors.Text,
                         modifier = Modifier
                             .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
                             .onFocusChanged { if (it.isFocused) focusedKey = entry.pkg },
@@ -90,7 +110,7 @@ fun AllAppsScreen(
                         entry.label,
                         17.sp,
                         Modifier.fillMaxWidth(),
-                        color = if (focused) Colors.Accent else Colors.Text,
+                        color = if (focused) Colors.Text else Colors.TextDim,
                         align = TextAlign.Center,
                     )
                 }

@@ -1,7 +1,11 @@
 package com.home.tiles
 
 import android.view.KeyEvent as AndroidKeyEvent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -32,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -53,7 +58,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val ClassicPad = 108.dp
-private val ClassicGap = 14.dp
+// Wide enough that a selected tile, grown by FOCUS_SCALE, keeps some room from its neighbours.
+private val ClassicGap = 28.dp
+private val RowTop = 8.dp
+private val NameHeight = 40.dp
 private const val MoveSlideMs = 160
 
 /**
@@ -82,6 +90,19 @@ internal fun ClassicHome(
     val first = remember { FocusRequester() }
     val movingFocus = remember { FocusRequester() }
     var focusedKey by remember { mutableStateOf<String?>(null) }
+    // The selected tile's light: its app's colour, blending over as the selection moves, and
+    // fading out when the selection leaves the row.
+    val focusedItem = items.firstOrNull { it.key == focusedKey }
+    // Usually already known (the tile's picture is cached); otherwise once the picture has loaded.
+    val glowTarget by produceState(focusedItem?.let { glowFor(repo, it) } ?: Colors.Text, focusedItem?.key) {
+        value = when (val item = focusedItem) {
+            null -> Colors.Text
+            is RowItem.App -> repo.loadArt(item.entry)?.glow ?: Colors.Text
+            else -> glowFor(repo, item)
+        }
+    }
+    val glowColor by animateColorAsState(glowTarget, tween(250), label = "glow")
+    val glowStrength by animateFloatAsState(if (focusedItem != null) 1f else 0f, tween(200), label = "glow")
 
     // Coming home puts focus back on the first tile, like the row layout. Keyed on the set of
     // tiles, not their order, so moving a tile keeps the focus on it.
@@ -143,7 +164,18 @@ internal fun ClassicHome(
         CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec) {
             LazyRow(
                 state = listState,
-                contentPadding = PaddingValues(start = ClassicPad, end = ClassicPad, top = 8.dp, bottom = 14.dp),
+                // The selected tile's light, behind the whole row so the neighbours stay on top of
+                // it; it follows the tile as the row scrolls (read at draw time).
+                modifier = Modifier.drawBehind {
+                    val key = focusedKey ?: return@drawBehind
+                    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return@drawBehind
+                    val w = tile.toPx()
+                    val h = tileHeight(tile).toPx()
+                    val s = if (move.key == key) FOCUS_SCALE_LIFTED else FOCUS_SCALE
+                    val center = Offset(info.offset + w / 2f, (RowTop + NameHeight).toPx() + h / 2f)
+                    drawFocusGlow(glowColor, glowStrength, center, w * s / 2f, h * s / 2f, FocusGlowSpread.toPx())
+                },
+                contentPadding = PaddingValues(start = ClassicPad, end = ClassicPad, top = RowTop, bottom = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(ClassicGap),
             ) {
                 // Before the apps are read: placeholder tiles where the row will be (under the
@@ -164,17 +196,16 @@ internal fun ClassicHome(
                             // Tiles slide to their new places when the order changes; the moved
                             // one is drawn above the neighbour it passes.
                             .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = tween(MoveSlideMs))
-                            // The selected (or moved) tile grows over its neighbours.
-                            .zIndex(if (moving || focused) 1f else 0f),
+                            .zIndex(if (moving) 1f else 0f),
                     ) {
                         // Name above the selected tile; may run wider than the tile.
-                        Box(Modifier.width(tile).height(40.dp)) {
+                        Box(Modifier.width(tile).height(NameHeight)) {
                             if (focused || moving) {
                                 T(
                                     if (moving) tr(R.string.move_hint, item.title) else item.title,
                                     22.sp,
                                     Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
-                                    color = Colors.Accent,
+                                    color = Colors.Text,
                                 )
                             }
                         }
@@ -182,7 +213,6 @@ internal fun ClassicHome(
                             width = tile,
                             highlighted = focused || moving,
                             lifted = moving,
-                            glow = rowItemGlow(repo, item),
                             modifier = Modifier
                                 .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
                                 .then(if (moving) Modifier.focusRequester(movingFocus).moveKeys(item.key, stepping) else Modifier)

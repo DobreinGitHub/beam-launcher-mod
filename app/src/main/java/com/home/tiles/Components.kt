@@ -57,6 +57,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -118,38 +120,23 @@ fun T(
 )
 
 /**
- * Cyan outline that breathes like the Switch selection frame: a few pulses after the selection
- * moves, then steady. An endless pulse would keep the whole screen redrawing at the display rate.
+ * Google TV style focus light: a soft, wide oval of [color] around an element of half-size
+ * [halfW] x [halfH] at [center], fading gently to nothing [spread] beyond its edge. A radial
+ * gradient, not a blur (blur needs Android 12; the projector has 11). Rows draw it behind all
+ * their items, so the neighbours stay on top of the light.
  */
-@Composable
-private fun rememberPulse(): State<Color> {
-    val glow = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        repeat(3) {
-            glow.animateTo(1f, tween(750))
-            glow.animateTo(0f, tween(750))
-        }
-    }
-    return remember { derivedStateOf { lerp(Colors.Accent, Colors.AccentGlow, glow.value) } }
-}
-
-/**
- * Google TV style focus light: a soft oval of [color] behind the element, strongest at its edge
- * and fading out [spread] beyond it. A radial gradient, not a blur (blur needs Android 12; the
- * projector has 11), drawn only while [strength] is above zero, so unfocused elements cost nothing.
- */
-fun Modifier.focusGlow(color: Color, spread: Dp, strength: () -> Float): Modifier = drawBehind {
-    val s = strength()
-    if (s <= 0f) return@drawBehind
-    val g = spread.toPx()
-    val ry = size.height / 2 + g
-    val rx = size.width / 2 + g
+fun DrawScope.drawFocusGlow(color: Color, strength: Float, center: Offset, halfW: Float, halfH: Float, spread: Float) {
+    if (strength <= 0f) return
+    val ry = halfH + spread
+    val rx = halfW + spread
+    val edge = halfH / ry
     // A circle stretched sideways into an oval as wide as the element plus the spread.
     scale(scaleX = rx / ry, scaleY = 1f, pivot = center) {
         drawCircle(
             Brush.radialGradient(
-                0f to color.copy(alpha = 0.55f * s),
-                ((ry - g) / ry) to color.copy(alpha = 0.42f * s),
+                0f to color.copy(alpha = 0.30f * strength),
+                edge to color.copy(alpha = 0.26f * strength),
+                (edge + (1f - edge) * 0.45f) to color.copy(alpha = 0.10f * strength),
                 1f to Color.Transparent,
                 center = center,
                 radius = ry,
@@ -160,18 +147,9 @@ fun Modifier.focusGlow(color: Color, spread: Dp, strength: () -> Float): Modifie
     }
 }
 
-/**
- * The breathing selection frame. Call it only on the selected/focused element: the colour is read
- * in the draw phase, so the animation redraws just this outline instead of recomposing the screen.
- */
-@Composable
-fun Modifier.pulseBorder(width: Dp, shape: Shape): Modifier {
-    val color = rememberPulse()
-    return drawWithContent {
-        drawContent()
-        val w = width.toPx()
-        inset(w / 2) { drawOutline(shape.createOutline(size, layoutDirection, this), color.value, style = Stroke(w)) }
-    }
+/** [drawFocusGlow] behind this element itself, for lone controls (the top buttons). */
+fun Modifier.focusGlow(color: Color, spread: Dp, strength: () -> Float): Modifier = drawBehind {
+    drawFocusGlow(color, strength(), center, size.width / 2, size.height / 2, spread.toPx())
 }
 
 /**
@@ -278,6 +256,13 @@ fun AppTileArt(repo: AppRepository, entry: AppEntry) {
 /** Tiles are 16:9, the shape of Android TV app banners, so a banner fills its tile exactly. */
 fun tileHeight(width: Dp) = width * 9f / 16f
 
+/** How much a selected tile or card grows, and a tile being moved; the gaps leave it room. */
+const val FOCUS_SCALE = 1.08f
+const val FOCUS_SCALE_LIFTED = 1.12f
+
+/** How far the light around a selected tile or card reaches past its edge. */
+val FocusGlowSpread = 44.dp
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun Tile(
@@ -287,27 +272,24 @@ fun Tile(
     dimmed: Boolean = false,
     /** Picked up to be moved: drawn larger still than a selected tile. */
     lifted: Boolean = false,
-    /** The light around the tile while selected (the app's colour, see [TileArt.glow]). */
-    glow: Color = Color.White,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     var pressed by remember { mutableStateOf(false) }
     val press = remember { DpadPress() }
-    // Google TV style selection: the selected tile grows over its neighbours and glows in its
-    // app's colour; no frame.
+    // Google TV style selection: the selected tile grows a little, no frame; the row draws the
+    // light behind it (see drawFocusGlow), under the neighbours.
     val scale by animateFloatAsState(
         when {
-            lifted -> 1.15f
-            pressed -> 1.04f
-            highlighted -> 1.1f
+            lifted -> FOCUS_SCALE_LIFTED
+            pressed -> 1.03f
+            highlighted -> FOCUS_SCALE
             else -> 1f
         },
         tween(150),
         label = "focus",
     )
-    val glowStrength by animateFloatAsState(if (highlighted || lifted) 1f else 0f, tween(150), label = "glow")
     val click = {
         Sounds.activate()
         onClick()
@@ -322,9 +304,7 @@ fun Tile(
                 scaleY = scale
                 alpha = if (dimmed) 0.45f else 1f
             }
-            // No shadows: under every tile they cost the projector's GPU more than the frame
-            // budget; the glow is one gradient, for the selected tile only.
-            .focusGlow(glow, spread = 18.dp) { glowStrength }
+            // No shadows: under every tile they cost the projector's GPU more than the frame budget.
             .onFocusChanged { if (it.isFocused) Sounds.navigate() else pressed = false }
             .dpadClick(press, onPress = { pressed = it }, onClick = click, onLongClick = onLongClick)
             .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = click),
@@ -380,7 +360,7 @@ fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Un
                     scaleY = scale
                 }
                 // Flat, no shadow; selected, it grows with a soft neutral light, like the tiles.
-                .focusGlow(Colors.Text, spread = 12.dp) { glowStrength * 0.6f }
+                .focusGlow(Colors.Text, spread = 10.dp) { glowStrength * 0.8f }
                 .background(Colors.Button, CircleShape)
                 .onFocusChanged {
                     focused = it.isFocused
@@ -399,7 +379,7 @@ fun RoundButton(icon: ImageVector, tint: Color, label: String, onClick: () -> Un
             if (focused) label else "",
             16.sp,
             Modifier.requiredWidth(200.dp),
-            color = Colors.Accent,
+            color = Colors.Text,
             align = TextAlign.Center,
         )
     }
@@ -539,7 +519,8 @@ fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
                     Modifier
                         .fillMaxWidth()
                         .height(54.dp)
-                        .background(if (focused) Colors.Accent else Color.Transparent, RoundedCornerShape(10.dp))
+                        // Google TV style: the selected item is a light bar with dark text.
+                        .background(if (focused) Colors.Text else Color.Transparent, RoundedCornerShape(10.dp))
                         .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
                         .onFocusChanged {
                             focused = it.isFocused
@@ -553,7 +534,7 @@ fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
                         .padding(horizontal = 18.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    T(text, 21.sp, color = if (focused) Color.White else Colors.Text)
+                    T(text, 21.sp, color = if (focused) Colors.Background else Colors.Text)
                 }
             }
         }

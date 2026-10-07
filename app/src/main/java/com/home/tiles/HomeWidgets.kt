@@ -178,8 +178,8 @@ private fun MediaButton(icon: ImageVector, onClick: () -> Unit) {
     Box(
         Modifier
             .size(44.dp)
-            .background(if (focused) Colors.Accent.copy(alpha = 0.18f) else Color.Transparent, CircleShape)
-            .then(if (focused) Modifier.pulseBorder(3.dp, CircleShape) else Modifier)
+            // Neutral like the rest of the selection (no coloured frame).
+            .background(if (focused) Colors.Text.copy(alpha = 0.22f) else Color.Transparent, CircleShape)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) Sounds.navigate()

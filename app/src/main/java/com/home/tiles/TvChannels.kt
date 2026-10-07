@@ -59,7 +59,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -361,19 +363,40 @@ private fun directNetwork(context: Context): Network? {
 @Composable
 fun ChannelRow(channel: TvChannel, startPad: Dp) {
     val context = LocalContext.current
+    val listState = rememberLazyListState()
+    var focusedKey by remember { mutableStateOf<String?>(null) }
+    // Neutral light (posters are many-coloured), behind the whole row like the apps row's.
+    val glowStrength by animateFloatAsState(if (focusedKey != null) 1f else 0f, tween(200), label = "glow")
+    val glowColor = Colors.Text
     Column(Modifier.fillMaxWidth()) {
         T(channel.name, 20.sp, Modifier.padding(start = startPad), color = Colors.TextDim)
         Spacer(Modifier.height(10.dp))
         LazyRow(
-            contentPadding = PaddingValues(start = startPad, end = 60.dp, top = 8.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            state = listState,
+            modifier = Modifier.drawBehind {
+                val key = focusedKey ?: return@drawBehind
+                val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return@drawBehind
+                val w = CARD_W_DP.dp.toPx()
+                val h = CARD_H_DP.dp.toPx()
+                val center = Offset(info.offset + w / 2f, CARD_TOP.toPx() + h / 2f)
+                drawFocusGlow(glowColor, glowStrength * 0.7f, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
+            },
+            contentPadding = PaddingValues(start = startPad, end = 60.dp, top = CARD_TOP, bottom = 8.dp),
+            // Room for a selected card, grown by FOCUS_SCALE, to stay clear of its neighbours.
+            horizontalArrangement = Arrangement.spacedBy(CARD_GAP),
         ) {
             items(channel.items, key = { it.key }) { item ->
-                TvCard(item) { context.openTvItem(item) }
+                TvCard(
+                    item,
+                    onFocus = { on -> if (on) focusedKey = item.key else if (focusedKey == item.key) focusedKey = null },
+                ) { context.openTvItem(item) }
             }
         }
     }
 }
+
+private val CARD_TOP = 8.dp
+private val CARD_GAP = 28.dp
 
 /** A channel row's place while the channels are being read: a title bar and a run of cards. */
 @Composable
@@ -382,8 +405,8 @@ fun ChannelRowSkeleton(startPad: Dp) {
         Box(Modifier.padding(start = startPad).size(240.dp, 20.dp).skeleton(RoundedCornerShape(6.dp)))
         Spacer(Modifier.height(10.dp))
         Row(
-            Modifier.padding(start = startPad, top = 8.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            Modifier.padding(start = startPad, top = CARD_TOP, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(CARD_GAP),
         ) {
             repeat(6) { Box(Modifier.size(208.dp, 117.dp).skeleton(RoundedCornerShape(12.dp))) }
         }
@@ -391,30 +414,28 @@ fun ChannelRowSkeleton(startPad: Dp) {
 }
 
 @Composable
-private fun TvCard(item: TvItem, onClick: () -> Unit) {
+private fun TvCard(item: TvItem, onFocus: (Boolean) -> Unit, onClick: () -> Unit) {
     val context = LocalContext.current
     var focused by remember { mutableStateOf(false) }
-    // Like the tiles: the selected card grows over its neighbours with a soft light around it
-    // (neutral: posters are many-coloured), no frame and no shadows (they overloaded the GPU).
-    val scale by animateFloatAsState(if (focused) 1.1f else 1f, tween(150), label = "card")
-    val glowStrength by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "glow")
+    // Like the tiles: the selected card grows a little, no frame and no shadows (they overloaded
+    // the GPU); the row draws the light behind it.
+    val scale by animateFloatAsState(if (focused) FOCUS_SCALE else 1f, tween(150), label = "card")
     val poster by produceState<ImageBitmap?>(item.poster?.let { posterCache.get(it) }, item.poster) {
         item.poster?.let { value = loadPoster(context, it) }
     }
     val shape = RoundedCornerShape(12.dp)
     Box(
         Modifier
-            .zIndex(if (focused) 1f else 0f)
             .size(CARD_W_DP.dp, CARD_H_DP.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .focusGlow(Colors.Text, spread = 14.dp) { glowStrength * 0.5f }
             .clip(shape)
             .background(Color(0xFF3A3A3A))
             .onFocusChanged {
                 focused = it.isFocused
+                onFocus(it.isFocused)
                 if (it.isFocused) Sounds.navigate()
             }
             .clickable(remember { MutableInteractionSource() }, null) {
