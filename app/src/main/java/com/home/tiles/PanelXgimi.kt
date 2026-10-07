@@ -112,6 +112,7 @@ internal fun AboutBeamPage() {
         AboutRow(tr(R.string.made_by), "tonisaf")
         T(BEAM_REPO, 14.sp, Modifier.fillMaxWidth().padding(bottom = 5.dp), color = PanelDim, align = TextAlign.End)
         AboutRow(tr(R.string.modified_by), "Dobrein")
+        T(BUILD_REPO, 14.sp, Modifier.fillMaxWidth().padding(bottom = 5.dp), color = PanelDim, align = TextAlign.End)
     }
 }
 
@@ -125,6 +126,7 @@ private fun AboutRow(label: String, value: String) {
 }
 
 private const val BEAM_REPO = "github.com/tonisaf/beam-launcher"
+private const val BUILD_REPO = "github.com/DobreinGitHub/beam-launcher"
 
 /** Table, ceiling or automatic mounting, rear projection, and a fine tilt of the picture. */
 @Composable

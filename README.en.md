@@ -15,6 +15,20 @@ refuses English as a system language. Voice commands are Russian only.
 > On other XGIMI models the projector functions (brightness, keystone, focus, battery) may not
 > work; other devices are not supported.
 
+## This build
+
+A modification of Beam by **Dobrein**, based on the original
+[tonisaf/beam-launcher](https://github.com/tonisaf/beam-launcher) by tonisaf (version and credits:
+panel → "About Beam"). Differences: tiles are ordered by hand ("Move" in the OK-hold menu, no
+automatic sorting), the OK-hold menu no longer opens the app on release, 16:9 tiles, several
+channel rows with Google TV style paging, posters load behind a VPN, charging state / time left /
+low-battery warnings / VPN icon in the status bar, and a panel matched to XGIMI's (scrim, opens at
+once and complete, silent), with a screensaver choice and an "About Beam" page.
+
+**Coming from the original Beam:** this build is signed with another key, so the install script
+replaces it (stock launcher back first, then the old Beam and its button stubs out); Beam's own
+settings start over.
+
 ## What it does
 
 - **Home screen**: a row of app tiles ordered by how often you use them, plus HDMI and USB drive
@@ -60,7 +74,7 @@ as the computer. About 15 minutes.
   Unzip it into `C:\adb`.
 - **Beam**: *Code* → *Download ZIP* on this page. Unzip it, for example into `C:\beam`. You don't need
   to download the Beam APK: the script fetches Beam and the remote button stubs from the latest
-  [release](https://github.com/tonisaf/beam-launcher/releases) and verifies them against
+  [release](https://github.com/DobreinGitHub/beam-launcher/releases) and verifies them against
   `SHA256SUMS.txt` (the computer needs internet access).
 - **The LeanKey keyboard (required):** the script disables the Chinese Sogou keyboard, and without a
   replacement there would be nothing to type with. Download
@@ -165,7 +179,7 @@ panel. The four app buttons on the remote are assigned in the panel: "Remote but
 - **"Running scripts is disabled":** run it with `-ExecutionPolicy Bypass`, as in step 6.
 - **The script can't find adb:** check the path in `-Adb`.
 - **The script can't download the APKs:** check the internet connection. You can put the APKs from the
-  [release](https://github.com/tonisaf/beam-launcher/releases/latest) into `tools\apks\` by hand.
+  [release](https://github.com/DobreinGitHub/beam-launcher/releases/latest) into `tools\apks\` by hand.
 
 ### What `restore.ps1` changes
 

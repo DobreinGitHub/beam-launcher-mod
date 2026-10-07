@@ -216,7 +216,8 @@ if ($Revert) {
 
 Write-Host "`n1. Установка приложений" -ForegroundColor Cyan
 $apkDir = Join-Path $PSScriptRoot "apks"
-$releaseRepo = "tonisaf/beam-launcher"
+# This build's releases (the original Beam is tonisaf/beam-launcher).
+$releaseRepo = "DobreinGitHub/beam-launcher"
 
 # Downloads the named files of a GitHub release into $apkDir, each checked against the release's
 # SHA256SUMS.txt (a file that is not listed there, or does not match, is thrown away).
@@ -275,7 +276,23 @@ Step "Лаунчер Beam" {
     if (-not $beamApk) {
         throw "нет APK Beam: скачайте со страницы Releases, соберите (./gradlew :app:assembleRelease :stub:assembleRelease), положите app-release.apk в tools\apks\ или укажите -Apk"
     }
-    Expect (Adb install -r $beamApk) "Success"
+    $out = Adb install -r $beamApk
+    # A Beam signed with another key (the original one, say) can't be updated in place. The stock
+    # launcher comes back first so there is always a home screen, then that Beam and its
+    # remote-button stubs go (only stubs: a real app with the same package name stays), and this
+    # one goes in. Its own settings (theme, tile order) start over.
+    if ($out -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match') {
+        Write-Host "      установлен Beam с другой подписью: заменяю его (настройки Beam сбросятся)" -ForegroundColor Yellow
+        if (Installed $stockLauncher) { Expect (Adb shell pm enable --user 0 $stockLauncher) "enabled" }
+        foreach ($p in $stubPackages) {
+            if ((Installed $p) -and ((Adb shell dumpsys package $p) -match 'com\.home\.tiles\.stub\.StubActivity')) {
+                Adb shell pm uninstall $p | Out-Null
+            }
+        }
+        Expect (Adb shell pm uninstall $beamPackage) "Success"
+        $out = Adb install -r $beamApk
+    }
+    Expect $out "Success"
 }
 # Everything below changes the system and the stock launcher gets disabled: without Beam there
 # would be no home screen, so stop here.
