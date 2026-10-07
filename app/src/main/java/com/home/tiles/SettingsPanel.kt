@@ -146,10 +146,12 @@ fun PanelScreen(onDismiss: () -> Unit) {
     // Kept here, not in MainPage, so its tiles don't vanish and come back each time a sub-page is
     // left; re-read while the main page is showing, and so after a sub-page changed something.
     val context = LocalContext.current
-    var main by remember { mutableStateOf<MainPageState?>(null) }
+    // Starts from what was read last (see warmPanel), so the tiles are all there from the first
+    // frame; the fresh read then only updates them.
+    var main by remember { mutableStateOf(lastMainState) }
     LaunchedEffect(page) {
         while (page == null) {
-            main = withContext(Dispatchers.IO) { MainPageState.read(context) }
+            main = withContext(Dispatchers.IO) { MainPageState.read(context) }.also { lastMainState = it }
             delay(MAIN_REFRESH_MS)
         }
     }
@@ -241,6 +243,19 @@ private data class MainPageState(
             bluetoothAudio = XgimiBluetooth.devices(context).firstOrNull { it.audio && it.connected }?.name,
         )
     }
+}
+
+/** The main page's firmware state as last read. */
+@Volatile
+private var lastMainState: MainPageState? = null
+
+/**
+ * Reads what the panel's main page shows before it is first opened, so it opens complete instead
+ * of building up as the firmware answers. Blocking (binder calls): run it off the main thread.
+ */
+fun warmPanel(context: Context) {
+    runCatching { lastLumens = Lumens.level() }
+    runCatching { lastMainState = MainPageState.read(context) }
 }
 
 /** How often the main page re-reads the firmware while it is open (an HDMI plug, a speaker connecting). */

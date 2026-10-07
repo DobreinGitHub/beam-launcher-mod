@@ -17,6 +17,7 @@ import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -286,10 +287,17 @@ private fun PerformanceWarning(onConfirm: () -> Unit, onCancel: () -> Unit) {
 }
 
 /** The projector's light-source brightness (0..10), the same setting as XGIMI's Brightness page. */
+/** The brightness last read from the firmware; see [warmPanel]. */
+@Volatile
+internal var lastLumens: Int? = null
+
 @Composable
 internal fun BrightnessSlider(modifier: Modifier) {
     val level = rememberFirmwareState { Lumens.level() }
-    val current = level.value ?: return
+    // The last value read stands in until the fresh one is back, so the slider (and the tiles
+    // under it) are in place from the panel's first frame instead of jumping in.
+    val current = level.value ?: lastLumens ?: return
+    SideEffect { level.value?.let { lastLumens = it } }
     LevelSlider(Icons.Rounded.BrightnessMedium, current, Lumens.MAX, modifier) {
         // Level 0 would leave a nearly black picture; keep the image usable.
         val value = it.coerceAtLeast(1)

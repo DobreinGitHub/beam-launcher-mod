@@ -58,6 +58,8 @@ class PanelOverlay : AccessibilityService() {
         SleepTimer.init(this)
         // The low-battery warning has to come over any app, not only while the launcher shows.
         BatteryMonitor.start(this)
+        // The panel's firmware values, read ahead so it opens complete.
+        Thread { warmPanel(applicationContext) }.start()
         // Turned off early: the sleep timer must not fire right after the next power-on.
         registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF))
     }
