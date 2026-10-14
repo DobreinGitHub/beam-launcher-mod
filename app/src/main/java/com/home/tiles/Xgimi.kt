@@ -143,8 +143,8 @@ object Xgimi {
 
     private const val TAG = "Xgimi"
 
-    /** [device]: the CEC name of what is plugged in, when it gave one. */
-    class Input(val label: String, val id: String, val device: String? = null)
+    /** [device]: the CEC name of what is plugged in, when it gave one; [port]: "HDMI 1" and so on. */
+    class Input(val label: String, val id: String, val device: String? = null, val port: String = label)
 
     /**
      * One entry per HDMI port. A device that introduces itself over HDMI-CEC (e.g. a console) shows
@@ -157,7 +157,7 @@ object Xgimi {
         return ports.mapIndexed { i, port ->
             val device = hdmi.firstOrNull { it.parentId == port.id }?.loadLabel(context)?.toString()?.takeIf { it.isNotBlank() }
             val fallback = if (ports.size == 1) "HDMI" else "HDMI ${i + 1}"
-            Input(device ?: fallback, port.id, device)
+            Input(device ?: fallback, port.id, device, fallback)
         }
     }
 

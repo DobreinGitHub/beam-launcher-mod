@@ -76,8 +76,11 @@
     <string name="hdmi_more">More HDMI settings</string>
     <string name="show">Show</string>
     <string name="now_playing">Now playing</string>
-    <string name="usb_tile">USB drive tile</string>
-    <string name="hdmi_tile">HDMI tile</string>
+    <string name="usb_tile">USB drives and disks</string>
+    <string name="hdmi_tile">HDMI devices</string>
+    <string name="connected_devices">Connected devices</string>
+    <string name="connected_devices_hint">Shown at the start of the row while connected</string>
+    <string name="usb_size">USB · %1$d GB</string>
     <string name="second_row">Channel rows</string>
     <string name="auto">Auto</string>
     <string name="off">Off</string>

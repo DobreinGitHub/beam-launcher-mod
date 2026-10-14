@@ -35,6 +35,9 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 - **OK-hold menu**: Open · Move · Hide from home · Uninstall. Releasing OK no longer opens the app
   (in All apps either).
 - **16:9 tiles** to fit Android TV banners, with no bars at the top and bottom.
+- **Connected-device tiles** in the banner style: a drive with its own name and size ("External HD ·
+  USB · 2000 GB"), HDMI with the device's name when it gives one ("PlayStation 5 · HDMI 1").
+  Switched in Settings → Home screen → "Connected devices".
 - **Two top buttons** in the quick settings style: All apps and Settings.
 - **The top bar makes way for XGIMI's panel**: while XGIMI's quick settings or settings are open
   (they have their own clock and battery), the home's buttons, clock and status hide, so nothing

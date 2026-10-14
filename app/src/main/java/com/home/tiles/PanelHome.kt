@@ -75,7 +75,7 @@ internal fun HomePage() {
     Toggle(tr(R.string.now_playing), LauncherSettings.nowPlaying, Modifier.fillMaxWidth()) {
         LauncherSettings.nowPlaying = !LauncherSettings.nowPlaying
     }
-    Spacer(Modifier.height(10.dp))
+    Section(tr(R.string.connected_devices))
     Toggle(tr(R.string.usb_tile), LauncherSettings.usbTile, Modifier.fillMaxWidth()) {
         LauncherSettings.usbTile = !LauncherSettings.usbTile
     }
@@ -83,6 +83,7 @@ internal fun HomePage() {
     Toggle(tr(R.string.hdmi_tile), LauncherSettings.hdmiTile, Modifier.fillMaxWidth()) {
         LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
     }
+    T(tr(R.string.connected_devices_hint), 14.sp, color = PanelDim, maxLines = 3)
     Section(tr(R.string.second_row))
     PairRow {
         Chip(tr(R.string.auto), LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {

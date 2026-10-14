@@ -76,8 +76,11 @@
     <string name="hdmi_more">Другие настройки HDMI</string>
     <string name="show">Показывать</string>
     <string name="now_playing">Сейчас играет</string>
-    <string name="usb_tile">Плитка флешки</string>
-    <string name="hdmi_tile">Плитка HDMI</string>
+    <string name="usb_tile">Флешки и диски (USB)</string>
+    <string name="hdmi_tile">Устройства по HDMI</string>
+    <string name="connected_devices">Подключённые устройства</string>
+    <string name="connected_devices_hint">Появляются в начале ряда, пока подключены</string>
+    <string name="usb_size">USB · %1$d ГБ</string>
     <string name="second_row">Ряды каналов</string>
     <string name="auto">Авто</string>
     <string name="off">Выкл</string>

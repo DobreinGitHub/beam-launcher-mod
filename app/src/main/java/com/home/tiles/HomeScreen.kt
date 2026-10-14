@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 
 // The row is centred in the space under the top bar; this lifts it to just above the screen's middle.
@@ -37,8 +38,18 @@ private val RowLift = 150.dp
 /** One tile in the home row. Special tiles (drive, HDMI) come before the apps. */
 internal sealed class RowItem(val key: String, val title: String, val subtitle: String = "") {
     class App(val entry: AppEntry) : RowItem(entry.pkg, entry.label)
-    class Usb(val drive: UsbDrive) : RowItem("usb:${drive.key}", tr(R.string.usb_drive), drive.label)
-    class Hdmi(val input: Xgimi.Input) : RowItem("hdmi:${input.id}", input.label, if (input.device != null) "HDMI" else tr(R.string.device_connected))
+    /** The drive's own name ("SanDisk"), and "USB · 29 ГБ" under it. */
+    class Usb(val drive: UsbDrive) : RowItem(
+        "usb:${drive.key}",
+        drive.label.ifBlank { tr(R.string.usb_drive) },
+        if (drive.totalBytes > 0) tr(R.string.usb_size, (drive.totalBytes / 1_000_000_000.0).roundToInt()) else "USB",
+    )
+    /** The device's own name when it gives one (HDMI-CEC), with the port under it; else the port. */
+    class Hdmi(val input: Xgimi.Input) : RowItem(
+        "hdmi:${input.id}",
+        input.label,
+        if (input.device != null) input.port else tr(R.string.device_connected),
+    )
     class All(count: Int) : RowItem("__all__", tr(R.string.all_apps), tr(R.string.apps_count, count))
 }
 
@@ -157,8 +168,8 @@ private const val ALL_KEY = "__all__"
  */
 internal fun glowFor(repo: AppRepository, item: RowItem): Color = when (item) {
     is RowItem.App -> repo.cachedArt(item.entry)?.glow ?: Colors.Text
-    is RowItem.Usb -> Color(0xFFFF9F43)
-    is RowItem.Hdmi -> Color(0xFF8B7CF6)
+    is RowItem.Usb -> UsbTint
+    is RowItem.Hdmi -> HdmiTint
     is RowItem.All -> Colors.Text
 }
 
@@ -166,8 +177,8 @@ internal fun glowFor(repo: AppRepository, item: RowItem): Color = when (item) {
 internal fun RowItemArt(repo: AppRepository, item: RowItem) {
     when (item) {
         is RowItem.App -> AppTileArt(repo, item.entry)
-        is RowItem.Usb -> UsbArt()
-        is RowItem.Hdmi -> HdmiArt()
+        is RowItem.Usb -> UsbArt(item.title, item.subtitle)
+        is RowItem.Hdmi -> HdmiArt(item.title, item.subtitle)
         is RowItem.All -> AllAppsArt()
     }
 }

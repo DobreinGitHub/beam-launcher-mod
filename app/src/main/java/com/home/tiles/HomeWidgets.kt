@@ -10,9 +10,11 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.media.tv.TvInputManager
+import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.StatFs
 import android.os.storage.StorageManager
 import android.service.notification.NotificationListenerService
 import androidx.compose.foundation.Image
@@ -22,7 +24,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,6 +65,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -196,7 +201,8 @@ private fun MediaButton(icon: ImageVector, onClick: () -> Unit) {
 
 // ---- USB drives ----
 
-class UsbDrive(val key: String, val label: String)
+/** [totalBytes]: the drive's capacity, 0 when it can't be read. */
+class UsbDrive(val key: String, val label: String, val totalBytes: Long = 0)
 
 @Composable
 fun rememberUsbDrives(): State<List<UsbDrive>> {
@@ -221,7 +227,12 @@ fun rememberUsbDrives(): State<List<UsbDrive>> {
 private fun queryUsbDrives(context: Context): List<UsbDrive> = runCatching {
     context.getSystemService(StorageManager::class.java).storageVolumes
         .filter { it.isRemovable && it.state == Environment.MEDIA_MOUNTED }
-        .map { UsbDrive(it.uuid ?: it.getDescription(context), it.getDescription(context)) }
+        .map { volume ->
+            val size = if (Build.VERSION.SDK_INT >= 30) {
+                runCatching { volume.directory?.let { StatFs(it.path).totalBytes } }.getOrNull() ?: 0L
+            } else 0L
+            UsbDrive(volume.uuid ?: volume.getDescription(context), volume.getDescription(context), size)
+        }
 }.getOrDefault(emptyList())
 
 // ---- HDMI ----
@@ -261,8 +272,44 @@ fun IconArt(icon: ImageVector, top: Color, bottom: Color) {
     }
 }
 
+/**
+ * A connected device as a banner like the app tiles: a round icon in the device's colour, its name
+ * and a second line (size, port). Too small for words (the hold-OK menu's picture): the icon alone.
+ */
 @Composable
-fun UsbArt() = IconArt(Icons.Rounded.Usb, Color(0xFFFF9F43), Color(0xFFE8590C))
+fun DeviceArt(icon: ImageVector, tint: Color, title: String, subtitle: String) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF2B2B2B)), contentAlignment = Alignment.Center) {
+        val w = maxWidth
+        val h = maxHeight
+        val roomy = w >= 160.dp
+        // Sized from the tile, so it reads the same on any row; alone (no words) it fills more of it.
+        val disc = h * if (roomy) 0.36f else 0.62f
+        val disk = @Composable {
+            Box(Modifier.size(disc).background(Color(0xFF474747), CircleShape), contentAlignment = Alignment.Center) {
+                Image(icon, null, Modifier.size(disc * 0.55f), colorFilter = ColorFilter.tint(tint))
+            }
+        }
+        if (!roomy) {
+            disk()
+        } else {
+            Row(Modifier.fillMaxWidth().padding(horizontal = w * 0.07f), verticalAlignment = Alignment.CenterVertically) {
+                disk()
+                Spacer(Modifier.width(w * 0.05f))
+                Column(Modifier.weight(1f)) {
+                    T(title, (h.value * 0.13f).sp, color = Color(0xFFF2F2F2), weight = FontWeight.Medium)
+                    T(subtitle, (h.value * 0.09f).sp, color = Color(0xFFA8A8A8))
+                }
+            }
+        }
+    }
+}
+
+/** The colours of the device tiles: their icon here and their light when selected. */
+val UsbTint = Color(0xFFFFB27A)
+val HdmiTint = Color(0xFFB3A9FF)
 
 @Composable
-fun HdmiArt() = IconArt(Icons.Rounded.SettingsInputHdmi, Color(0xFF6C5CE7), Color(0xFF3B2DB0))
+fun UsbArt(title: String, subtitle: String) = DeviceArt(Icons.Rounded.Usb, UsbTint, title, subtitle)
+
+@Composable
+fun HdmiArt(title: String, subtitle: String) = DeviceArt(Icons.Rounded.SettingsInputHdmi, HdmiTint, title, subtitle)
