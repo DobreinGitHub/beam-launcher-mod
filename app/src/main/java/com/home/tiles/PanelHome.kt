@@ -48,7 +48,7 @@ internal fun AppearancePage() {
     Toggle(tr(R.string.ambient_tint), LauncherSettings.ambientTint, Modifier.fillMaxWidth()) {
         LauncherSettings.ambientTint = !LauncherSettings.ambientTint
     }
-    T(tr(R.string.ambient_tint_hint), 14.sp, color = PanelDim)
+    T(tr(R.string.ambient_tint_hint), 14.sp, color = PanelDim, maxLines = 3)
     Section(tr(R.string.interface_section))
     Toggle(tr(R.string.nav_sounds), LauncherSettings.sounds, Modifier.fillMaxWidth()) {
         LauncherSettings.sounds = !LauncherSettings.sounds
@@ -119,13 +119,8 @@ internal fun RemoteButtonsSection() {
         }
     }
 
-    Section(tr(R.string.settings_button))
-    Toggle(tr(R.string.opens_beam_panel), LauncherSettings.settingsKeyPanel, Modifier.fillMaxWidth()) {
-        LauncherSettings.settingsKeyPanel = !LauncherSettings.settingsKeyPanel
-    }
-    T(tr(R.string.settings_button_hint), 14.sp, color = PanelDim)
     Section(tr(R.string.app_buttons))
-    T(tr(R.string.app_buttons_hint), 14.sp, color = PanelDim)
+    T(tr(R.string.app_buttons_hint), 14.sp, color = PanelDim, maxLines = 3)
     for (i in 0..3) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth()) {

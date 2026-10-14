@@ -82,10 +82,9 @@
     <string name="auto">Авто</string>
     <string name="off">Выкл</string>
     <string name="nothing">Ничего</string>
-    <string name="this_panel">Эта панель</string>
-    <string name="settings_button">Кнопка настроек</string>
-    <string name="opens_beam_panel">Открывает панель Beam</string>
-    <string name="settings_button_hint">Вместо быстрых настроек XGIMI (они на миг мелькнут и закроются)</string>
+    <string name="this_panel">Настройки</string>
+    <string name="quick_settings_hint">Панель XGIMI: фокус, трапеция, яркость, сеть, Bluetooth, источник. Её же открывает кнопка настроек на пульте.</string>
+    <string name="xgimi_settings_hint">Все настройки проектора: изображение, звук, проекция, сеть, система.</string>
     <string name="app_buttons">Кнопки приложений</string>
     <string name="app_buttons_hint">Нажмите кнопку на пульте, чтобы перейти к ней. ← → — действие</string>
     <string name="color_by_month">Цвет по месяцу</string>

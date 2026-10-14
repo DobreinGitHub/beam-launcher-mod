@@ -35,9 +35,10 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 - **OK-hold menu**: Open · Move · Hide from home · Uninstall. Releasing OK no longer opens the app
   (in All apps either).
 - **16:9 tiles** to fit Android TV banners, with no bars at the top and bottom.
-- **Three top buttons** in the quick settings style (the selected one fills blue): All apps,
-  XGIMI settings (opens XGIMI's quick settings, which lead on to all settings) and Beam settings.
-- **Several channel rows** (Beam settings → Home screen → "Channel rows") with Google TV style
+- **Two top buttons** in the quick settings style: All apps and Settings.
+- **The top bar makes way for panels**: while a panel or menu (XGIMI's or Beam's) covers the home
+  screen, its buttons, clock and status hide, so the time and battery aren't shown twice.
+- **Several channel rows** (Settings → Home screen → "Channel rows") with Google TV style
   paging between rows. VoKino and Kinopoisk posters load even with a VPN on.
 - **Smooth loading**: while the apps and channels are read, placeholders with a moving shine hold
   their places, so the screen doesn't jump.
@@ -63,17 +64,19 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
   and a dark version).
 - **A "Background in app colour" switch.**
 
-**Beam settings panel**
+**Settings**
 
-- **Only Beam's own settings**: appearance, home screen, remote buttons, screensaver, About (the
-  round button in the header). The projector's settings (focus, keystone, picture, sound,
-  Bluetooth, network, source) are in XGIMI's panel: the first tile, "XGIMI settings", opens it;
-  power off, restart and the sleep timer are in XGIMI's menu on the remote's power button. A Russian
-  XGIMI interface is installed separately:
+- **One settings page**, laid out like XGIMI's full settings: categories with round icons on the
+  left, the selected one's content beside them. The first two, "Quick settings" and "XGIMI
+  settings", open the projector's own panel and settings (focus, keystone, picture, sound,
+  Bluetooth, network, source); then Beam's: appearance, home screen, remote buttons, screensaver,
+  About. Power off, restart and the sleep timer are in XGIMI's menu on the remote's power button.
+  A Russian XGIMI interface is installed separately:
   [xgimi-play6-russifier](https://github.com/tonisaf/xgimi-play6-russifier) (the translation alone
   is enough; its launcher and remote-button module are not needed).
-- **Looks like XGIMI's panel**: the same darkening, white focus, a header with the time and date;
-  it opens at once and complete, with no animation and no sound.
+- **One panel at a time**: Beam's page and XGIMI's panel never open together; opening one closes the
+  other. The remote's settings key opens XGIMI's panel, the voice key Beam's page.
+- **Like XGIMI's**: the same darkening, white focus; it opens at once, with no animation and no sound.
 - **System navigation sounds**, the same as in XGIMI's menus.
 - **Screensaver choice**: XGIMI's or an installed one (for example Aerial Views).
 - **An "About Beam" page**: version and credits.
@@ -98,9 +101,8 @@ settings start over.
 - **Home screen**: a row of app tiles in the order you set, plus HDMI and USB drive
   tiles. Below it rows with other apps' channels (SmartTube subscriptions, recent Spotify,
   "Continue watching"). Also a "Now playing" widget and the projector's battery level.
-- **Beam settings panel** over any app, opened with the remote's voice button: appearance, home
-  screen, remote buttons, screensaver; and from there XGIMI's panel with the
-  projector's settings.
+- **Settings** over any app, opened with the remote's voice button: appearance, home screen,
+  remote buttons, screensaver; and from there XGIMI's panel and settings for the projector.
 - **App buttons on the remote**: the firmware hard-wires four buttons to Chinese video services;
   they can be assigned to any app, to the panel, or to "home".
 - **Offline voice search** on [Vosk](https://alphacephei.com/vosk/) (the small Russian model).

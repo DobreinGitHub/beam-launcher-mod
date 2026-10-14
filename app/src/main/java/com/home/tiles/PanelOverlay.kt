@@ -62,14 +62,8 @@ class PanelOverlay : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val firstDown = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
         // The four shortcut keys never get here: the firmware consumes them before accessibility
-        // services see them (see the stub module).
-        if (event.keyCode == SETTINGS_KEY && LauncherSettings.settingsKeyPanel) {
-            if (firstDown) handler.post {
-                if (view == null) showPanel() else hidePanel()
-                closeStockQuickSettings()
-            }
-            return true
-        }
+        // services see them (see the stub module). The settings key is left to the firmware: it
+        // opens XGIMI's quick panel, and ours closes for it (see onAccessibilityEvent).
         if (event.keyCode != KeyEvent.KEYCODE_F5) return false
         // Answer at once and do the work afterwards: if this call takes too long (~0.5 s, e.g.
         // while the launcher in this same process is busy), the system also hands the key to the
@@ -274,8 +268,6 @@ class PanelOverlay : AccessibilityService() {
         /** Holding the voice key this long turns the press into a voice command. */
         private const val HOLD_MS = 1000L
 
-        /** The remote's gear key; XGIMI's system UI opens its quick settings on it. */
-        const val SETTINGS_KEY = KeyEvent.KEYCODE_MOVE_HOME
         private const val STOCK_SETTINGS = "com.android.newsettings"
 
         @Volatile

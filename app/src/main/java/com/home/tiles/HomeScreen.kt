@@ -201,16 +201,15 @@ private fun TopBar(onOpenAll: () -> Unit, onOpenPanel: () -> Unit) {
 }
 
 /**
- * The shortcut buttons in the top bar: all apps, XGIMI's quick settings (its full settings are
- * one step from there) and Beam's panel.
+ * The shortcut buttons in the top bar: all apps, and one settings page that holds Beam's settings
+ * and hands over to XGIMI's quick panel and settings (the remote's settings key opens XGIMI's
+ * panel directly).
  */
 @Composable
 internal fun ActionButtons(onOpenAll: () -> Unit, onOpenPanel: () -> Unit, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = modifier) {
         TopButton(Icons.Rounded.Apps, tr(R.string.all_apps), onOpenAll)
-        TopButton(Icons.Rounded.Settings, tr(R.string.xgimi_settings)) { context.openQuickPanel() }
-        TopButton(Icons.Rounded.Tune, tr(R.string.beam_settings), onOpenPanel)
+        TopButton(Icons.Rounded.Settings, tr(R.string.settings), onOpenPanel)
     }
 }
 

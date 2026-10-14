@@ -118,11 +118,12 @@ fun T(
     color: Color = Colors.Text,
     weight: FontWeight = FontWeight.Normal,
     align: TextAlign = TextAlign.Start,
+    maxLines: Int = 1,
 ) = BasicText(
     text = text,
     modifier = modifier,
     style = TextStyle(color = color, fontSize = size, fontWeight = weight, textAlign = align),
-    maxLines = 1,
+    maxLines = maxLines,
     overflow = TextOverflow.Ellipsis,
 )
 

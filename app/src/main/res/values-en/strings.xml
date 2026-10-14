@@ -82,10 +82,9 @@
     <string name="auto">Auto</string>
     <string name="off">Off</string>
     <string name="nothing">Nothing</string>
-    <string name="this_panel">This panel</string>
-    <string name="settings_button">Settings button</string>
-    <string name="opens_beam_panel">Opens the Beam panel</string>
-    <string name="settings_button_hint">Instead of XGIMI quick settings (they flash briefly and close)</string>
+    <string name="this_panel">Settings</string>
+    <string name="quick_settings_hint">XGIMI\'s panel: focus, keystone, brightness, network, Bluetooth, source. The remote\'s settings key opens it too.</string>
+    <string name="xgimi_settings_hint">All of the projector\'s settings: picture, sound, projection, network, system.</string>
     <string name="app_buttons">App buttons</string>
     <string name="app_buttons_hint">Press a button on the remote to jump to it. ← → — action</string>
     <string name="color_by_month">Colour by month</string>

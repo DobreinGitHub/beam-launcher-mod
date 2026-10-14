@@ -86,6 +86,6 @@ internal fun ScreensaverPage(onSetup: (android.content.ComponentName) -> Unit) {
             if (ScreensaverTimeout.set(context, next)) timeout = ScreensaverTimeout.current(context)
         }
     } else {
-        T(tr(R.string.no_write_settings), 14.sp, color = PanelDim)
+        T(tr(R.string.no_write_settings), 14.sp, color = PanelDim, maxLines = 3)
     }
 }
