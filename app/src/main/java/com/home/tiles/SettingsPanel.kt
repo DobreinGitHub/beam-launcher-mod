@@ -80,7 +80,6 @@ private enum class PanelPage(@StringRes val titleRes: Int) {
     Home(R.string.home_screen),
     Remote(R.string.remote_buttons),
     Screensaver(R.string.screensaver),
-    Power(R.string.power),
     About(R.string.about_beam);
 
     val title: String get() = tr(titleRes)
@@ -210,7 +209,6 @@ private fun ColumnScope.MainPage(
         QuickItem(Icons.Rounded.Dashboard, tr(R.string.home_screen), PanelPage.Home),
         QuickItem(Icons.Rounded.SettingsRemote, tr(R.string.remote_buttons), PanelPage.Remote),
         QuickItem(Icons.Rounded.Landscape, tr(R.string.screensaver), PanelPage.Screensaver),
-        QuickItem(Icons.Rounded.PowerSettingsNew, tr(R.string.power), PanelPage.Power, active = SleepTimer.endsAt.longValue > 0),
     )
     PanelHeader(Modifier.focusRequester(tileRequesters.getValue(PanelPage.About))) { open(PanelPage.About) }
     Spacer(Modifier.height(16.dp))
@@ -332,10 +330,6 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
     when (page) {
         PanelPage.Appearance -> AppearancePage()
         PanelPage.Home -> HomePage()
-        PanelPage.Power -> PowerPage(
-            onOff = { projector { Power.off(context) } },
-            onXgimiMenu = { projector { Xgimi.powerMenu(context) } },
-        )
         // XGIMI's screensaver is set up in its scenes app; others in their own app.
         PanelPage.Screensaver -> ScreensaverPage(onSetup = { component ->
             projector {

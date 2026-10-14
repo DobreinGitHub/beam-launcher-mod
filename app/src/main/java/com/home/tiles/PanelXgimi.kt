@@ -54,43 +54,6 @@ private fun AboutRow(label: String, value: String) {
 private const val BEAM_REPO = "github.com/tonisaf/beam-launcher"
 private const val BUILD_REPO = "github.com/DobreinGitHub/beam-launcher-mod"
 
-/** Power off now, or later with the sleep timer; XGIMI's own menu for restart and the rest. */
-@Composable
-internal fun PowerPage(onOff: () -> Unit, onXgimiMenu: () -> Unit) {
-    val context = LocalContext.current
-    val end = SleepTimer.endsAt.longValue
-    // Ticks the remaining time while the page is open.
-    val now by produceState(System.currentTimeMillis(), end) {
-        while (true) {
-            value = System.currentTimeMillis()
-            delay(15_000)
-        }
-    }
-    Section(tr(R.string.now))
-    ListRow(tr(R.string.power_off), onOff)
-    Section(if (end > 0) tr(R.string.sleep_timer_left, SleepTimer.minutesLeft(now)) else tr(R.string.sleep_timer))
-    val choices = listOf(0) + SleepTimer.options
-    choices.chunked(2).forEach { pair ->
-        PairRow {
-            pair.forEach { minutes ->
-                val label = if (minutes == 0) tr(R.string.off) else if (minutes % 60 == 0) tr(R.string.hours_short, minutes / 60) else tr(R.string.minutes_short, minutes)
-                // The running timer's own chip is the one ticked; a new choice restarts it.
-                val selected = if (minutes == 0) end == 0L else end > 0 && SleepTimer.lastMinutes(context) == minutes
-                Chip(label, selected, Modifier.weight(1f)) {
-                    if (minutes == 0) SleepTimer.cancel(context) else SleepTimer.start(context, minutes)
-                }
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-    }
-    if (end > 0) {
-        val at = SimpleDateFormat("HH:mm", AppLanguage.locale).format(Date(end))
-        T(tr(R.string.sleep_off_at, at), 14.sp, color = PanelDim)
-    }
-    Section(tr(R.string.more))
-    ListRow(tr(R.string.reboot_xgimi_menu), onXgimiMenu)
-}
-
 /**
  * The screensaver: which one runs (XGIMI Atmosphere or an installed one like Aerial Views),
  * its own settings, and how long the projector waits before starting it.

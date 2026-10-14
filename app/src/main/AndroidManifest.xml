@@ -82,11 +82,6 @@
             </intent-filter>
         </service>
 
-        <!-- Sleep timer alarms (SleepTimer). -->
-        <receiver
-            android:name=".SleepTimerReceiver"
-            android:exported="false" />
-
         <receiver
             android:name=".AdbCommandReceiver"
             android:exported="true"

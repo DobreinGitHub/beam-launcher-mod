@@ -65,13 +65,16 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 
 **Beam settings panel**
 
-- **Only Beam's own settings**: appearance, home screen, remote buttons, screensaver, power and
-  sleep timer, About. The projector's settings (focus, keystone, picture, sound, Bluetooth,
-  network, source) are in XGIMI's panel: the first tile, "XGIMI settings", opens it. A Russian
+- **Only Beam's own settings**: appearance, home screen, remote buttons, screensaver, About (the
+  round button in the header). The projector's settings (focus, keystone, picture, sound,
+  Bluetooth, network, source) are in XGIMI's panel: the first tile, "XGIMI settings", opens it;
+  power off, restart and the sleep timer are in XGIMI's menu on the remote's power button. A Russian
   XGIMI interface is installed separately:
   [xgimi-play6-russifier](https://github.com/tonisaf/xgimi-play6-russifier) (the translation alone
   is enough; its launcher and remote-button module are not needed).
-- **Darkening like XGIMI's panel**; it opens at once and complete, with no animation and no sound.
+- **Looks like XGIMI's panel**: the same darkening, white focus, a header with the time and date;
+  it opens at once and complete, with no animation and no sound.
+- **System navigation sounds**, the same as in XGIMI's menus.
 - **Screensaver choice**: XGIMI's or an installed one (for example Aerial Views).
 - **An "About Beam" page**: version and credits.
 
@@ -96,7 +99,7 @@ settings start over.
   tiles. Below it rows with other apps' channels (SmartTube subscriptions, recent Spotify,
   "Continue watching"). Also a "Now playing" widget and the projector's battery level.
 - **Beam settings panel** over any app, opened with the remote's voice button: appearance, home
-  screen, remote buttons, screensaver, power and sleep timer; and from there XGIMI's panel with the
+  screen, remote buttons, screensaver; and from there XGIMI's panel with the
   projector's settings.
 - **App buttons on the remote**: the firmware hard-wires four buttons to Chinese video services;
   they can be assigned to any app, to the panel, or to "home".
