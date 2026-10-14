@@ -4,6 +4,8 @@ import androidx.annotation.StringRes
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -52,6 +54,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -110,11 +113,18 @@ fun SettingsPanel(onDismiss: () -> Unit) {
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun PanelScreen(onDismiss: () -> Unit) {
+fun PanelScreen(
+    onDismiss: () -> Unit,
+    /** Opens XGIMI's panel or settings in this page's place; the overlay keeps its darkening until XGIMI's is up. */
+    handOver: (open: () -> Unit) -> Unit = { open -> onDismiss(); open() },
+) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     var selected by remember { mutableStateOf(Category.Quick) }
     var inContent by remember { mutableStateOf(false) }
+    // Handing over to XGIMI: the cards fade, the darkening stays until XGIMI's own is on screen.
+    var leaving by remember { mutableStateOf(false) }
+    val cardsAlpha by animateFloatAsState(if (leaving) 0f else 1f, tween(120), label = "leave")
     val requesters = remember { Category.entries.associateWith { FocusRequester() } }
     DisposableEffect(Unit) {
         PanelState.open = true
@@ -131,8 +141,10 @@ fun PanelScreen(onDismiss: () -> Unit) {
     }
     fun open(category: Category) {
         when (category) {
-            Category.Quick -> { onDismiss(); context.openQuickPanel() }
-            Category.Xgimi -> { onDismiss(); context.openSettings() }
+            Category.Quick, Category.Xgimi -> {
+                leaving = true
+                handOver { if (category == Category.Quick) context.openQuickPanel() else context.openSettings() }
+            }
             else -> focusManager.moveFocus(FocusDirection.Right)
         }
     }
@@ -159,6 +171,7 @@ fun PanelScreen(onDismiss: () -> Unit) {
                 // Where XGIMI's settings cards sit.
                 .padding(21.dp)
                 .fillMaxHeight()
+                .graphicsLayer { alpha = cardsAlpha }
                 // Taps on the cards themselves must not reach the close-on-tap backdrop.
                 .pointerInput(Unit) { detectTapGestures { } },
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -268,7 +281,7 @@ private fun CategoryRow(
                     selected -> CardBg
                     else -> Color.Transparent
                 },
-                RoundedCornerShape(32.dp),
+                RoundedCornerShape(16.dp),
             )
             .panelControl({
                 focused = it

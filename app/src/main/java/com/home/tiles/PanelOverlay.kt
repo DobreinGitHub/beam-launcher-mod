@@ -63,7 +63,14 @@ class PanelOverlay : AccessibilityService() {
         val firstDown = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
         // The four shortcut keys never get here: the firmware consumes them before accessibility
         // services see them (see the stub module). The settings key is left to the firmware: it
-        // opens XGIMI's quick panel, and ours closes for it (see onAccessibilityEvent).
+        // opens XGIMI's quick panel, and ours closes for it (see onAccessibilityEvent). XGIMI may
+        // not open over ours, so ours steps aside at once and opens it if the firmware didn't.
+        if (event.keyCode == SETTINGS_KEY) {
+            if (firstDown && view != null) handler.post {
+                handOver { handler.postDelayed({ if (!stockShown()) openQuickPanel() }, 300) }
+            }
+            return false
+        }
         if (event.keyCode != KeyEvent.KEYCODE_F5) return false
         // Answer at once and do the work afterwards: if this call takes too long (~0.5 s, e.g.
         // while the launcher in this same process is busy), the system also hands the key to the
@@ -76,18 +83,19 @@ class PanelOverlay : AccessibilityService() {
     }
 
     /**
-     * XGIMI's window manager starts its quick settings on the settings key before accessibility
-     * services can swallow it, and the component can't be disabled over adb. Its window closes on
-     * CLOSE_SYSTEM_DIALOGS (any reason but its own), and appears a moment after the key, so the
-     * broadcast goes out a few times.
+     * Closes XGIMI's quick panel or settings if one is on screen now (it closes on
+     * CLOSE_SYSTEM_DIALOGS, any reason but its own). Only what is already there: a guard that
+     * closed anything XGIMI opened for a while afterwards also closed the panel the user asked for
+     * a moment later.
      */
-    private fun closeStockQuickSettings() {
-        closeStockUntil = SystemClock.uptimeMillis() + 1500
-        for (delay in longArrayOf(60, 150, 300, 500, 800, 1200)) handler.postDelayed(::sendCloseDialogs, delay)
+    private fun closeStockIfOpen() {
+        if (!stockShown()) return
+        sendCloseDialogs()
+        handler.postDelayed({ if (stockShown()) sendCloseDialogs() }, 150)
     }
 
-    /** While [closeStockUntil]: any window appearing is most likely XGIMI's quick settings. */
-    private var closeStockUntil = 0L
+    private fun stockShown(): Boolean =
+        runCatching { getWindows().any { it.root?.packageName == STOCK_SETTINGS } }.getOrDefault(false)
 
     private fun sendCloseDialogs() {
         @Suppress("DEPRECATION")
@@ -186,7 +194,7 @@ class PanelOverlay : AccessibilityService() {
         val composeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
-            setContent { PanelScreen(onDismiss = ::hidePanel) }
+            setContent { PanelScreen(onDismiss = ::hidePanel, handOver = ::handOver) }
         }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -207,8 +215,38 @@ class PanelOverlay : AccessibilityService() {
         view = composeView
         panelParams = params
         // One panel at a time: XGIMI's quick panel goes when ours comes (the voice key can open
-        // ours over it).
-        closeStockQuickSettings()
+        // ours over it). Ours covers the same spot, so the swap doesn't show.
+        closeStockIfOpen()
+    }
+
+    /** Set while ours steps aside for XGIMI's panel or settings (see [handOver]). */
+    private var handingOver = false
+    private val handOverFallback = Runnable {
+        // XGIMI didn't show while ours was still there: let ours go and ask once more.
+        if (!handingOver) return@Runnable
+        handingOver = false
+        hidePanel()
+        if (!stockShown()) pendingOpen?.invoke()
+        pendingOpen = null
+    }
+    private var pendingOpen: (() -> Unit)? = null
+
+    /**
+     * Opens XGIMI's panel or settings ([open]) in place of ours without a flash: ours stops taking
+     * keys and touches but stays (its darkening stays on screen) until XGIMI's window is up, then
+     * goes. Removing ours first left a moment of undarkened home in between.
+     */
+    private fun handOver(open: () -> Unit) {
+        val composeView = view ?: return open()
+        panelParams?.let { params ->
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            runCatching { windows.updateViewLayout(composeView, params) }
+        }
+        handingOver = true
+        pendingOpen = open
+        open()
+        handler.postDelayed(handOverFallback, 900)
     }
 
     /**
@@ -217,6 +255,9 @@ class PanelOverlay : AccessibilityService() {
      * controlled nothing until a reboot. It's made non-focusable first, then removed immediately.
      */
     private fun hidePanel() {
+        handler.removeCallbacks(handOverFallback)
+        handingOver = false
+        pendingOpen = null
         val composeView = view ?: return
         view = null
         panelParams?.let { params ->
@@ -233,14 +274,11 @@ class PanelOverlay : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
-        if (SystemClock.uptimeMillis() < closeStockUntil) {
-            // Close the stock quick settings the moment their window shows up, not at the next timer.
-            if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED || event.packageName == STOCK_SETTINGS) sendCloseDialogs()
-        } else if (view != null && event.packageName == STOCK_SETTINGS &&
+        if (view != null && event.packageName == STOCK_SETTINGS &&
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         ) {
-            // XGIMI's panel or settings opened (its settings key, its own button): ours makes way,
-            // so the two never stand side by side.
+            // XGIMI's panel or settings is up (handed over, its settings key, its own button): ours
+            // makes way now, so the two never stand side by side and nothing flashes in between.
             hidePanel()
         }
     }
@@ -268,6 +306,8 @@ class PanelOverlay : AccessibilityService() {
         /** Holding the voice key this long turns the press into a voice command. */
         private const val HOLD_MS = 1000L
 
+        /** The remote's gear key; XGIMI's system UI opens its quick panel on it. */
+        private const val SETTINGS_KEY = KeyEvent.KEYCODE_MOVE_HOME
         private const val STOCK_SETTINGS = "com.android.newsettings"
 
         @Volatile

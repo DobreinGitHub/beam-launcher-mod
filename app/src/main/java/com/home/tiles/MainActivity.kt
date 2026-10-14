@@ -107,7 +107,14 @@ object HomeWindow {
  */
 @Composable
 fun Modifier.hiddenUnderPanels(): Modifier {
-    val alpha by animateFloatAsState(if (HomeWindow.focused.value) 1f else 0f, tween(150), label = "chrome")
+    // Hides at once, comes back only after a moment: in the gap while one panel hands over to
+    // another the home has the focus for an instant, and the bar would blink in and out.
+    val focused = HomeWindow.focused.value
+    val alpha by animateFloatAsState(
+        if (focused) 1f else 0f,
+        tween(150, delayMillis = if (focused) 300 else 0),
+        label = "chrome",
+    )
     return graphicsLayer { this.alpha = alpha }
 }
 
