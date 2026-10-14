@@ -49,13 +49,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
-// XGIMI's own panel: no sheet over the evenly dimmed picture, see-through grey tiles,
-// saturated blue focus with white text.
+// XGIMI's own panel and settings (as the russifier leaves them): no sheet over the evenly dimmed
+// picture, see-through grey tiles, white focus with near-black text (measured off its screen).
 internal val CardBg = Color(0x38FFFFFF)
-internal val FocusBg = Color(0xFF3B7CF5)
-internal val FocusText = Color.White
+internal val FocusBg = Color.White
+internal val FocusText = Color(0xFF1A1A1A)
 /** Filled part of a focused slider or switch, drawn on [FocusBg]. */
-private val FocusFill = Color.White
+private val FocusFill = Color(0xFF1A1A1A)
 internal val Accent = Color(0xFF8AB4F8)
 /** Text on a tile that is switched on (light [Accent] fill). */
 internal val OnText = Color(0xFF0B1D36)

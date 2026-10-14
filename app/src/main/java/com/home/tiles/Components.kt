@@ -412,13 +412,16 @@ fun AllAppsArt() {
 
 /**
  * A top-bar button like the quick settings panel's: a bare icon, dimmed until selected; then a
- * rounded square fills with the panel's blue under a white icon, and its name shows underneath.
+ * rounded square fills like XGIMI's focus (white under a dark icon; in the light theme, where white
+ * wouldn't show, the other way round), and its name shows underneath.
  */
 @Composable
 fun TopButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val fill by animateColorAsState(if (focused) FocusBg else FocusBg.copy(alpha = 0f), tween(150), label = "fill")
-    val tint by animateColorAsState(if (focused) FocusText else Colors.TextDim, tween(150), label = "tint")
+    val focusFill = if (LauncherSettings.dark) FocusBg else Colors.Text
+    val focusIcon = if (LauncherSettings.dark) FocusText else Colors.Background
+    val fill by animateColorAsState(if (focused) focusFill else focusFill.copy(alpha = 0f), tween(150), label = "fill")
+    val tint by animateColorAsState(if (focused) focusIcon else Colors.TextDim, tween(150), label = "tint")
     Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
