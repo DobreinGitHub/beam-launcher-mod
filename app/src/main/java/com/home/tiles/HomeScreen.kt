@@ -178,7 +178,8 @@ private fun TopBar(onOpenAll: () -> Unit, onOpenPanel: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .padding(start = 48.dp, end = 60.dp, top = 30.dp)
-            .height(100.dp),
+            .height(100.dp)
+            .hiddenUnderPanels(),
     ) {
         ActionButtons(onOpenAll, onOpenPanel, Modifier.padding(top = 2.dp))
         Spacer(Modifier.weight(1f))

@@ -18,7 +18,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +69,11 @@ class MainActivity : ComponentActivity() {
         resumeTick.intValue++
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        HomeWindow.focused.value = hasFocus
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Home pressed while already home: jump back to the start.
@@ -83,6 +91,24 @@ class MainActivity : ComponentActivity() {
             apps.value = withContext(Dispatchers.IO) { repo.loadApps() }
         }
     }
+}
+
+/**
+ * Whether the launcher's window has the input focus. It loses it whenever something covers it:
+ * XGIMI's quick panel or settings, Beam's panel, a menu.
+ */
+object HomeWindow {
+    val focused = mutableStateOf(true)
+}
+
+/**
+ * The home screen's own top bar (buttons, clock, network, battery) steps aside while a panel covers
+ * the home, so the panel's clock and battery aren't shown twice and nothing peeks out behind it.
+ */
+@Composable
+fun Modifier.hiddenUnderPanels(): Modifier {
+    val alpha by animateFloatAsState(if (HomeWindow.focused.value) 1f else 0f, tween(150), label = "chrome")
+    return graphicsLayer { this.alpha = alpha }
 }
 
 /** Panel open requests from [OpenPanelActivity]; same process, so a plain counter is enough. */
