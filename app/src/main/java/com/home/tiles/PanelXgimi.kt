@@ -92,7 +92,7 @@ internal fun PowerPage(onOff: () -> Unit, onXgimiMenu: () -> Unit) {
 }
 
 /**
- * The screensaver: which one runs (XGIMI's "Any Door" or an installed one like Aerial Views),
+ * The screensaver: which one runs (XGIMI Atmosphere or an installed one like Aerial Views),
  * its own settings, and how long the projector waits before starting it.
  */
 @Composable
