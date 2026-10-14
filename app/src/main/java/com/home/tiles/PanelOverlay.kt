@@ -212,6 +212,9 @@ class PanelOverlay : AccessibilityService() {
         owner.resume()
         view = composeView
         panelParams = params
+        // One panel at a time: XGIMI's quick panel goes when ours comes (the voice key can open
+        // ours over it).
+        closeStockQuickSettings()
     }
 
     /**
@@ -235,10 +238,17 @@ class PanelOverlay : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Close the stock quick settings the moment their window shows up, not at the next timer.
-        if (event != null && SystemClock.uptimeMillis() < closeStockUntil &&
-            (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED || event.packageName == STOCK_SETTINGS)
-        ) sendCloseDialogs()
+        event ?: return
+        if (SystemClock.uptimeMillis() < closeStockUntil) {
+            // Close the stock quick settings the moment their window shows up, not at the next timer.
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED || event.packageName == STOCK_SETTINGS) sendCloseDialogs()
+        } else if (view != null && event.packageName == STOCK_SETTINGS &&
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        ) {
+            // XGIMI's panel or settings opened (its settings key, its own button): ours makes way,
+            // so the two never stand side by side.
+            hidePanel()
+        }
     }
 
     override fun onInterrupt() {}
