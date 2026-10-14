@@ -57,6 +57,7 @@ class PanelOverlay : AccessibilityService() {
         XgimiService.bind(this)
         // The low-battery warning has to come over any app, not only while the launcher shows.
         BatteryMonitor.start(this)
+        XgimiScreens.shown.value = stockShown()
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -274,6 +275,12 @@ class PanelOverlay : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        // Keeps the home's top bar out of the way while XGIMI's panel or settings is open.
+        when {
+            event.packageName == STOCK_SETTINGS && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
+                XgimiScreens.shown.value = true
+            event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED -> XgimiScreens.shown.value = stockShown()
+        }
         if (view != null && event.packageName == STOCK_SETTINGS &&
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         ) {

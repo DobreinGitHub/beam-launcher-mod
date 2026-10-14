@@ -36,8 +36,9 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
   (in All apps either).
 - **16:9 tiles** to fit Android TV banners, with no bars at the top and bottom.
 - **Two top buttons** in the quick settings style: All apps and Settings.
-- **The top bar makes way for panels**: while a panel or menu (XGIMI's or Beam's) covers the home
-  screen, its buttons, clock and status hide, so the time and battery aren't shown twice.
+- **The top bar makes way for XGIMI's panel**: while XGIMI's quick settings or settings are open
+  (they have their own clock and battery), the home's buttons, clock and status hide, so nothing
+  is shown twice. Next to Beam's settings the bar stays.
 - **Several channel rows** (Settings → Home screen → "Channel rows") with Google TV style
   paging between rows. VoKino and Kinopoisk posters load even with a VPN on.
 - **Smooth loading**: while the apps and channels are read, placeholders with a moving shine hold

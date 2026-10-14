@@ -69,11 +69,6 @@ class MainActivity : ComponentActivity() {
         resumeTick.intValue++
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        HomeWindow.focused.value = hasFocus
-    }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Home pressed while already home: jump back to the start.
@@ -94,27 +89,21 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Whether the launcher's window has the input focus. It loses it whenever something covers it:
- * XGIMI's quick panel or settings, Beam's panel, a menu.
+ * Whether XGIMI's quick panel or settings is on screen; kept by [PanelOverlay] from the window
+ * events it already watches.
  */
-object HomeWindow {
-    val focused = mutableStateOf(true)
+object XgimiScreens {
+    val shown = mutableStateOf(false)
 }
 
 /**
- * The home screen's own top bar (buttons, clock, network, battery) steps aside while a panel covers
- * the home, so the panel's clock and battery aren't shown twice and nothing peeks out behind it.
+ * The home screen's own top bar (buttons, clock, network, battery) steps aside while XGIMI's quick
+ * panel or settings is open, so their clock and battery aren't shown twice and nothing peeks out
+ * behind them. Beam's own settings page has no clock of its own, so the bar stays beside it.
  */
 @Composable
 fun Modifier.hiddenUnderPanels(): Modifier {
-    // Hides at once, comes back only after a moment: in the gap while one panel hands over to
-    // another the home has the focus for an instant, and the bar would blink in and out.
-    val focused = HomeWindow.focused.value
-    val alpha by animateFloatAsState(
-        if (focused) 1f else 0f,
-        tween(150, delayMillis = if (focused) 300 else 0),
-        label = "chrome",
-    )
+    val alpha by animateFloatAsState(if (XgimiScreens.shown.value) 0f else 1f, tween(150), label = "chrome")
     return graphicsLayer { this.alpha = alpha }
 }
 
