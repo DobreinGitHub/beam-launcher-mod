@@ -49,6 +49,10 @@ internal fun AppearancePage() {
         LauncherSettings.ambientTint = !LauncherSettings.ambientTint
     }
     T(tr(R.string.ambient_tint_hint), 14.sp, color = PanelDim)
+    Section(tr(R.string.interface_section))
+    Toggle(tr(R.string.nav_sounds), LauncherSettings.sounds, Modifier.fillMaxWidth()) {
+        LauncherSettings.sounds = !LauncherSettings.sounds
+    }
     // Each language is named in itself, so it can be found whatever the interface is set to.
     Section(tr(R.string.language))
     PairRow {
@@ -61,52 +65,8 @@ internal fun AppearancePage() {
     }
 }
 
-/** Where the projector starts, the firmware's HDMI auto switch, and a link to its HDMI page (CEC). */
 @Composable
-private fun HdmiSection(onHdmiPage: () -> Unit) {
-    val context = LocalContext.current
-    val autoSwitch = rememberFirmwareState { Hdmi.autoSwitch() }
-    val bootState = rememberFirmwareState { Hdmi.bootToHdmi() }
-    val cec = rememberFirmwareState { Cec.control(context) }
-    val cecWake = rememberFirmwareState { Cec.wakeUp() }
-    val bootHdmi = bootState.value ?: false
-    Section(tr(R.string.on_power_on))
-    PairRow {
-        Chip(tr(R.string.home_screen), !bootHdmi, Modifier.weight(1f)) {
-            bootState.change(false) { Hdmi.setBootToHdmi(context, false) }
-        }
-        Chip("HDMI", bootHdmi, Modifier.weight(1f), note = tr(R.string.if_connected)) {
-            bootState.change(true) { Hdmi.setBootToHdmi(context, true) }
-        }
-    }
-    autoSwitch.value?.let { on ->
-        Spacer(Modifier.height(10.dp))
-        Toggle(tr(R.string.hdmi_on_connect), on, Modifier.fillMaxWidth()) {
-            autoSwitch.change(!on) { Hdmi.setAutoSwitch(!on) }
-        }
-    }
-    cec.value?.let { on ->
-        Section("HDMI‑CEC")
-        Toggle(tr(R.string.hdmi_cec_control), on, Modifier.fillMaxWidth()) {
-            cec.change(!on) { Cec.setControl(context, !on) }
-            // Turning the control off turns the wake-up off too: ask the firmware what it ended up with.
-            cecWake.value?.let { wake -> cecWake.change(if (on) false else wake) {} }
-        }
-        T(tr(R.string.hdmi_cec_hint), 14.sp, color = PanelDim)
-        if (on) cecWake.value?.let { wake ->
-            Spacer(Modifier.height(10.dp))
-            Toggle(tr(R.string.hdmi_wakes), wake, Modifier.fillMaxWidth()) {
-                cecWake.change(!wake) { Cec.setWakeUp(context, !wake) }
-            }
-            T(tr(R.string.hdmi_wakes_hint), 14.sp, color = PanelDim)
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    ListRow(tr(R.string.hdmi_more), onHdmiPage)
-}
-
-@Composable
-internal fun HomePage(onHdmiPage: () -> Unit) {
+internal fun HomePage() {
     val context = LocalContext.current
     val channels by produceState(emptyList<TvChannel>()) {
         value = withContext(Dispatchers.IO) { queryTvChannels(context).filter { it.items.isNotEmpty() } }
@@ -123,7 +83,6 @@ internal fun HomePage(onHdmiPage: () -> Unit) {
     Toggle(tr(R.string.hdmi_tile), LauncherSettings.hdmiTile, Modifier.fillMaxWidth()) {
         LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
     }
-    HdmiSection(onHdmiPage)
     Section(tr(R.string.second_row))
     PairRow {
         Chip(tr(R.string.auto), LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {

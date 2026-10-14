@@ -1,7 +1,5 @@
 package com.home.tiles
 
-import android.content.Context
-import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,78 +24,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
-
-/** XGIMI's sensor switches: keystone when moved, refocus on tilt, eye protection. */
-@Composable
-internal fun SensorToggles() {
-    val realtime = rememberFirmwareState { Sensors.realtimeKeystone() }
-    val motionFocus = rememberFirmwareState { Sensors.motionFocus() }
-    val eyes = rememberFirmwareState { Sensors.eyeProtection() }
-    val bootKeystone = rememberFirmwareState { Sensors.bootKeystone() }
-    // Nothing is shown until the firmware has answered, and nothing if it has none of these.
-    if (realtime.value == null && motionFocus.value == null && eyes.value == null && bootKeystone.value == null) return
-    Section(tr(R.string.sensors))
-    bootKeystone.value?.let { on ->
-        Toggle(tr(R.string.kst_on_boot), on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            bootKeystone.change(!on) { Sensors.setBootKeystone(!on) }
-        }
-    }
-    realtime.value?.let { on ->
-        Toggle(tr(R.string.kst_on_move), on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            realtime.change(!on) { Sensors.setRealtimeKeystone(!on) }
-        }
-    }
-    motionFocus.value?.let { on ->
-        Toggle(tr(R.string.af_on_move), on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            motionFocus.change(!on) { Sensors.setMotionFocus(!on) }
-        }
-    }
-    eyes.value?.let { on ->
-        Toggle(tr(R.string.eye_protection), on, Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            eyes.change(!on) { Sensors.setEyeProtection(!on) }
-        }
-    }
-}
-
-/** Model, firmware and the like, read once when the page opens. */
-@Composable
-internal fun AboutSection() {
-    val context = LocalContext.current
-    val rows by produceState(emptyList<Pair<String, String>>()) {
-        value = withContext(Dispatchers.IO) { aboutRows(context) }
-    }
-    if (rows.isEmpty()) return
-    Section(tr(R.string.about_projector))
-    Column(Modifier.fillMaxWidth().background(CardBg, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
-        rows.forEach { (label, value) -> AboutRow(label, value) }
-    }
-}
-
-private fun aboutRows(context: Context): List<Pair<String, String>> {
-    fun prop(name: String) = XgimiCommon.property(name).takeIf { it.isNotBlank() }
-    val memory = android.app.ActivityManager.MemoryInfo().also {
-        context.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(it)
-    }
-    val storage = android.os.StatFs(android.os.Environment.getDataDirectory().path)
-    val uptime = android.os.SystemClock.elapsedRealtime() / 60_000
-    val ip = runCatching {
-        java.net.NetworkInterface.getNetworkInterfaces().toList()
-            .flatMap { it.inetAddresses.toList() }
-            .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }?.hostAddress
-    }.getOrNull()
-    fun gb(bytes: Long) = String.format(Locale.US, "%.1f", bytes / 1e9)
-    return listOfNotNull(
-        prop("ro.boot.xgimi.modelname")?.let { tr(R.string.model) to "XGIMI · $it" },
-        prop("ro.build.version.incremental")?.let { tr(R.string.firmware) to it },
-        "Android" to android.os.Build.VERSION.RELEASE,
-        prop("ro.boot.serialno")?.let { tr(R.string.serial) to it },
-        ip?.let { tr(R.string.ip_address) to it },
-        tr(R.string.uptime) to if (uptime >= 60) tr(R.string.hours_minutes, uptime / 60, uptime % 60) else tr(R.string.minutes_short, uptime),
-        tr(R.string.free_memory) to tr(R.string.memory_of, memory.availMem / 1_048_576, memory.totalMem / 1_048_576),
-        tr(R.string.free_storage) to tr(R.string.storage_of, gb(storage.availableBytes), gb(storage.totalBytes)),
-    )
-}
 
 /** Beam's version and who made it: the original author and this build's modifications. */
 @Composable
@@ -127,35 +53,6 @@ private fun AboutRow(label: String, value: String) {
 
 private const val BEAM_REPO = "github.com/tonisaf/beam-launcher"
 private const val BUILD_REPO = "github.com/DobreinGitHub/beam-launcher-mod"
-
-/** Table, ceiling or automatic mounting, rear projection, and a fine tilt of the picture. */
-@Composable
-internal fun ProjectionPage(onRotatePage: () -> Unit) {
-    val mount = rememberFirmwareState { Projection.mount() }
-    val rear = rememberFirmwareState { Projection.rear() }
-    mount.value?.let { current ->
-        Section(tr(R.string.installation))
-        listOf(Projection.AUTO to tr(R.string.auto), Projection.TABLE to tr(R.string.on_table), Projection.CEILING to tr(R.string.on_ceiling)).forEach { (value, label) ->
-            Chip(label, current == value, Modifier.fillMaxWidth().padding(bottom = 8.dp), note = if (value == Projection.AUTO) tr(R.string.by_position_sensor) else null) {
-                mount.change(value) { Projection.setMount(value) }
-            }
-        }
-    }
-    rear.value?.let { on ->
-        Spacer(Modifier.height(2.dp))
-        Toggle(tr(R.string.rear_projection), on, Modifier.fillMaxWidth()) {
-            rear.change(!on) { Projection.setRear(!on) }
-        }
-        T(tr(R.string.rear_projection_hint), 14.sp, color = PanelDim)
-    }
-    Section(tr(R.string.picture_tilt))
-    Selector(tr(R.string.straighten), tr(R.string.by_half_degree), Modifier.fillMaxWidth()) { step ->
-        // Every step counts, so each gets its own key: none is merged into the one before.
-        PanelIo.submit("tilt-${System.nanoTime()}") { Projection.tilt(clockwise = step > 0) }
-    }
-    Spacer(Modifier.height(10.dp))
-    ListRow(tr(R.string.rotate_xgimi), onRotatePage)
-}
 
 /** Power off now, or later with the sleep timer; XGIMI's own menu for restart and the rest. */
 @Composable

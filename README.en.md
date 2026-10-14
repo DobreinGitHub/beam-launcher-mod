@@ -65,6 +65,12 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 
 **Beam settings panel**
 
+- **Only Beam's own settings**: appearance, home screen, remote buttons, screensaver, power and
+  sleep timer, About. The projector's settings (focus, keystone, picture, sound, Bluetooth,
+  network, source) are in XGIMI's panel: the first tile, "XGIMI settings", opens it. A Russian
+  XGIMI interface is installed separately:
+  [xgimi-play6-russifier](https://github.com/tonisaf/xgimi-play6-russifier) (the translation alone
+  is enough; its launcher and remote-button module are not needed).
 - **Darkening like XGIMI's panel**; it opens at once and complete, with no animation and no sound.
 - **Screensaver choice**: XGIMI's or an installed one (for example Aerial Views).
 - **An "About Beam" page**: version and credits.
@@ -89,9 +95,9 @@ settings start over.
 - **Home screen**: a row of app tiles in the order you set, plus HDMI and USB drive
   tiles. Below it rows with other apps' channels (SmartTube subscriptions, recent Spotify,
   "Continue watching"). Also a "Now playing" widget and the projector's battery level.
-- **Quick settings panel** over any app, opened with the remote's voice button: picture, sound,
-  appearance, Bluetooth (including searching for and pairing speakers), screensaver, power and
-  sleep timer, projection, keystone and picture size, XGIMI settings.
+- **Beam settings panel** over any app, opened with the remote's voice button: appearance, home
+  screen, remote buttons, screensaver, power and sleep timer; and from there XGIMI's panel with the
+  projector's settings.
 - **App buttons on the remote**: the firmware hard-wires four buttons to Chinese video services;
   they can be assigned to any app, to the panel, or to "home".
 - **Offline voice search** on [Vosk](https://alphacephei.com/vosk/) (the small Russian model).
@@ -262,8 +268,7 @@ Read this before running it:
   Beam is installed and set as the home screen;
 - makes LeanKey the system keyboard if it is installed;
 - grants Beam permissions over adb: usage statistics, notification access (for "Now playing"), TV
-  channels, `WRITE_SECURE_SETTINGS`, location (to search for Bluetooth devices), and modifying
-  system settings;
+  channels, `WRITE_SECURE_SETTINGS`, and modifying system settings;
 - turns on Beam's accessibility service (added to the ones already enabled): it catches the voice
   button and draws the panel over apps. The firmware resets it on boot; Beam turns it back on by
   itself;
@@ -358,9 +363,7 @@ SmartTube) use Beam as well, set it as the system recognizer (optional):
 **Can I just install the APK, without the script?** It installs and runs, but it won't become the
 home screen (XGIMI's stock launcher stays enabled), and without the permissions the script grants
 the panel on the voice button after a reboot, "Now playing", the channel rows, the starting tile
-order, the screensaver delay and Bluetooth search won't work. The remote's app buttons need the
-stubs. Controlling the projector (brightness, picture, sound, keystone) doesn't depend on the
-permissions and works.
+order and the screensaver delay won't work. The remote's app buttons need the stubs.
 
 **The panel doesn't open from the voice button.** Check that the accessibility service "Beam:
 панель" is on. The script turns it on, the firmware resets it on boot, and Beam turns it back on

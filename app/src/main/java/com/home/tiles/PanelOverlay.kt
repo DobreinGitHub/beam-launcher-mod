@@ -58,8 +58,6 @@ class PanelOverlay : AccessibilityService() {
         SleepTimer.init(this)
         // The low-battery warning has to come over any app, not only while the launcher shows.
         BatteryMonitor.start(this)
-        // The panel's firmware values, read ahead so it opens complete.
-        Thread { warmPanel(applicationContext) }.start()
         // Turned off early: the sleep timer must not fire right after the next power-on.
         registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF))
     }
@@ -74,13 +72,6 @@ class PanelOverlay : AccessibilityService() {
         val firstDown = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
         // The four shortcut keys never get here: the firmware consumes them before accessibility
         // services see them (see the stub module).
-        KeystoneActivity.volumeKeys?.let { resize ->
-            val up = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP
-            if (up || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                if (event.action == KeyEvent.ACTION_DOWN) handler.post { resize(up) }
-                return true
-            }
-        }
         if (event.keyCode == SETTINGS_KEY && LauncherSettings.settingsKeyPanel) {
             if (firstDown) handler.post {
                 if (view == null) showPanel() else hidePanel()
