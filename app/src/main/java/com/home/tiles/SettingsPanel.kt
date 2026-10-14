@@ -211,9 +211,8 @@ private fun ColumnScope.MainPage(
         QuickItem(Icons.Rounded.SettingsRemote, tr(R.string.remote_buttons), PanelPage.Remote),
         QuickItem(Icons.Rounded.Landscape, tr(R.string.screensaver), PanelPage.Screensaver),
         QuickItem(Icons.Rounded.PowerSettingsNew, tr(R.string.power), PanelPage.Power, active = SleepTimer.endsAt.longValue > 0),
-        QuickItem(Icons.Rounded.Info, tr(R.string.about_beam), PanelPage.About),
     )
-    PanelHeader()
+    PanelHeader(Modifier.focusRequester(tileRequesters.getValue(PanelPage.About))) { open(PanelPage.About) }
     Spacer(Modifier.height(16.dp))
     // One full-width row each: the names fit, and all of them on one screen.
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -233,10 +232,15 @@ private fun ColumnScope.MainPage(
     }
 }
 
+/**
+ * Laid out like XGIMI's panel header: the time with the battery beside it, the date underneath
+ * ("14 октября 2026 · Ср"), and a round grey button on the right (theirs is settings, ours About).
+ */
 @Composable
-private fun PanelHeader() {
+private fun PanelHeader(aboutModifier: Modifier, onAbout: () -> Unit) {
     val timeFormat = remember(AppLanguage.locale) { SimpleDateFormat("HH:mm", AppLanguage.locale) }
-    val dateFormat = remember(AppLanguage.locale) { SimpleDateFormat("EE, d MMMM", AppLanguage.locale) }
+    val dateFormat = remember(AppLanguage.locale) { SimpleDateFormat("d MMMM yyyy", AppLanguage.locale) }
+    val dayFormat = remember(AppLanguage.locale) { SimpleDateFormat("EE", AppLanguage.locale) }
     // Minute resolution: every change redraws this full-screen window over the video.
     val now by produceState(Date()) {
         while (true) {
@@ -244,12 +248,18 @@ private fun PanelHeader() {
             delay(60_000 - System.currentTimeMillis() % 60_000)
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val day = dayFormat.format(now).replaceFirstChar { it.titlecase(AppLanguage.locale) }
+    // As far from the top as XGIMI's.
+    Row(Modifier.padding(top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            T(dateFormat.format(now), 16.sp, color = PanelDim)
-            T(timeFormat.format(now), 36.sp, color = PanelText, weight = FontWeight.Medium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(timeFormat.format(now), 40.sp, color = PanelText)
+                Spacer(Modifier.width(10.dp))
+                BatteryIndicator(13.sp, PanelText, iconScale = 0.6f)
+            }
+            T(dateFormat.format(now) + " · " + day, 15.sp, color = PanelText)
         }
-        BatteryIndicator(20.sp, PanelText)
+        Box(aboutModifier) { RoundIcon(Icons.Rounded.Info, filled = true, onClick = onAbout) }
     }
 }
 
@@ -291,13 +301,14 @@ private fun WideTile(item: QuickItem, modifier: Modifier, onClick: () -> Unit) {
     }
 }
 
+/** A round icon button; [filled] gives it the grey disc of XGIMI's header button when not focused. */
 @Composable
-private fun RoundIcon(icon: ImageVector, onClick: () -> Unit) {
+private fun RoundIcon(icon: ImageVector, filled: Boolean = false, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
             .size(48.dp)
-            .background(if (focused) FocusBg else Color.Transparent, CircleShape)
+            .background(if (focused) FocusBg else if (filled) CardBg else Color.Transparent, CircleShape)
             .panelControl({ focused = it }, onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -313,7 +324,7 @@ private fun ColumnScope.SubPage(page: PanelPage, first: FocusRequester, onDismis
         action()
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.focusRequester(first)) { RoundIcon(Icons.Rounded.ArrowBack, onBack) }
+        Box(Modifier.focusRequester(first)) { RoundIcon(Icons.Rounded.ArrowBack, onClick = onBack) }
         Spacer(Modifier.width(8.dp))
         T(page.title, 24.sp, color = PanelText)
     }

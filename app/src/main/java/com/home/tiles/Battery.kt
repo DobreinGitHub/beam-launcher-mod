@@ -157,7 +157,7 @@ private fun timeLeft(minutes: Int): String =
  * plug. On battery: the time left once it can be told, and red at 15% and below.
  */
 @Composable
-fun BatteryIndicator(textSize: TextUnit = StatusTextSize, color: Color = Colors.Text) {
+fun BatteryIndicator(textSize: TextUnit = StatusTextSize, color: Color = Colors.Text, iconScale: Float = 1f) {
     BatteryMonitor.start(LocalContext.current)
     val info = BatteryMonitor.info ?: return
     val low = info.power == PowerSource.BATTERY && info.percent <= 15
@@ -174,11 +174,11 @@ fun BatteryIndicator(textSize: TextUnit = StatusTextSize, color: Color = Colors.
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         badge?.let { (icon, badgeTint) ->
-            Image(icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(badgeTint))
+            Image(icon, null, Modifier.size(26.dp * iconScale), colorFilter = ColorFilter.tint(badgeTint))
             Spacer(Modifier.width(2.dp))
         }
-        BatteryGlyph(info, tint)
-        Spacer(Modifier.width(8.dp))
+        BatteryGlyph(info, tint, iconScale)
+        Spacer(Modifier.width(8.dp * iconScale))
         T("${info.percent}%", textSize, color = if (low) tint else color, weight = FontWeight.Light)
         info.minutesLeft?.let {
             Spacer(Modifier.width(10.dp))
@@ -189,12 +189,12 @@ fun BatteryIndicator(textSize: TextUnit = StatusTextSize, color: Color = Colors.
 
 /** Horizontal battery like the Switch's: outline and a fill proportional to the charge. */
 @Composable
-private fun BatteryGlyph(info: BatteryInfo, tint: Color) {
+private fun BatteryGlyph(info: BatteryInfo, tint: Color, scale: Float = 1f) {
     // Same height as the Wi-Fi glyph's visible part, so the two icons line up.
-    Box(Modifier.size(width = 40.dp, height = 20.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(width = 40.dp * scale, height = 20.dp * scale), contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) {
-            val stroke = 2.5.dp.toPx()
-            val nub = 3.dp.toPx()
+            val stroke = 2.5.dp.toPx() * scale.coerceAtLeast(0.7f)
+            val nub = 3.dp.toPx() * scale
             val body = Size(size.width - nub - stroke, size.height - stroke)
             val corner = CornerRadius(4.dp.toPx())
             drawRoundRect(tint, Offset(stroke / 2, stroke / 2), body, corner, style = Stroke(stroke))
