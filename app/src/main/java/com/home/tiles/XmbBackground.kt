@@ -38,6 +38,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.geometry.Offset
 import android.media.AudioManager
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 
 /** PS3 XMB month colours, January to December. */
 val XmbColors = listOf(
@@ -61,17 +64,18 @@ fun xmbStops(dark: Boolean): List<Color> {
 /**
  * The XMB backdrop: month gradient, translucent waves with bright crests, drifting sparkles.
  * Waves are an AGSL shader (Android 13+), so the GPU does the per-pixel work; older systems get
- * the plain gradient. Animation only runs while the launcher is resumed.
+ * them drawn in software, small (see XmbWavesLite). Animation only runs while the launcher is
+ * resumed.
  */
 @Composable
 fun XmbBackground() {
     val stops = xmbStops(LauncherSettings.dark)
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(stops)),
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) XmbWaves() else XmbWavesLite()
+    val gradient = Brush.verticalGradient(stops)
+    val paintUnder: DrawScope.() -> Unit = { drawRect(gradient) }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Box(Modifier.fillMaxSize().drawBehind(paintUnder)) { XmbWaves() }
+    } else {
+        XmbWavesLite(paintUnder, stops)
     }
 }
 
@@ -98,15 +102,27 @@ private class Sparkle(val x: Float, val y: Float, val phase: Float, val speed: F
  * the soft look wanted, and tessellating thick strokes at 1080p every frame was the costly part);
  * crest lines and sparkles stay sharp at full resolution. ~20 fps, paused while music plays,
  * since the projector's CPU is also decoding the audio.
+ *
+ * The gradient ([paintUnder]) goes into the same small bitmap, under the bands, so gradient and
+ * waves reach the screen in one pass: as separate full-screen layers (the gradient twice, the
+ * bands), they took the GPU 15 ms a frame standing still. It is painted, small, only when it
+ * changes ([underKey]: theme, month colour); each wave step copies it in. The ambient wash stays
+ * a layer of its own (see Backdrop): it changes with every move along the row, and painting it
+ * in here redrew the bands in software on each of those frames.
  */
 @Composable
-private fun XmbWavesLite() {
+private fun XmbWavesLite(paintUnder: DrawScope.() -> Unit, underKey: Any) {
     val context = LocalContext.current
     val audio = remember { context.getSystemService(AudioManager::class.java) }
     var time by remember { mutableFloatStateOf(0f) }
     val bands = remember { android.graphics.Bitmap.createBitmap(BAND_W, BAND_H, android.graphics.Bitmap.Config.ARGB_8888) }
     val bandCanvas = remember { android.graphics.Canvas(bands) }
     val bandImage = remember { bands.asImageBitmap() }
+    // The gradient and wash, painted when they change; copied under the bands at each step.
+    val under = remember { android.graphics.Bitmap.createBitmap(BAND_W, BAND_H, android.graphics.Bitmap.Config.ARGB_8888) }
+    val underCanvas = remember { androidx.compose.ui.graphics.Canvas(under.asImageBitmap()) }
+    val underPainter = remember { CanvasDrawScope() }
+    val painted = remember { arrayOfNulls<Any>(1) }
     val bandPaint = remember {
         android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             style = android.graphics.Paint.Style.STROKE
@@ -143,8 +159,12 @@ private fun XmbWavesLite() {
                 val t = time
                 val w = size.width
                 val h = size.height
-                // Soft bands, low resolution.
-                bands.eraseColor(android.graphics.Color.TRANSPARENT)
+                // Gradient and wash, then the soft bands over them, all at low resolution.
+                if (painted[0] != underKey) {
+                    underPainter.draw(this, layoutDirection, underCanvas, Size(BAND_W.toFloat(), BAND_H.toFloat()), paintUnder)
+                    painted[0] = underKey
+                }
+                bandCanvas.drawBitmap(under, 0f, 0f, null)
                 for (i in 0 until 3) {
                     bandPath.reset()
                     for (s in 0..BAND_STEPS) {

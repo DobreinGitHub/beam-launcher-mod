@@ -19,7 +19,12 @@ import androidx.compose.ui.graphics.luminance
 import androidx.palette.graphics.Palette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.ConcurrentHashMap
+import android.content.ComponentCallbacks2
+import android.util.LruCache
+import androidx.compose.ui.graphics.asAndroidBitmap
+import kotlin.math.roundToInt
+
+private const val ART_CACHE_BYTES = 24 * 1024 * 1024
 
 data class AppEntry(
     val pkg: String,
@@ -62,7 +67,19 @@ private fun glowOf(bitmap: Bitmap): Color {
 class AppRepository(private val context: Context) {
     private val pm = context.packageManager
     private val prefs = context.getSharedPreferences("tiles", Context.MODE_PRIVATE)
-    private val artCache = ConcurrentHashMap<String, TileArt>()
+
+    // Tile pictures at the most pixels a tile ever shows (the widest tile, lifted to be moved):
+    // larger ones cost memory on a 1.4 GB projector and made the GPU scale them down every frame.
+    private val artWidth = (MAX_TILE_WIDTH_DP * FOCUS_SCALE_LIFTED * context.resources.displayMetrics.density).roundToInt()
+    private val artHeight = artWidth * 9 / 16
+    // A logo on a coloured card fills 62% of the tile's height (see AppArt).
+    private val iconSide = (artHeight * 0.62f).roundToInt()
+
+    // Bounded, so a long list of apps (All apps loads them all) can't grow it without end;
+    // at about half a megabyte a picture it holds some fifty.
+    private val artCache = object : LruCache<String, TileArt>(ART_CACHE_BYTES) {
+        override fun sizeOf(key: String, value: TileArt) = value.image.asAndroidBitmap().allocationByteCount
+    }
 
     private var hidden: Set<String>
         get() = prefs.getStringSet(KEY_HIDDEN, null) ?: DEFAULT_HIDDEN
@@ -202,12 +219,31 @@ class AppRepository(private val context: Context) {
         usm.queryAndAggregateUsageStats(now - USAGE_WINDOW_MS, now).mapValues { it.value.lastTimeUsed }
     }.getOrDefault(emptyMap())
 
-    fun cachedArt(entry: AppEntry): TileArt? = artCache[cacheKey(entry)]
+    /**
+     * Gives memory back when the system runs short (see MainActivity.onTrimMemory): the least
+     * recently shown pictures go, the home row's stay as long as they can. Not on every trip to
+     * another app, so coming home doesn't redraw the tiles from scratch.
+     */
+    fun trimArt(level: Int) {
+        when {
+            level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ->
+                artCache.trimToSize(ART_CACHE_BYTES / 4)
+            level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ->
+                artCache.trimToSize(ART_CACHE_BYTES / 2)
+        }
+    }
+
+    fun cachedArt(entry: AppEntry): TileArt? = artCache.get(cacheKey(entry))
 
     suspend fun loadArt(entry: AppEntry): TileArt? = withContext(Dispatchers.IO) {
-        artCache[cacheKey(entry)]?.let { return@withContext it }
+        artCache.get(cacheKey(entry))?.let { return@withContext it }
         val art = runCatching { banner(entry) ?: icon(entry) }.getOrNull()
-        art?.also { artCache[cacheKey(entry)] = it }
+        art?.also {
+            artCache.put(cacheKey(entry), it)
+            // Sent to the GPU now, in the background: uploaded only when first drawn, a screen's
+            // worth of pictures stalled its first frames (All apps' slide showed as a jump).
+            it.image.prepareToDraw()
+        }
     }
 
     private fun cacheKey(entry: AppEntry) = "${entry.pkg}:${entry.updated}"
@@ -216,11 +252,11 @@ class AppRepository(private val context: Context) {
         val drawable = runCatching { pm.getActivityBanner(entry.component) }.getOrNull()
             ?: runCatching { pm.getApplicationBanner(entry.pkg) }.getOrNull()
             ?: return null
-        val w = 640
+        val w = artWidth
         val h = if (drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
             w * drawable.intrinsicHeight / drawable.intrinsicWidth
         } else {
-            360
+            artHeight
         }
         val bitmap = drawable.toBitmap(w, h)
         // Behind the banner (seen through transparent parts): its own edge colour, so it blends in.
@@ -236,7 +272,7 @@ class AppRepository(private val context: Context) {
     private fun icon(entry: AppEntry): TileArt {
         val drawable = highResIcon(entry) ?: pm.getActivityIcon(entry.component)
         if (drawable is AdaptiveIconDrawable) adaptiveTile(drawable)?.let { return it }
-        val bitmap = drawable.toBitmap(384, 384)
+        val bitmap = drawable.toBitmap(iconSide, iconSide)
         val palette = Palette.from(bitmap).generate()
         var base = Color(
             palette.vibrantSwatch?.rgb
@@ -256,8 +292,8 @@ class AppRepository(private val context: Context) {
      */
     private fun adaptiveTile(icon: AdaptiveIconDrawable): TileArt? {
         val background = icon.background ?: return null
-        val w = 768
-        val h = 432
+        val w = artWidth
+        val h = artHeight
         val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val top = (h - w) / 2

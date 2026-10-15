@@ -1,5 +1,9 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.home.tiles
 
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.ExperimentalComposeUiApi
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -49,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -62,6 +67,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -140,6 +153,26 @@ fun toggleChannelRow(setting: String, key: String): String {
     val next = if (key in keys) keys - key else keys + key
     return if (next.isEmpty()) SECOND_ROW_OFF else next.joinToString("\n")
 }
+
+/**
+ * [setting] with [key]'s row swapped with its neighbour on screen, [step] rows away (−1 up, 1 down).
+ * [shown] are the rows on screen, in order: chosen rows that are empty right now keep their places.
+ * Auto has a single row, so nothing moves.
+ */
+fun moveChannelRow(setting: String, key: String, step: Int, shown: List<String>): String {
+    val keys = channelRowKeys(setting).toMutableList()
+    val target = shown.getOrNull(shown.indexOf(key) + step) ?: return setting
+    val i = keys.indexOf(key)
+    val j = keys.indexOf(target)
+    if (i < 0 || j < 0) return setting
+    keys[i] = target
+    keys[j] = key
+    return keys.joinToString("\n")
+}
+
+/** [setting] without [key]'s row; the one automatic row taken away means no rows. */
+fun hideChannelRow(setting: String, key: String): String =
+    if (setting == SECOND_ROW_AUTO) SECOND_ROW_OFF else toggleChannelRow(setting, key)
 
 /** The channel chosen for the second row; "auto" prefers SmartTube subscriptions. */
 fun pickSecondRow(channels: List<TvChannel>, setting: String): TvChannel? = when (setting) {
@@ -284,6 +317,16 @@ private val posterCache = object : LruCache<Uri, ImageBitmap>(POSTER_CACHE_BYTES
     override fun sizeOf(key: Uri, value: ImageBitmap) = value.asAndroidBitmap().allocationByteCount
 }
 
+/** Gives memory back when the system runs short, like AppRepository.trimArt. */
+fun trimPosters(level: Int) {
+    when {
+        level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE ||
+            level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> posterCache.evictAll()
+        level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND ||
+            level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> posterCache.trimToSize(POSTER_CACHE_BYTES / 2)
+    }
+}
+
 private const val POSTER_CACHE_BYTES = 12 * 1024 * 1024
 
 /** A card's size ([TvCard]); posters are decoded to just cover it. */
@@ -331,7 +374,11 @@ private suspend fun loadPoster(context: Context, uri: Uri): ImageBitmap? = withC
             }
         }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap()
-    }.getOrNull()?.also { posterCache.put(uri, it) }
+    }.getOrNull()?.also {
+        posterCache.put(uri, it)
+        // Sent to the GPU now, in the background, not when first drawn (that stalled a frame).
+        it.prepareToDraw()
+    }
 }
 
 /** The image at [url] over [network] (the default one when null); null for an error or a web page. */
@@ -360,19 +407,55 @@ private fun directNetwork(context: Context): Network? {
 
 // ---- UI ----
 
+/**
+ * A channel's row: its name, then its cards. Holding OK on a card opens [onMenu]. While [move]
+ * holds this row, ▲ ▼ move the whole row, OK finishes and Back cancels; [position] is its place
+ * among the rows, so the page follows it as it moves.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ChannelRow(channel: TvChannel, startPad: Dp) {
+internal fun ChannelRow(
+    channel: TvChannel,
+    startPad: Dp,
+    position: Int = 0,
+    move: MoveControl? = null,
+    modifier: Modifier = Modifier,
+    onMenu: (TvItem) -> Unit = {},
+) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
     var focusedKey by remember { mutableStateOf<String?>(null) }
     // Neutral lights (posters are many-coloured), behind the whole row like the apps row's.
     val glows = rememberTileGlows()
-    Column(Modifier.fillMaxWidth()) {
-        T(channel.name, 20.sp, Modifier.padding(start = startPad), color = Colors.TextDim)
+    val moving = move != null && move.key == channel.key
+    // The page settles a moved row's cards where it settles a focused one (see rowKeyline).
+    val bring = remember { BringIntoViewRequester() }
+    val density = LocalDensity.current
+    LaunchedEffect(moving, position) {
+        if (!moving) return@LaunchedEffect
+        withFrameNanos {}
+        val cardTop = with(density) { (ROW_NAME_HEIGHT + CARD_TOP).toPx() }
+        runCatching { bring.bringIntoView(Rect(0f, cardTop, 1f, cardTop + 1f)) }
+    }
+    Column(
+        // The page follows the row's new place, not where a slide (in [modifier]) is drawing it.
+        Modifier
+            .bringIntoViewRequester(bring)
+            .then(modifier)
+            .fillMaxWidth()
+            .then(if (moving) Modifier.moveKeys(channel.key, move!!, vertical = true) else Modifier),
+    ) {
+        T(
+            if (moving) tr(R.string.move_row_hint, channel.name) else channel.name,
+            20.sp,
+            Modifier.padding(start = startPad),
+            color = if (moving) Colors.Text else Colors.TextDim,
+        )
         Spacer(Modifier.height(10.dp))
         LazyRow(
             state = listState,
-            modifier = Modifier.drawBehind {
+            // Coming back to the row returns to the card last selected in it, as on Google TV.
+            modifier = Modifier.focusRestorer().drawBehind {
                 val w = CARD_W_DP.dp.toPx()
                 val h = CARD_H_DP.dp.toPx()
                 for (info in listState.layoutInfo.visibleItemsInfo) {
@@ -392,6 +475,7 @@ fun ChannelRow(channel: TvChannel, startPad: Dp) {
                 TvCard(
                     item,
                     onFocus = { on -> if (on) focusedKey = item.key else if (focusedKey == item.key) focusedKey = null },
+                    onLongClick = { onMenu(item) },
                 ) { context.openTvItem(item) }
             }
         }
@@ -400,6 +484,20 @@ fun ChannelRow(channel: TvChannel, startPad: Dp) {
 
 private val CARD_TOP = 8.dp
 private val CARD_GAP = 28.dp
+// A row's name line and the gap under it, above the cards.
+private val ROW_NAME_HEIGHT = 38.dp
+
+/** A card's picture alone, for the OK-hold menu. */
+@Composable
+internal fun TvItemArt(item: TvItem) {
+    val context = LocalContext.current
+    val poster by produceState<ImageBitmap?>(item.poster?.let { posterCache.get(it) }, item.poster) {
+        item.poster?.let { value = loadPoster(context, it) }
+    }
+    Box(Modifier.fillMaxSize().background(Color(0xFF3A3A3A))) {
+        poster?.let { Image(it, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+    }
+}
 
 /** A channel row's place while the channels are being read: a title bar and a run of cards. */
 @Composable
@@ -416,10 +514,16 @@ fun ChannelRowSkeleton(startPad: Dp) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TvCard(item: TvItem, onFocus: (Boolean) -> Unit, onClick: () -> Unit) {
+private fun TvCard(item: TvItem, onFocus: (Boolean) -> Unit, onLongClick: () -> Unit, onClick: () -> Unit) {
     val context = LocalContext.current
     var focused by remember { mutableStateOf(false) }
+    val press = remember { DpadPress() }
+    val click = {
+        Sounds.activate()
+        onClick()
+    }
     // Like the tiles: the selected card grows a little, no frame and no shadows (they overloaded
     // the GPU); the row draws the light behind it.
     val scale by animateFloatAsState(if (focused) FOCUS_SCALE else 1f, tween(150), label = "card")
@@ -428,18 +532,20 @@ private fun TvCard(item: TvItem, onFocus: (Boolean) -> Unit, onClick: () -> Unit
         item.poster?.let { value = loadPoster(context, it) }
     }
     val shape = RoundedCornerShape(12.dp)
+    val screenShown = LocalScreenShown.current
     Box(
         Modifier
             .size(CARD_W_DP.dp, CARD_H_DP.dp)
+            // Not on the screen kept ready behind the shown one.
+            .focusProperties { canFocus = screenShown }
             .onFocusChanged {
                 focused = it.isFocused
                 onFocus(it.isFocused)
                 if (it.isFocused) Sounds.navigate()
             }
-            .clickable(remember { MutableInteractionSource() }, null) {
-                Sounds.activate()
-                onClick()
-            }
+            // OK opens, holding OK opens the row's menu (as on the tiles).
+            .dpadClick(press, onPress = {}, onClick = click, onLongClick = onLongClick)
+            .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = click)
             // Grown inside the focus target, so paging to the card sees its real place (see Tile).
             .graphicsLayer {
                 scaleX = scale

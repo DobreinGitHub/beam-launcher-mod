@@ -34,8 +34,8 @@ android {
         applicationId = "com.home.tiles"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.3-ru-v1"
+        versionCode = 6
+        versionName = "1.0-ru-v2"
         // The projector is 32-bit ARM; keeps Vosk/JNA native libraries to the one ABI.
         ndk { abiFilters += "armeabi-v7a" }
     }

@@ -75,15 +75,6 @@ internal fun HomePage() {
     Toggle(tr(R.string.now_playing), LauncherSettings.nowPlaying, Modifier.fillMaxWidth()) {
         LauncherSettings.nowPlaying = !LauncherSettings.nowPlaying
     }
-    Section(tr(R.string.connected_devices))
-    Toggle(tr(R.string.usb_tile), LauncherSettings.usbTile, Modifier.fillMaxWidth()) {
-        LauncherSettings.usbTile = !LauncherSettings.usbTile
-    }
-    Spacer(Modifier.height(10.dp))
-    Toggle(tr(R.string.hdmi_tile), LauncherSettings.hdmiTile, Modifier.fillMaxWidth()) {
-        LauncherSettings.hdmiTile = !LauncherSettings.hdmiTile
-    }
-    T(tr(R.string.connected_devices_hint), 14.sp, color = PanelDim, maxLines = 3)
     Section(tr(R.string.second_row))
     PairRow {
         Chip(tr(R.string.auto), LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {
@@ -93,9 +84,11 @@ internal fun HomePage() {
             LauncherSettings.secondRow = SECOND_ROW_OFF
         }
     }
-    // Any number of channels, each its own row, in the order they were switched on.
+    // Any number of channels, each its own row. The chosen ones come first, in their order on
+    // the home screen (changed there: hold OK on a card → "Move row"); new ones join the end.
     val chosen = channelRowKeys(LauncherSettings.secondRow)
-    channels.forEach { channel ->
+    T(tr(R.string.channel_rows_hint), 14.sp, color = PanelDim, maxLines = 3)
+    channels.sortedBy { chosen.indexOf(it.key).let { i -> if (i < 0) Int.MAX_VALUE else i } }.forEach { channel ->
         Spacer(Modifier.height(10.dp))
         Toggle(channel.name, channel.key in chosen, Modifier.fillMaxWidth()) {
             LauncherSettings.secondRow = toggleChannelRow(LauncherSettings.secondRow, channel.key)

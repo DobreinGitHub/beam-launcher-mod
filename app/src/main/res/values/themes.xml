@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Tiles" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <!-- Only seen before Beam's first frame (then dropped, see MainActivity): dark like the
+             dark theme's background, so a start never flashes white. -->
+        <item name="android:windowBackground">@color/start_background</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowAnimationStyle">@null</item>
     </style>

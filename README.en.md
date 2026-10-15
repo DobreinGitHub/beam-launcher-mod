@@ -31,22 +31,34 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
   colour. Can be turned off in Appearance.
 - **Tiles are ordered by hand**: hold OK → "Move", ◀ ▶ move the tile, OK to finish, Back to cancel.
   Tiles slide into place and the row scrolls along. No automatic sorting by usage, like Google TV;
-  new apps go to the end. The HDMI and USB tiles can be moved and hidden too.
+  new apps go to the end.
 - **OK-hold menu**: Open · Move · Hide from home · Uninstall. Releasing OK no longer opens the app
   (in All apps either).
 - **16:9 tiles** to fit Android TV banners, with no bars at the top and bottom.
-- **Connected-device tiles** in the banner style: a drive with its own name and size ("External HD ·
-  USB · 2000 GB"), HDMI with the device's name when it gives one ("PlayStation 5 · HDMI 1").
-  Switched in Settings → Home screen → "Connected devices".
-- **Two top buttons** in the quick settings style: All apps and Settings.
+- **A Google TV style top bar**: Home and All apps tabs in one pill (the current one marked, the
+  selection sliding and stretching from tab to tab), with a round settings button beside it. One
+  bar over both screens, always in view: highlighting a tab is enough, the screen under the bar
+  changes with a short slide and fade; OK goes into it. The buttons beside the tabs (settings, a
+  drive) act only on OK. Up from a screen's top row always goes to its tab; Back in All apps goes
+  to the tab first, then home. The All apps grid lines up with the home rows; the All apps tile at
+  the end of the row shows an icon, its name and the app count.
+- **Connected devices apart from the apps**, like Google TV: while something is plugged in, a pill
+  for it appears next to the top buttons. A drive with its own name and size ("External HD · USB ·
+  2000 GB", opens the file manager), HDMI with the device's name when it gives one ("PlayStation 5 ·
+  HDMI 1", switches to the input). The row holds only apps.
 - **The top bar makes way for XGIMI's panel**: while XGIMI's quick settings or settings are open
   (they have their own clock and battery), the home's buttons, clock and status hide, so nothing
   is shown twice. Next to Beam's settings the bar stays.
 - **Several channel rows** (Settings → Home screen → "Channel rows") with Google TV style
-  paging between rows. VoKino and Kinopoisk posters load even with a VPN on.
+  paging between rows. VoKino and Kinopoisk posters load even with a VPN on. To reorder rows,
+  hold OK on a card → "Move row", ▲ ▼ move the row, OK to finish, Back to cancel; "Remove row from
+  home" is there too. The top bar stays put, and rows fade softly under it instead of being cut.
 - **Smooth loading**: while the apps and channels are read, placeholders with a moving shine hold
   their places, so the screen doesn't jump.
 - **Smoother scrolling**: posters are kept downscaled, shadows and needless redraws are gone.
+  The tinted background and the selection light are drawn from ready-made pictures, and tile
+  pictures are made at the tile's size: a home screen frame takes 9–11 ms of GPU time on the
+  XGIMI Play 6 instead of 14–18, and less memory.
 - **RuStore is no longer hidden** by default.
 
 **All apps**
@@ -102,8 +114,8 @@ settings start over.
 
 ## What it does
 
-- **Home screen**: a row of app tiles in the order you set, plus HDMI and USB drive
-  tiles. Below it rows with other apps' channels (SmartTube subscriptions, recent Spotify,
+- **Home screen**: a row of app tiles in the order you set; plugged-in drives and HDMI
+  devices sit at the top, next to the buttons. Below the row are rows with other apps' channels (SmartTube subscriptions, recent Spotify,
   "Continue watching"). Also a "Now playing" widget and the projector's battery level.
 - **Settings** over any app, opened with the remote's voice button: appearance, home screen,
   remote buttons, screensaver; and from there XGIMI's panel and settings for the projector.

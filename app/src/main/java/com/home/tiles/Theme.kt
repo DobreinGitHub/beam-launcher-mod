@@ -15,8 +15,6 @@ object LauncherSettings {
     private val backgroundState = mutableStateOf(0)
     private val soundsState = mutableStateOf(true)
     private val nowPlayingState = mutableStateOf(true)
-    private val usbTileState = mutableStateOf(true)
-    private val hdmiTileState = mutableStateOf(true)
     private val secondRowState = mutableStateOf(SECOND_ROW_AUTO)
     private val xmbColorState = mutableStateOf(-1)
     private val bgAnimationState = mutableStateOf(true)
@@ -30,8 +28,6 @@ object LauncherSettings {
         backgroundState.value = prefs.getInt("background", 0).coerceIn(Backgrounds.indices)
         soundsState.value = prefs.getBoolean("sounds", true)
         nowPlayingState.value = prefs.getBoolean("nowPlaying", true)
-        usbTileState.value = prefs.getBoolean("usbTile", true)
-        hdmiTileState.value = prefs.getBoolean("hdmiTile", true)
         secondRowState.value = prefs.getString("secondRow", SECOND_ROW_AUTO) ?: SECOND_ROW_AUTO
         xmbColorState.value = prefs.getInt("xmbColor", -1)
         bgAnimationState.value = prefs.getBoolean("bgAnimation", true)
@@ -53,14 +49,6 @@ object LauncherSettings {
     var nowPlaying: Boolean
         get() = nowPlayingState.value
         set(value) { nowPlayingState.value = value; prefs.edit().putBoolean("nowPlaying", value).apply() }
-
-    var usbTile: Boolean
-        get() = usbTileState.value
-        set(value) { usbTileState.value = value; prefs.edit().putBoolean("usbTile", value).apply() }
-
-    var hdmiTile: Boolean
-        get() = hdmiTileState.value
-        set(value) { hdmiTileState.value = value; prefs.edit().putBoolean("hdmiTile", value).apply() }
 
     /** Channel key shown under the tiles, or [SECOND_ROW_AUTO] / [SECOND_ROW_OFF]. */
     var secondRow: String
@@ -91,10 +79,7 @@ object Colors {
     val Button get() = if (dark) Color(0xFF474747) else Color(0xFFEBEBEB)
     val Text get() = if (dark) Color(0xFFF2F2F2) else Color(0xFF2D2D2D)
     val TextDim get() = if (dark) Color(0xFFA8A8A8) else Color(0xFF6E6E6E)
-    val Divider get() = if (dark) Color(0xFF9A9A9A) else Color(0xFF3C3C3C)
-    val AllTile get() = if (dark) Color(0xFF4A4A4A) else Color(0xFFE3E3E3)
     val Accent = Color(0xFF00C3E3)
-    val AccentGlow = Color(0xFF7FF0FF)
 
     val isXmb get() = Backgrounds[LauncherSettings.background].xmb
 

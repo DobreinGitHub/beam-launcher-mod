@@ -9,6 +9,10 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -24,6 +28,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -76,9 +81,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.KeyEventType
@@ -137,22 +150,53 @@ fun DrawScope.drawFocusGlow(color: Color, strength: Float, center: Offset, halfW
     if (strength <= 0f) return
     val ry = halfH + spread
     val rx = halfW + spread
-    val edge = halfH / ry
-    // A circle stretched sideways into an oval as wide as the element plus the spread.
-    scale(scaleX = rx / ry, scaleY = 1f, pivot = center) {
-        drawCircle(
-            Brush.radialGradient(
-                0f to color.copy(alpha = 0.30f * strength),
-                edge to color.copy(alpha = 0.26f * strength),
-                (edge + (1f - edge) * 0.45f) to color.copy(alpha = 0.10f * strength),
-                1f to Color.Transparent,
-                center = center,
-                radius = ry,
-            ),
-            radius = ry,
-            center = center,
-        )
+    // The light's shape is a small picture made once, stretched into the oval and coloured as it
+    // is drawn (like AmbientWash): a gradient worked out per pixel every frame, with new shader
+    // objects each time, was the largest part of the home row's GPU time.
+    drawImage(
+        glowMask(halfH / ry),
+        dstOffset = IntOffset((center.x - rx).roundToInt(), (center.y - ry).roundToInt()),
+        dstSize = IntSize((rx * 2).roundToInt(), (ry * 2).roundToInt()),
+        alpha = strength,
+        colorFilter = glowFilter(color),
+        filterQuality = FilterQuality.Low,
+    )
+}
+
+/** The glow's alpha shape, by where the element's edge falls in it (tiles and cards differ). */
+private val glowMasks = HashMap<Int, ImageBitmap>()
+
+private fun glowMask(edge: Float): ImageBitmap {
+    // In twentieths: a step finer than the eye can tell, and only a couple of shapes in use.
+    val step = (edge * 20).roundToInt().coerceIn(1, 19)
+    return glowMasks.getOrPut(step) {
+        val e = step / 20f
+        val side = GLOW_MASK_SIDE
+        // White with the light's alpha, coloured by glowFilter as it is drawn (as AmbientWash's).
+        val bitmap = android.graphics.Bitmap.createBitmap(side, side, android.graphics.Bitmap.Config.ARGB_8888)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            shader = android.graphics.RadialGradient(
+                side / 2f, side / 2f, side / 2f,
+                // Alpha 0.30, 0.26, 0.10, 0.
+                intArrayOf(0x4DFFFFFF, 0x42FFFFFF, 0x1AFFFFFF, 0x00FFFFFF),
+                floatArrayOf(0f, e, e + (1f - e) * 0.45f, 1f),
+                android.graphics.Shader.TileMode.CLAMP,
+            )
+        }
+        android.graphics.Canvas(bitmap).drawCircle(side / 2f, side / 2f, side / 2f, paint)
+        bitmap.asImageBitmap()
     }
+}
+
+// Smooth enough stretched over a tile's light (a soft gradient, no edges to blur).
+private const val GLOW_MASK_SIDE = 128
+
+/** One tint filter per colour, not one per frame. */
+private val glowFilters = HashMap<Color, ColorFilter>()
+
+private fun glowFilter(color: Color): ColorFilter {
+    if (glowFilters.size > 64) glowFilters.clear()
+    return glowFilters.getOrPut(color) { ColorFilter.tint(color, BlendMode.SrcIn) }
 }
 
 /**
@@ -284,6 +328,9 @@ fun AppTileArt(repo: AppRepository, entry: AppEntry) {
 /** Tiles are 16:9, the shape of Android TV app banners, so a banner fills its tile exactly. */
 fun tileHeight(width: Dp) = width * 9f / 16f
 
+/** The widest a home-row tile gets; tile pictures are made for it (see AppRepository). */
+const val MAX_TILE_WIDTH_DP = 280
+
 /** How much a selected tile or card grows, and a tile being moved; the gaps leave it room. */
 const val FOCUS_SCALE = 1.08f
 const val FOCUS_SCALE_LIFTED = 1.12f
@@ -347,9 +394,12 @@ fun Tile(
     }
     val height = tileHeight(width)
     val corner = tileCorner(height)
+    val screenShown = LocalScreenShown.current
     Box(
         modifier
             .size(width, height)
+            // Not on the screen kept ready behind the shown one.
+            .focusProperties { canFocus = screenShown }
             .onFocusChanged { if (it.isFocused) Sounds.navigate() else pressed = false }
             .dpadClick(press, onPress = { pressed = it }, onClick = click, onLongClick = onLongClick)
             .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = click)
@@ -395,59 +445,41 @@ fun AppArt(art: TileArt?, label: String) {
     }
 }
 
-@Composable
-fun AllAppsArt() {
-    Column(
-        Modifier.fillMaxSize().background(Colors.AllTile),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Image(
-            Icons.Rounded.Apps,
-            null,
-            Modifier.fillMaxHeight(0.45f).aspectRatio(1f),
-            colorFilter = ColorFilter.tint(Colors.TextDim),
-        )
-    }
-}
-
 /**
- * A top-bar button like the quick settings panel's: a bare icon, dimmed until selected; then a
- * rounded square fills like XGIMI's focus (white under a dark icon; in the light theme, where white
- * wouldn't show, the other way round), and its name shows underneath.
+ * The tile that closes the home row and opens All apps: a quiet card with the apps icon in a
+ * disc, the name and how many apps there are, so it reads as a door to the full list rather than
+ * one more app. Too small for words (as in a menu): the disc alone.
  */
 @Composable
-fun TopButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    val focusFill = if (LauncherSettings.dark) FocusBg else Colors.Text
-    val focusIcon = if (LauncherSettings.dark) FocusText else Colors.Background
-    val fill by animateColorAsState(if (focused) focusFill else focusFill.copy(alpha = 0f), tween(150), label = "fill")
-    val tint by animateColorAsState(if (focused) focusIcon else Colors.TextDim, tween(150), label = "tint")
-    Column(Modifier.width(64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .size(64.dp)
-                .background(fill, RoundedCornerShape(16.dp))
-                .onFocusChanged {
-                    focused = it.isFocused
-                    if (it.isFocused) Sounds.navigate()
-                }
-                .clickable(remember { MutableInteractionSource() }, null) {
-                    Sounds.activate()
-                    onClick()
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(icon, label, Modifier.size(34.dp), colorFilter = ColorFilter.tint(tint))
+fun AllAppsArt(title: String, subtitle: String) {
+    val dark = LauncherSettings.dark
+    BoxWithConstraints(
+        Modifier.fillMaxSize().background(if (dark) Color(0xFF383838) else Color(0xFFE6E6E6)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val w = maxWidth
+        val h = maxHeight
+        val roomy = w >= 160.dp
+        // Sized from the tile, so it reads the same at any size; alone it fills more of it.
+        val disc = h * if (roomy) 0.36f else 0.62f
+        val icon = @Composable {
+            Box(Modifier.size(disc).background(Colors.Button, CircleShape), contentAlignment = Alignment.Center) {
+                Image(Icons.Rounded.Apps, null, Modifier.size(disc * 0.5f), colorFilter = ColorFilter.tint(Colors.Text))
+            }
         }
-        Spacer(Modifier.height(8.dp))
-        T(
-            if (focused) label else "",
-            16.sp,
-            Modifier.requiredWidth(200.dp),
-            color = Colors.Text,
-            align = TextAlign.Center,
-        )
+        if (!roomy) {
+            icon()
+        } else {
+            Row(Modifier.fillMaxWidth().padding(horizontal = w * 0.08f), verticalAlignment = Alignment.CenterVertically) {
+                icon()
+                Spacer(Modifier.width(w * 0.06f))
+                Column(Modifier.weight(1f)) {
+                    T(title, (h.value * 0.12f).sp, color = Colors.Text, weight = FontWeight.Medium, maxLines = 2)
+                    Spacer(Modifier.height(h * 0.02f))
+                    T(subtitle, (h.value * 0.09f).sp, color = Colors.TextDim)
+                }
+            }
+        }
     }
 }
 

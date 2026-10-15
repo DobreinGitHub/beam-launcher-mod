@@ -1,5 +1,9 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.home.tiles
 
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,18 +47,23 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 
-private val TileWidth = 200.dp
-private val GridPad = 12.dp
+// The grid lines up with the home screen: the rows' left edge and their gap between tiles.
+private val GridStart = 108.dp
+private val GridEnd = 108.dp
+private const val Columns = 5
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AllAppsScreen(
     repo: AppRepository,
     apps: List<AppEntry>,
-    onBack: () -> Unit,
+    /** Put the selection on the first app (opened from the home row's tile, or OK on the tab). */
+    takeFocus: Boolean,
+    onFocusTaken: () -> Unit,
     onOptions: (AppEntry) -> Unit,
 ) {
     val context = LocalContext.current
@@ -64,44 +73,43 @@ fun AllAppsScreen(
     val first = remember { FocusRequester() }
     val gridState = rememberLazyGridState()
 
-    BackHandler(onBack = onBack)
-
-    LaunchedEffect(Unit) {
+    // Shown only under the highlighted tab, the selection stays on the tab.
+    LaunchedEffect(takeFocus) {
+        if (!takeFocus) return@LaunchedEffect
         withFrameNanos {}
         runCatching { first.requestFocus() }
+        onFocusTaken()
     }
 
-    Column(Modifier.fillMaxSize().padding(start = 64.dp, end = 64.dp, top = 36.dp)) {
-        Row(Modifier.fillMaxWidth().hiddenUnderPanels(), verticalAlignment = Alignment.CenterVertically) {
-            T(tr(R.string.all_apps), 36.sp, weight = FontWeight.Light)
-            Spacer(Modifier.width(20.dp))
-            T("${apps.size}", 24.sp, color = Colors.TextDim)
-            Spacer(Modifier.weight(1f))
-            Clock(30.sp)
-        }
-        Spacer(Modifier.height(18.dp))
+    // The top bar is over this screen (see LauncherApp); Back is handled there too.
+    Column(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        // Equal tiles filling the width between the home rows' margins.
+        val tile = (maxWidth - GridStart - GridEnd - ColumnGap * (Columns - 1)) / Columns
+        val tileH = tileHeight(tile)
         // The tiles' lights, behind the whole grid like on the home row.
         val glows = rememberTileGlows()
         val density = LocalDensity.current
-        val keyline = remember(density) { GridKeyline(with(density) { (GridTop + RowPitch + tileHeight(TileWidth) / 2).toPx() }) }
+        val keyline = remember(density, tile) { GridKeyline(with(density) { (GridTop + tileH + RowGap + tileH / 2).toPx() }) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides keyline) {
         LazyVerticalGrid(
             state = gridState,
-            modifier = Modifier.drawBehind {
-                val w = TileWidth.toPx()
-                val h = tileHeight(TileWidth).toPx()
+            // Down from the top bar returns to the app last selected here.
+            modifier = Modifier.focusRestorer().drawBehind {
+                val w = tile.toPx()
+                val h = tileH.toPx()
                 for (info in gridState.layoutInfo.visibleItemsInfo) {
                     val glow = glows[info.key] ?: continue
                     // Item offsets count from the content's start: add the paddings back.
                     val center = Offset(
-                        info.offset.x + GridPad.toPx() + info.size.width / 2f,
+                        info.offset.x + GridStart.toPx() + info.size.width / 2f,
                         info.offset.y - gridState.layoutInfo.viewportStartOffset + h / 2f,
                     )
                     drawFocusGlow(glow.color.value, glow.level.value, center, w * FOCUS_SCALE / 2f, h * FOCUS_SCALE / 2f, FocusGlowSpread.toPx())
                 }
             },
-            columns = GridCells.Adaptive(TileWidth),
-            contentPadding = PaddingValues(GridPad, GridTop, GridPad, 40.dp),
+            columns = GridCells.Fixed(Columns),
+            contentPadding = PaddingValues(GridStart, GridTop, GridEnd, 40.dp),
             horizontalArrangement = Arrangement.spacedBy(ColumnGap),
             verticalArrangement = Arrangement.spacedBy(RowGap),
         ) {
@@ -113,12 +121,16 @@ fun AllAppsScreen(
                 RegisterTileGlow(glows, entry.pkg, focused, glowColor)
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                     Tile(
-                        width = TileWidth,
+                        width = tile,
                         highlighted = focused,
                         hiddenMark = entry.hidden,
                         modifier = Modifier
                             .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
-                            .onFocusChanged { if (it.isFocused) focusedKey = entry.pkg },
+                            // Cleared when the selection leaves for the top bar, so no tile stays lit.
+                            .onFocusChanged {
+                                if (it.isFocused) focusedKey = entry.pkg
+                                else if (focusedKey == entry.pkg) focusedKey = null
+                            },
                         onClick = { context.launchApp(entry) },
                         onLongClick = { onOptions(entry) },
                     ) { AppTileArt(repo, entry) }
@@ -128,7 +140,7 @@ fun AllAppsScreen(
                         T(
                             entry.label,
                             17.sp,
-                            Modifier.fillMaxWidth().offset(y = tileHeight(TileWidth) + NameGap),
+                            Modifier.fillMaxWidth().offset(y = tileH + NameGap),
                             align = TextAlign.Center,
                         )
                     }
@@ -136,16 +148,16 @@ fun AllAppsScreen(
             }
         }
         }
+        }
     }
 }
 
 private val GridTop = 14.dp
-private val ColumnGap = 30.dp
+// The home row's gap between tiles.
+private val ColumnGap = 28.dp
 // Room for the selected tile's name between the rows.
 private val RowGap = 40.dp
 private val NameGap = 9.dp
-// From one row's top to the next: every row is the same height (the name takes no room).
-private val RowPitch = tileHeight(TileWidth) + RowGap
 
 /**
  * Google TV style paging: the selected row settles on the second row's line, so the grid moves a

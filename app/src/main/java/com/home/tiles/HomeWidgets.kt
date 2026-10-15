@@ -17,6 +17,8 @@ import android.os.Looper
 import android.os.StatFs
 import android.os.storage.StorageManager
 import android.service.notification.NotificationListenerService
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,10 +67,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlin.math.roundToInt
 
 /**
  * Lets the system give us media sessions (granted over adb:
@@ -260,56 +264,71 @@ private fun queryLiveHdmi(context: Context): List<Xgimi.Input> {
     }
 }
 
-// ---- Tile art for the special tiles ----
-
-@Composable
-fun IconArt(icon: ImageVector, top: Color, bottom: Color) {
-    Box(
-        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(top, bottom))),
-        contentAlignment = Alignment.Center,
-    ) {
-        Image(icon, null, Modifier.fillMaxSize(0.42f), colorFilter = ColorFilter.tint(Color.White))
-    }
-}
+// ---- Connected devices ----
 
 /**
- * A connected device as a banner like the app tiles: a round icon in the device's colour, its name
- * and a second line (size, port). Too small for words (the hold-OK menu's picture): the icon alone.
+ * A connected device in the top bar, shown only while it is plugged in: a pill like the now-playing
+ * bar with a round icon in the device's colour, its name and a second line (size, port). Selected,
+ * it fills like the top-bar buttons.
  */
 @Composable
-fun DeviceArt(icon: ImageVector, tint: Color, title: String, subtitle: String) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF2B2B2B)), contentAlignment = Alignment.Center) {
-        val w = maxWidth
-        val h = maxHeight
-        val roomy = w >= 160.dp
-        // Sized from the tile, so it reads the same on any row; alone (no words) it fills more of it.
-        val disc = h * if (roomy) 0.36f else 0.62f
-        val disk = @Composable {
-            Box(Modifier.size(disc).background(Color(0xFF474747), CircleShape), contentAlignment = Alignment.Center) {
-                Image(icon, null, Modifier.size(disc * 0.55f), colorFilter = ColorFilter.tint(tint))
+fun DeviceChip(icon: ImageVector, tint: Color, title: String, subtitle: String, onGone: () -> Unit, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    // Unplugged while selected: the selection would go with the chip and leave nothing selected
+    // (the remote then did nothing); it moves to a neighbour instead, once the chip is gone.
+    val view = LocalView.current
+    DisposableEffect(Unit) { onDispose { if (focused) view.post(onGone) } }
+    val focusFill = if (LauncherSettings.dark) FocusBg else Colors.Text
+    val focusText = if (LauncherSettings.dark) FocusText else Colors.Background
+    val fill by animateColorAsState(if (focused) focusFill else Colors.Button, tween(150), label = "fill")
+    val text by animateColorAsState(if (focused) focusText else Colors.Text, tween(150), label = "text")
+    Row(
+        Modifier
+            .height(64.dp)
+            .background(fill, CircleShape)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) Sounds.navigate()
             }
+            .clickable(remember { MutableInteractionSource() }, null) {
+                Sounds.activate()
+                onClick()
+            }
+            .padding(start = 8.dp, end = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(48.dp).background(Colors.Background, CircleShape), contentAlignment = Alignment.Center) {
+            Image(icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(tint))
         }
-        if (!roomy) {
-            disk()
-        } else {
-            Row(Modifier.fillMaxWidth().padding(horizontal = w * 0.07f), verticalAlignment = Alignment.CenterVertically) {
-                disk()
-                Spacer(Modifier.width(w * 0.05f))
-                Column(Modifier.weight(1f)) {
-                    T(title, (h.value * 0.13f).sp, color = Color(0xFFF2F2F2), weight = FontWeight.Medium)
-                    T(subtitle, (h.value * 0.09f).sp, color = Color(0xFFA8A8A8))
-                }
-            }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.widthIn(max = 220.dp)) {
+            T(title, 18.sp, color = text)
+            T(subtitle, 14.sp, color = text.copy(alpha = 0.7f))
         }
     }
 }
 
-/** The colours of the device tiles: their icon here and their light when selected. */
-val UsbTint = Color(0xFFFFB27A)
-val HdmiTint = Color(0xFFB3A9FF)
+/** The devices' colours; deeper in the light theme, where the pale ones wouldn't show. */
+val UsbTint get() = if (LauncherSettings.dark) Color(0xFFFFB27A) else Color(0xFFD9682B)
+val HdmiTint get() = if (LauncherSettings.dark) Color(0xFFB3A9FF) else Color(0xFF6A5AD6)
 
 @Composable
-fun UsbArt(title: String, subtitle: String) = DeviceArt(Icons.Rounded.Usb, UsbTint, title, subtitle)
+fun UsbChip(drive: UsbDrive, onGone: () -> Unit, onClick: () -> Unit) = DeviceChip(
+    Icons.Rounded.Usb,
+    UsbTint,
+    drive.label.ifBlank { tr(R.string.usb_drive) },
+    if (drive.totalBytes > 0) tr(R.string.usb_size, (drive.totalBytes / 1_000_000_000.0).roundToInt()) else "USB",
+    onGone,
+    onClick,
+)
 
+/** The device's own name when it gives one (HDMI-CEC), with the port under it; else the port. */
 @Composable
-fun HdmiArt(title: String, subtitle: String) = DeviceArt(Icons.Rounded.SettingsInputHdmi, HdmiTint, title, subtitle)
+fun HdmiChip(input: Xgimi.Input, onGone: () -> Unit, onClick: () -> Unit) = DeviceChip(
+    Icons.Rounded.SettingsInputHdmi,
+    HdmiTint,
+    input.label,
+    if (input.device != null) input.port else tr(R.string.device_connected),
+    onGone,
+    onClick,
+)

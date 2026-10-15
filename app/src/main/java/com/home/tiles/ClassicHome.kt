@@ -1,5 +1,9 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.home.tiles
 
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.ExperimentalComposeUiApi
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.ui.draw.drawBehind
@@ -23,8 +27,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -35,6 +43,18 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector2D
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.composed
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.round
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -63,6 +83,8 @@ private val ClassicGap = 28.dp
 private val RowTop = 8.dp
 private val NameHeight = 40.dp
 private const val MoveSlideMs = 160
+// Rows are taller than tiles: a little longer, so the slide reads the same.
+private const val RowSlideMs = 220
 
 /**
  * The Switch home screen: equal-size tiles in a normally scrolling row (tiles to the left stay in
@@ -76,6 +98,9 @@ internal fun ClassicHome(
     /** False until the apps are read: the row shows placeholder tiles meanwhile. */
     appsLoaded: Boolean,
     resumeTick: Int,
+    /** See HomeScreen: whether to put the selection on the first tile. */
+    takeFocus: Boolean,
+    onFocusTaken: () -> Unit,
     channelRows: List<TvChannel>,
     /** Channel rows still being read, held as placeholders. */
     placeholderRows: Int,
@@ -83,10 +108,17 @@ internal fun ClassicHome(
     clickFor: (RowItem) -> () -> Unit,
     longClickFor: (RowItem) -> () -> Unit,
     move: MoveControl,
+    /** Moving a channel row: the row's key, ▲ ▼ steps, done and cancel. */
+    rowMove: MoveControl,
+    /** Holding OK on a channel's card. */
+    rowMenu: (TvChannel, TvItem) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val pageScroll = rememberScrollState()
     val scrolls = channelRows.size + placeholderRows > 1
+    // A focused card settles this far under the top bar, its row's name just clear of fadeTopEdge.
+    val keylinePx = with(LocalDensity.current) { Keyline.toPx() }
+    val keyline = remember(keylinePx) { rowKeyline(keylinePx) }
     val first = remember { FocusRequester() }
     val movingFocus = remember { FocusRequester() }
     var focusedKey by remember { mutableStateOf<String?>(null) }
@@ -98,15 +130,20 @@ internal fun ClassicHome(
     SideEffect { AmbientTint.target.value = tint }
     DisposableEffect(Unit) { onDispose { AmbientTint.target.value = null } }
 
-    // Coming home puts focus back on the first tile, like the row layout. Keyed on the set of
-    // tiles, not their order, so moving a tile keeps the focus on it.
-    LaunchedEffect(resumeTick, items.map { it.key }.toSet()) {
-        if (move.key != null) return@LaunchedEffect
+    // Coming home puts focus back on the first tile, like the row layout; shown only under the
+    // highlighted tab, the selection stays on the tab. Keyed on the set of tiles, not their order,
+    // so moving a tile keeps the focus on it; and once the apps are read, a pending request (made
+    // before they were) is carried out.
+    LaunchedEffect(resumeTick, takeFocus, items.map { it.key }.toSet()) {
+        if (!takeFocus || move.key != null) return@LaunchedEffect
         pageScroll.scrollTo(0)
         listState.scrollToItem(0)
         repeat(10) {
             withFrameNanos {}
-            if (runCatching { first.requestFocus() }.isSuccess) return@LaunchedEffect
+            if (runCatching { first.requestFocus() }.isSuccess) {
+                onFocusTaken()
+                return@LaunchedEffect
+            }
         }
     }
 
@@ -145,12 +182,12 @@ internal fun ClassicHome(
 
     BoxWithConstraints(modifier.fillMaxWidth()) {
         // A little over four 16:9 tiles across, 280dp wide at most on a 1280dp screen.
-        val tile = ((maxWidth - ClassicPad) / 4.3f).coerceAtMost(280.dp)
+        val tile = ((maxWidth - ClassicPad) / 4.3f).coerceAtMost(MAX_TILE_WIDTH_DP.dp)
         // One channel row fits under the tiles; with more the page scrolls down to them (the
-        // focused card scrolls itself into view, see RowKeyline) and back up when coming home.
+        // focused card scrolls itself into view, see rowKeyline) and back up when coming home.
         // The keyline is only for the page: the rows inside keep their own sideways scrolling.
         val rowSpec = LocalBringIntoViewSpec.current
-        CompositionLocalProvider(LocalBringIntoViewSpec provides if (scrolls) RowKeyline else rowSpec) {
+        CompositionLocalProvider(LocalBringIntoViewSpec provides if (scrolls) keyline else rowSpec) {
         Column(
             if (scrolls) Modifier.fillMaxSize().verticalScroll(pageScroll) else Modifier.fillMaxSize(),
             verticalArrangement = if (scrolls) Arrangement.Top else Arrangement.Center,
@@ -160,7 +197,10 @@ internal fun ClassicHome(
                 state = listState,
                 // The tiles' lights, behind the whole row so the neighbours stay on top of them;
                 // they follow the tiles as the row scrolls (read at draw time).
-                modifier = Modifier.drawBehind {
+                // Coming back to the row (down from the top bar, up from a channel row) returns to
+                // the tile last selected in it, as on Google TV, not to whichever is nearest: that
+                // was often the tile half out of view at the edge, one before.
+                modifier = Modifier.fadeAtTop(pageScroll).focusRestorer().drawBehind {
                     val w = tile.toPx()
                     val h = tileHeight(tile).toPx()
                     for (info in listState.layoutInfo.visibleItemsInfo) {
@@ -200,9 +240,10 @@ internal fun ClassicHome(
                             .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = tween(MoveSlideMs))
                             .zIndex(if (moving) 1f else 0f),
                     ) {
-                        // Name above the selected tile; may run wider than the tile.
+                        // Name above the selected tile; may run wider than the tile. Not over
+                        // "All apps", whose tile already says it.
                         Box(Modifier.width(tile).height(NameHeight)) {
-                            if (focused || moving) {
+                            if ((focused && item !is RowItem.All) || moving) {
                                 T(
                                     if (moving) tr(R.string.move_hint, item.title) else item.title,
                                     22.sp,
@@ -231,7 +272,18 @@ internal fun ClassicHome(
             channelRows.forEachIndexed { i, channel ->
                 // A clear gap between the apps and the first channel, a smaller one between channels.
                 Spacer(Modifier.height(if (i == 0) 32.dp else 18.dp))
-                ChannelRow(channel, ClassicPad)
+                // Keyed, so a moved row takes its state (and the focused card) along; it slides to
+                // its new place like a moved tile, above the row it passes.
+                key(channel.key) {
+                    ChannelRow(
+                        channel, ClassicPad, i, rowMove,
+                        modifier = Modifier
+                            .fadeAtTop(pageScroll)
+                            .zIndex(if (rowMove.key == channel.key) 1f else 0f)
+                            .slideToPlace(enabled = rowMove.key != null),
+                        onMenu = { rowMenu(channel, it) },
+                    )
+                }
             }
             repeat(placeholderRows) { i ->
                 Spacer(Modifier.height(if (i == 0 && channelRows.isEmpty()) 32.dp else 18.dp))
@@ -244,26 +296,51 @@ internal fun ClassicHome(
     }
 }
 
+// Where a focused channel card settles, from the top of the page (just under the top bar): its
+// row's name (about 46dp above the card) is in full view, and the row above is just out of it.
+private val Keyline = 88.dp
+// A row fades out over this much of its way past the page's top (see fadeAtTop).
+private val TopFade = 48.dp
+
 /**
  * Google TV style paging between rows: the page glides so the focused card's row settles on a
- * line near the top, instead of scrolling just enough to show it. Near the top it can't go above
- * the start, so the apps row stays where it is.
+ * line just under the top bar ([keyline]), instead of scrolling just enough to show it. That line
+ * is high enough that the row above goes all the way under the bar, not half of it. Near the top
+ * it can't go above the start, so the apps row stays where it is.
  */
 @OptIn(ExperimentalFoundationApi::class)
-private val RowKeyline = object : BringIntoViewSpec {
+private fun rowKeyline(keyline: Float) = object : BringIntoViewSpec {
     // A spring, not a tween: the scroll is re-aimed every frame, and a tween restarted each time
     // only creeps (it took about 2 s). Critically damped, settles in about 0.4 s.
     override val scrollAnimationSpec: AnimationSpec<Float> =
         spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f)
 
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
-        offset - containerSize * 0.18f
+        offset - keyline
+}
+
+/**
+ * A row rising past the top of the page (under the top bar) fades out as a whole over the first
+ * [TopFade] of its way out, like Google TV's rows, instead of being cut on a line. Each row's own
+ * alpha, applied to its drawing as it goes: a mask over the whole page needed an offscreen layer
+ * every frame, and the projector's GPU missed 60% of frames on the channel rows with it.
+ */
+private fun Modifier.fadeAtTop(scroll: ScrollState): Modifier = composed {
+    // The row's top in the page's content: the scroll is subtracted at draw time.
+    var top by remember { mutableFloatStateOf(0f) }
+    this
+        .onPlaced { top = it.positionInParent().y }
+        .graphicsLayer {
+            val y = top - scroll.value
+            alpha = if (y >= 0f) 1f else (1f + y / TopFade.toPx()).coerceIn(0f, 1f)
+            compositingStrategy = CompositingStrategy.ModulateAlpha
+        }
 }
 
 /**
  * Scrolls the row along with a moving tile. Each step aims at where the row must be for the
  * tile's new place, counting from where an unfinished scroll was heading, so quick steps add up
- * instead of waiting for each other. Tiles are equal, so a place is index × (tile + gap).
+ * instead of waiting for each other. Tiles are equal, so a place is index Ã— (tile + gap).
  */
 private class MoveFollower(private val list: LazyListState, private val scope: CoroutineScope) {
     private var job: Job? = null
@@ -316,13 +393,44 @@ private suspend fun LazyListState.bringIntoRow(index: Int) {
  * The keys of a tile being moved: left/right move it, OK puts it down, Back puts it back where it
  * was. Up/down are swallowed so the focus can't leave the tile mid-move.
  */
-private fun Modifier.moveKeys(key: String, move: MoveControl) = onPreviewKeyEvent { event ->
+/**
+ * Glides to a new place in the parent instead of jumping there, like the tiles' animateItem (the
+ * channel rows are a plain column, not a lazy list). Only while [enabled] (a row is being moved),
+ * so rows loading in or going away don't drift into place.
+ */
+private fun Modifier.slideToPlace(enabled: Boolean): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    val animate by rememberUpdatedState(enabled)
+    // Where the layout puts it, and where it is drawn (animated towards that).
+    var target by remember { mutableStateOf(IntOffset.Zero) }
+    var drawn by remember { mutableStateOf<Animatable<IntOffset, AnimationVector2D>?>(null) }
+    this
+        // Called in the same pass, before the offset below is placed: the very frame the row
+        // lands in its new place it is still drawn at the old one, with no frame in between.
+        .onPlaced { target = it.positionInParent().round() }
+        .offset {
+            val current = drawn
+            if (!animate && current?.isRunning != true) {
+                drawn = null
+                return@offset IntOffset.Zero
+            }
+            val anim = current ?: Animatable(target, IntOffset.VectorConverter).also { drawn = it }
+            if (anim.targetValue != target) scope.launch { anim.animateTo(target, tween(RowSlideMs)) }
+            anim.value - target
+        }
+}
+
+/** Keys while moving [key]: ◀ ▶ step it (▲ ▼ for a [vertical] list, like the channel rows). */
+internal fun Modifier.moveKeys(key: String, move: MoveControl, vertical: Boolean = false) = onPreviewKeyEvent { event ->
     val down = event.type == KeyEventType.KeyDown
     val up = event.type == KeyEventType.KeyUp
+    val back = if (vertical) AndroidKeyEvent.KEYCODE_DPAD_UP else AndroidKeyEvent.KEYCODE_DPAD_LEFT
+    val forth = if (vertical) AndroidKeyEvent.KEYCODE_DPAD_DOWN else AndroidKeyEvent.KEYCODE_DPAD_RIGHT
     when (event.nativeKeyEvent.keyCode) {
-        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (down) move.step(key, -1); true }
-        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) move.step(key, 1); true }
-        AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> true
+        back -> { if (down) move.step(key, -1); true }
+        forth -> { if (down) move.step(key, 1); true }
+        AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN,
+        AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
         AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> {
             if (up) move.done()
             true

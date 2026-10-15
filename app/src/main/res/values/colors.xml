@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark theme's background (Colors.Background): the window before Beam's first frame. -->
+    <color name="start_background">#2D2D2D</color>
+</resources>

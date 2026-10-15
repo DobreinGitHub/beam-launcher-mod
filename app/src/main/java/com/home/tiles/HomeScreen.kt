@@ -29,27 +29,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 
 
 // The row is centred in the space under the top bar; this lifts it to just above the screen's middle.
 private val RowLift = 150.dp
 
-/** One tile in the home row. Special tiles (drive, HDMI) come before the apps. */
+/** One tile in the home row: the apps, then "All apps". Connected devices are in the top bar. */
 internal sealed class RowItem(val key: String, val title: String, val subtitle: String = "") {
     class App(val entry: AppEntry) : RowItem(entry.pkg, entry.label)
-    /** The drive's own name ("SanDisk"), and "USB · 29 ГБ" under it. */
-    class Usb(val drive: UsbDrive) : RowItem(
-        "usb:${drive.key}",
-        drive.label.ifBlank { tr(R.string.usb_drive) },
-        if (drive.totalBytes > 0) tr(R.string.usb_size, (drive.totalBytes / 1_000_000_000.0).roundToInt()) else "USB",
-    )
-    /** The device's own name when it gives one (HDMI-CEC), with the port under it; else the port. */
-    class Hdmi(val input: Xgimi.Input) : RowItem(
-        "hdmi:${input.id}",
-        input.label,
-        if (input.device != null) input.port else tr(R.string.device_connected),
-    )
     class All(count: Int) : RowItem("__all__", tr(R.string.all_apps), tr(R.string.apps_count, count))
 }
 
@@ -59,8 +46,10 @@ fun HomeScreen(
     repo: AppRepository,
     loadedApps: List<AppEntry>?,
     resumeTick: Int,
+    /** Put the selection on the first tile (coming home, or OK on the tab); not when only shown under the tab. */
+    takeFocus: Boolean,
+    onFocusTaken: () -> Unit,
     onOpenAll: () -> Unit,
-    onOpenPanel: () -> Unit,
     onMenu: (MenuRequest) -> Unit,
     onChanged: () -> Unit,
 ) {
@@ -76,13 +65,7 @@ fun HomeScreen(
         else -> channelRowKeys(LauncherSettings.secondRow).size
     }
     LaunchedEffect(resumeTick) { context.requestChannelRefresh() }
-    val drives by rememberUsbDrives()
-    val hdmi by rememberLiveHdmi()
-    val rowItems = buildList {
-        if (LauncherSettings.usbTile) drives.forEach { add(RowItem.Usb(it)) }
-        if (LauncherSettings.hdmiTile) hdmi.forEach { add(RowItem.Hdmi(it)) }
-        apps.filter { !it.hidden }.forEach { add(RowItem.App(it)) }
-    }
+    val rowItems = apps.filter { !it.hidden }.map { RowItem.App(it) }
     // The order set with "Move"; "All apps" always closes the row. Before the apps are read the
     // row is placeholders (see ClassicHome).
     val byKey = rowItems.associateBy { it.key }
@@ -111,29 +94,54 @@ fun HomeScreen(
         orderBeforeMove = null
     }
 
+    // Moving a channel row: its key and the rows to go back to if it's cancelled.
+    var movingRow by remember { mutableStateOf<String?>(null) }
+    var rowsBeforeMove by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(resumeTick) { movingRow = null }
+    fun rowStep(key: String, step: Int) {
+        val setting = LauncherSettings.secondRow
+        val next = moveChannelRow(setting, key, step, channelRows.map { it.key })
+        if (next != setting) {
+            LauncherSettings.secondRow = next
+            Sounds.navigate()
+        }
+    }
+    fun rowDone() {
+        movingRow = null
+        rowsBeforeMove = null
+        Sounds.activate()
+    }
+    fun rowCancel() {
+        rowsBeforeMove?.let { LauncherSettings.secondRow = it }
+        movingRow = null
+        rowsBeforeMove = null
+    }
+    fun rowMenu(channel: TvChannel, item: TvItem) = onMenu(
+        MenuRequest(
+            title = channel.name,
+            art = { TvItemArt(item) },
+            options = buildList<Pair<String, () -> Unit>> {
+                add(tr(R.string.menu_open) to { context.openTvItem(item) })
+                // One row (or the automatic one) has nothing to swap with.
+                if (channelRows.size > 1) add(tr(R.string.menu_move_row) to {
+                    rowsBeforeMove = LauncherSettings.secondRow
+                    movingRow = channel.key
+                })
+                // It comes back with its switch in Settings → Home screen.
+                add(tr(R.string.menu_hide_row) to {
+                    LauncherSettings.secondRow = hideChannelRow(LauncherSettings.secondRow, channel.key)
+                })
+            },
+        ),
+    )
+
     fun clickFor(item: RowItem): () -> Unit = when (item) {
         is RowItem.App -> { { context.launchApp(item.entry) } }
-        is RowItem.Usb -> { { context.launchPackage(FILE_MANAGER) } }
-        is RowItem.Hdmi -> { { Xgimi.openInput(context, item.input) } }
         is RowItem.All -> onOpenAll
     }
     fun longClickFor(item: RowItem): () -> Unit = {
         when (item) {
             is RowItem.App -> onMenu(appMenu(context, repo, item.entry, onChanged, onMove = { startMove(item.key) }))
-            is RowItem.Usb, is RowItem.Hdmi -> onMenu(
-                MenuRequest(
-                    title = item.title,
-                    art = { RowItemArt(repo, item) },
-                    options = listOf(
-                        tr(R.string.menu_open) to clickFor(item),
-                        tr(R.string.menu_move) to { startMove(item.key) },
-                        // These tiles come back with their switch in Beam settings, "Home screen".
-                        tr(R.string.menu_hide_home) to {
-                            if (item is RowItem.Usb) LauncherSettings.usbTile = false else LauncherSettings.hdmiTile = false
-                        },
-                    ),
-                ),
-            )
             is RowItem.All -> {}
         }
     }
@@ -142,12 +150,13 @@ fun HomeScreen(
     Column(Modifier.fillMaxSize()) {
         // With a channel row below there is no spare height to lift into.
         val lift = if (channelRows.isNotEmpty() || placeholderRows > 0) 0.dp else RowLift
-        TopBar(onOpenAll, onOpenPanel)
-        // The Switch layout: equal tiles in a normally scrolling row.
+        // The Switch layout: equal tiles in a normally scrolling row (the top bar is over it, see LauncherApp).
         ClassicHome(
-            repo, items, loadedApps != null, resumeTick, channelRows, placeholderRows,
+            repo, items, loadedApps != null, resumeTick, takeFocus, onFocusTaken, channelRows, placeholderRows,
             Modifier.weight(1f).padding(bottom = lift), ::clickFor, ::longClickFor,
             MoveControl(moving, ::moveStep, ::moveDone, ::moveCancel),
+            MoveControl(movingRow, ::rowStep, ::rowDone, ::rowCancel),
+            ::rowMenu,
         )
     }
 }
@@ -163,13 +172,10 @@ internal class MoveControl(
 private const val ALL_KEY = "__all__"
 
 /**
- * The colour a row tile glows in while selected: its app's (once its picture has loaded), the
- * HDMI/USB tile's own, or neutral.
+ * The colour a row tile glows in while selected: its app's (once its picture has loaded), or neutral.
  */
 internal fun glowFor(repo: AppRepository, item: RowItem): Color = when (item) {
     is RowItem.App -> repo.cachedArt(item.entry)?.glow ?: Colors.Text
-    is RowItem.Usb -> UsbTint
-    is RowItem.Hdmi -> HdmiTint
     is RowItem.All -> Colors.Text
 }
 
@@ -177,51 +183,7 @@ internal fun glowFor(repo: AppRepository, item: RowItem): Color = when (item) {
 internal fun RowItemArt(repo: AppRepository, item: RowItem) {
     when (item) {
         is RowItem.App -> AppTileArt(repo, item.entry)
-        is RowItem.Usb -> UsbArt(item.title, item.subtitle)
-        is RowItem.Hdmi -> HdmiArt(item.title, item.subtitle)
-        is RowItem.All -> AllAppsArt()
+        is RowItem.All -> AllAppsArt(item.title, item.subtitle)
     }
 }
 
-@Composable
-private fun TopBar(onOpenAll: () -> Unit, onOpenPanel: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = 48.dp, end = 60.dp, top = 30.dp)
-            .height(100.dp)
-            .hiddenUnderPanels(),
-    ) {
-        ActionButtons(onOpenAll, onOpenPanel, Modifier.padding(top = 2.dp))
-        Spacer(Modifier.weight(1f))
-        val nowPlaying by rememberNowPlaying()
-        nowPlaying?.takeIf { LauncherSettings.nowPlaying }?.let {
-            NowPlayingBar(it)
-            Spacer(Modifier.width(32.dp))
-        }
-        Row(Modifier.height(66.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Clock, network and battery share one text size, icon height and spacing.
-            Clock(StatusTextSize)
-            Spacer(Modifier.width(StatusGap))
-            VpnIcon()
-            NetworkIcon()
-            Spacer(Modifier.width(StatusGap))
-            BatteryIndicator()
-        }
-    }
-}
-
-/**
- * The shortcut buttons in the top bar: all apps, and one settings page that holds Beam's settings
- * and hands over to XGIMI's quick panel and settings (the remote's settings key opens XGIMI's
- * panel directly).
- */
-@Composable
-internal fun ActionButtons(onOpenAll: () -> Unit, onOpenPanel: () -> Unit, modifier: Modifier = Modifier) {
-    Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = modifier) {
-        TopButton(Icons.Rounded.Apps, tr(R.string.all_apps), onOpenAll)
-        TopButton(Icons.Rounded.Settings, tr(R.string.settings), onOpenPanel)
-    }
-}
-
-private const val FILE_MANAGER = "com.xgimi.filemanager"
