@@ -207,6 +207,16 @@ private fun MediaButton(icon: ImageVector, onClick: () -> Unit) {
 /** [totalBytes]: the drive's capacity, 0 when it can't be read. */
 class UsbDrive(val key: String, val label: String, val totalBytes: Long = 0)
 
+/**
+ * A pretend USB drive and HDMI device in the top bar, for screenshots without plugging anything
+ * in. Off unless switched on over adb: --ez demo_devices true (see AdbCommandReceiver).
+ */
+object DemoDevices {
+    val on = mutableStateOf(false)
+    val drive = UsbDrive("demo", "SanDisk", 64L * 1000 * 1000 * 1000)
+    val hdmi = Xgimi.Input("PlayStation 5", "demo", port = "HDMI 1")
+}
+
 @Composable
 fun rememberUsbDrives(): State<List<UsbDrive>> {
     val context = LocalContext.current

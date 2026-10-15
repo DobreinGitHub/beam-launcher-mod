@@ -68,8 +68,7 @@ private fun standState(type: Int?): StandState = when (type) {
 
 /**
  * [minutesLeft]: on battery or the stand, how long the projector runs at the recent rate (on the
- * stand: the stand's charge, then its own); null until known. [minutesAtLeast]: on the stand before
- * the projector's own battery has been timed, so only the stand's part is counted. [stand]: the
+ * stand: the stand's charge, then its own); null off battery. [stand]: the
  * battery stand's state; [standLevel]: its charge, null when it isn't attached or doesn't report it
  * (while it charges); [standCharging]: its own charger is in.
  */
@@ -79,7 +78,6 @@ class BatteryInfo(
     val minutesLeft: Int?,
     val stand: StandState = StandState.NONE,
     val standLevel: Int? = null,
-    val minutesAtLeast: Boolean = false,
 ) {
     val standCharging get() = stand == StandState.CHARGING
 }
@@ -132,16 +130,48 @@ object BatteryMonitor {
     private val warned = mutableSetOf<Int>()
     private val standWarned = mutableSetOf<Int>()
     private var hadStand: Boolean? = null
-    // How long one percent of the projector's own battery lasts, timed whenever it runs on it and
-    // kept: on the stand the projector goes on with its own charge once the stand's runs out.
-    private var ownMsPerPercent: Long? = null
+    // The level in use at the last sample: a drop of a percent is when a drain rate is learned.
+    private var lastLevel: Int? = null
 
     @Synchronized
     fun start(context: Context) {
         if (appContext != null) return
         appContext = context.applicationContext
-        ownMsPerPercent = prefs(context).getLong(KEY_OWN_RATE, 0L).takeIf { it > 0 }
         executor.scheduleWithFixedDelay({ runCatching { sample() } }, 0, POLL_S, TimeUnit.SECONDS)
+    }
+
+    /**
+     * How long a percent lasts, remembered for the projector's own battery and for the stand, and
+     * for each with Eco on and off (the firmware turns Eco on by itself on the stand, and it
+     * changes the drain): the time left shows as soon as the projector runs on either, and the
+     * live reading refines it. The other Eco state's rate stands in while one isn't known yet.
+     */
+    private fun remembered(source: String, eco: Boolean): Long? {
+        val prefs = appContext?.let(::prefs) ?: return null
+        val rate = prefs.getLong("$KEY_RATE$source:$eco", 0L).takeIf { it > 0 }
+            ?: prefs.getLong("$KEY_RATE$source:${!eco}", 0L).takeIf { it > 0 }
+            // The Play 6's battery and the Power Base Stand are both 20,000 mAh: a percent of one
+            // lasts about as long as a percent of the other, so each stands in for the other.
+            ?: prefs.getLong("$KEY_RATE${other(source)}:$eco", 0L).takeIf { it > 0 }
+            ?: prefs.getLong("$KEY_RATE${other(source)}:${!eco}", 0L).takeIf { it > 0 }
+            ?: STAND_SEED_MS
+        return plausibleRate(rate)
+    }
+
+    /** The remembered rates, for the adb hook (--ez battery_get true). */
+    fun describeRates(): String {
+        val prefs = appContext?.let(::prefs) ?: return "not started"
+        return listOf(OWN, STAND).flatMap { s -> listOf(true, false).map { e -> "$s eco=$e: ${prefs.getLong("$KEY_RATE$s:$e", 0L) / 1000}s/%" } }
+            .joinToString("; ") + " | now ${info?.minutesLeft} min"
+    }
+
+    private fun other(source: String) = if (source == OWN) STAND else OWN
+
+    private fun learn(source: String, eco: Boolean, measured: Long) {
+        val prefs = appContext?.let(::prefs) ?: return
+        val key = "$KEY_RATE$source:$eco"
+        val old = prefs.getLong(key, 0L).takeIf { it > 0 }
+        prefs.edit().putLong(key, learnRate(old, plausibleRate(measured))).apply()
     }
 
     private fun sample() {
@@ -179,23 +209,26 @@ object BatteryMonitor {
             else -> PowerSource.CHARGING
         }
         // Two percents at least, so one step of the level doesn't make a wild guess.
-        val msPerPercent = if (span >= MIN_TREND_MS && change <= -2) span / -change else null
-        if (power == PowerSource.BATTERY && msPerPercent != null && msPerPercent != ownMsPerPercent) {
-            ownMsPerPercent = msPerPercent
-            appContext?.let { prefs(it).edit().putLong(KEY_OWN_RATE, msPerPercent).apply() }
-        }
-        val own = ownMsPerPercent
-        val minutesLeft = when {
-            msPerPercent == null -> null
-            power == PowerSource.BATTERY -> (level * msPerPercent / 60_000).toInt()
-            // The stand's charge, then the projector's own (it stays full while the stand carries it).
-            power == PowerSource.STAND -> ((level * msPerPercent + reading.level * (own ?: 0L)) / 60_000).toInt()
+        val live = if (span >= MIN_TREND_MS && change <= -2) span / -change else null
+        val drainSource = when (power) {
+            PowerSource.BATTERY -> OWN
+            PowerSource.STAND -> STAND
             else -> null
         }
-        state.value = BatteryInfo(
-            reading.level, power, minutesLeft, reading.stand, reading.standLevel,
-            minutesAtLeast = power == PowerSource.STAND && own == null,
-        )
+        val eco = runCatching { Eco.enabled() }.getOrNull() == true
+        // Each percent the charge in use drops, what the live reading says is learned.
+        if (drainSource != null && live != null && lastLevel != null && level < lastLevel!!) learn(drainSource, eco, live)
+        lastLevel = level
+        val rate = drainSource?.let { blendRate(remembered(it, eco), live, span) }
+        val minutesLeft = when {
+            rate == null -> null
+            power == PowerSource.BATTERY -> (level * rate / 60_000).toInt()
+            // The stand's charge, then the projector's own (it stays full while the stand carries it),
+            // both at the drain of the present use: the two hold the same 20,000 mAh, and what is playing
+            // now goes on playing once the stand runs out.
+            else -> ((level + reading.level) * rate / 60_000).toInt()
+        }
+        state.value = BatteryInfo(reading.level, power, minutesLeft, reading.stand, reading.standLevel)
         noteStand(reading)
         warnIfLow(reading)
     }
@@ -401,11 +434,37 @@ private fun DrawScope.drawBattery(percent: Int, tint: Color, scale: Float, at: O
 @Composable
 fun batteryTimeLeft(): String? {
     BatteryMonitor.start(LocalContext.current)
-    val info = BatteryMonitor.info ?: return null
-    // Only the stand's part known yet: "> 1 ч 10 мин".
-    return info.minutesLeft?.let(::timeLeft)?.let { if (info.minutesAtLeast) it.replaceFirst("≈", ">") else it }
+    return BatteryMonitor.info?.minutesLeft?.let(::timeLeft)
 }
 
-private const val KEY_OWN_RATE = "ownMsPerPercent"
+private const val KEY_RATE = "msPerPercent:"
+private const val OWN = "own"
+private const val STAND = "stand"
+// Until either battery has been timed: measured on this projector on the stand, 33% in 62 minutes.
+private const val STAND_SEED_MS = 112_000L
+// The live reading takes over from the remembered rate over this long.
+private const val BLEND_MS = 15 * 60_000L
+
+/**
+ * The rate to estimate with: the remembered one at first, the live one ([liveSpanMs] of readings
+ * behind it) taking over gradually, so the time left settles rather than jumps.
+ */
+internal fun blendRate(remembered: Long?, live: Long?, liveSpanMs: Long): Long? {
+    if (live == null) return remembered
+    if (remembered == null) return live
+    val w = (liveSpanMs.toDouble() / BLEND_MS).coerceIn(0.0, 1.0)
+    return (remembered * (1 - w) + live * w).toLong()
+}
+
+/**
+ * A rate kept within what this projector can do: the Play 6 runs about 2.5 h on its 20,000 mAh
+ * for video at full brightness (1.5 min a percent), longer when dimmer or Eco; a reading outside
+ * 50 s to 4 min a percent (about 1.4 to 6.7 h for a full charge) is a mismeasure, such as one
+ * taken while the charger was in for part of the time.
+ */
+internal fun plausibleRate(rate: Long): Long = rate.coerceIn(50_000L, 240_000L)
+
+/** A remembered rate moved a third of the way to a new measurement, so one odd session doesn't wipe it. */
+internal fun learnRate(old: Long?, measured: Long): Long = if (old == null) measured else (old * 2 + measured) / 3
 
 private fun prefs(context: Context) = context.getSharedPreferences("battery", Context.MODE_PRIVATE)

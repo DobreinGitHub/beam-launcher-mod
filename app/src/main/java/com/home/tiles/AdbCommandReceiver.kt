@@ -43,6 +43,13 @@ class AdbCommandReceiver : BroadcastReceiver() {
             LauncherSettings.dark = intent.getBooleanExtra("dark", true)
             resultData = "ok"
         }
+        // --ez battery_get true: the remembered drain rates and the time left.
+        if (intent.hasExtra("battery_get")) { BatteryMonitor.start(context); resultData = BatteryMonitor.describeRates() }
+        // --ez demo_devices BOOL: a pretend USB drive and HDMI device in the top bar, for screenshots.
+        if (intent.hasExtra("demo_devices")) {
+            DemoDevices.on.value = intent.getBooleanExtra("demo_devices", false)
+            resultData = "ok"
+        }
         // --ez theme_follow true: the theme as XGIMI's «Стиль темы» again.
         if (intent.hasExtra("theme_follow")) {
             LauncherSettings.followXgimi = intent.getBooleanExtra("theme_follow", true)

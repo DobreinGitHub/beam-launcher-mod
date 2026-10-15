@@ -249,8 +249,12 @@ private fun NavIconButton(icon: ImageVector, description: String, onClick: () ->
 @Composable
 private fun ConnectedDevices(onGone: () -> Unit, crowded: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val drives by rememberUsbDrives()
-    val hdmi by rememberLiveHdmi()
+    val realDrives by rememberUsbDrives()
+    val realHdmi by rememberLiveHdmi()
+    // Pretend devices for screenshots, switched on only over adb (see DemoDevices).
+    val demo = DemoDevices.on.value
+    val drives = if (demo) realDrives + DemoDevices.drive else realDrives
+    val hdmi = if (demo) realHdmi + DemoDevices.hdmi else realHdmi
     val compact = crowded || drives.size + hdmi.size >= 2
     Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = modifier) {
         hdmi.forEach { key("hdmi:${it.id}") { HdmiChip(it, compact, onGone) { Xgimi.openInput(context, it) } } }

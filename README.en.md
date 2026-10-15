@@ -228,7 +228,23 @@ A debugging request appears on the projector's screen: tick "Always allow" and p
 should contain the line `192.168.1.50:5555   device` (not `offline` and not `unauthorized`). Turn off
 any VPN on the computer for this: otherwise adb can't reach the projector.
 
-### Step 6. Install Beam
+### Step 6. Translate XGIMI's menus to Russian (recommended)
+
+Beam itself is already in Russian; XGIMI's settings and panel are not. The russifier translates them:
+
+1. Download XGIMI-Russifier-…-Windows-Setup….zip from the
+   [russifier's releases](https://github.com/tonisaf/xgimi-play6-russifier/releases) and unpack the
+   whole archive (XgimiInstaller.exe must sit next to the kit folder). ADB is included.
+2. Run XgimiInstaller.exe and enter the projector's IP (the one from step 4).
+3. Choose «Установить русификацию». **Tick only the translation itself** (and the time zone if you
+   want it): skip its BEAM launcher and remote-button module, the next step installs this build of
+   Beam and its buttons.
+4. Press «Установить» and wait for the green message. The projector restarts by itself (2–4
+   minutes): don't turn it off or close the window.
+
+Details and removal: START-HERE.txt inside the archive.
+
+### Step 7. Install Beam
 
 Open the `C:\beam` folder the same way through PowerShell and run, as one line:
 
@@ -288,7 +304,7 @@ too, or pass `-Apk`: the download is skipped then. Another release: `-Release v0
 all: `-NoDownload`. You can put the IP and the path to adb into `local.env` once (`DEVICE=…`, `ADB=…`),
 and then you won't need the `-Device` and `-Adb` parameters.
 
-### Step 7. Check
+### Step 8. Check
 
 Press "Home": Beam should open. A short press of the remote's voice button opens the quick settings
 panel. The four app buttons on the remote are assigned in the panel: "Remote buttons". Voice search:
