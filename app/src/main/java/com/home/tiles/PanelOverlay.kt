@@ -1,5 +1,7 @@
 package com.home.tiles
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.graphics.Color
@@ -348,8 +350,8 @@ class PanelOverlay : AccessibilityService() {
 
 /** Whether the panel is on screen (in the launcher or as the overlay). */
 object PanelState {
-    @Volatile
-    var open = false
+    // Snapshot state: the home screen's top bar steps aside while the page is open (see hiddenUnderPanels).
+    var open by androidx.compose.runtime.mutableStateOf(false)
 }
 
 /** Minimal lifecycle + saved-state owner so Compose can run in a window without an activity. */

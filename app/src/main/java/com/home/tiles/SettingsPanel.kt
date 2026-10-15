@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.InvertColors
+import androidx.compose.material.icons.rounded.InvertColorsOff
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.VolumeOff
+import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.ui.text.font.FontWeight
+import java.text.SimpleDateFormat
+import java.util.Date
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Landscape
@@ -47,9 +58,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -61,7 +70,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,14 +77,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 
-/**
- * The categories of the settings page, in XGIMI's full-settings layout. The first two hand over to
- * XGIMI's own quick panel and settings (this page closes, so the two never stand side by side);
- * the rest are Beam's.
- */
-private enum class Category(@StringRes val titleRes: Int, val icon: ImageVector, val xgimi: Boolean = false) {
-    Quick(R.string.quick_settings, Icons.Rounded.Tune, xgimi = true),
-    Xgimi(R.string.xgimi_settings, Icons.Rounded.Settings, xgimi = true),
+
+/** Beam's own sections of the settings page; XGIMI's panel and settings are the tiles above them. */
+private enum class Page(@StringRes val titleRes: Int, val icon: ImageVector) {
     Appearance(R.string.appearance, Icons.Rounded.Palette),
     Home(R.string.home_screen, Icons.Rounded.Dashboard),
     Remote(R.string.remote_buttons, Icons.Rounded.SettingsRemote),
@@ -94,7 +97,7 @@ fun SettingsPanel(onDismiss: () -> Unit) {
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false,
-            // Back first leaves the content column; PanelScreen decides.
+            // Back first leaves a section; PanelScreen decides.
             dismissOnBackPress = false,
         ),
     ) {
@@ -105,11 +108,13 @@ fun SettingsPanel(onDismiss: () -> Unit) {
 }
 
 /**
- * Beam's settings page, laid out like XGIMI's full settings so the two read as one system: two
- * dark cards on the left, categories with round icons, and the focused category's content beside
- * them. Moving through the categories shows each one's content; right (or OK) goes into it, Back
- * returns to the category, and Back again closes. Hosted by [SettingsPanel] in the launcher and by
- * [PanelOverlay] over other apps; appears at once, like XGIMI's.
+ * Beam's settings page, laid out like XGIMI's quick panel, so the two read as one: no card, tiles
+ * over the darkened screen. A header with the page's name and, at its right, a round gear that
+ * opens XGIMI's full settings (as the gear on XGIMI's panel does); a full-width pill to XGIMI's
+ * quick panel; wide tiles for Beam's sections; small square tiles for quick switches. These hand
+ * over to XGIMI (this page closes, so the two never stand side by side). A section opens in the
+ * panel's place; Back returns to its tile, and Back again closes. Hosted by [SettingsPanel] in the
+ * launcher and by [PanelOverlay] over other apps; appears at once.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -119,34 +124,28 @@ fun PanelScreen(
     handOver: (open: () -> Unit) -> Unit = { open -> onDismiss(); open() },
 ) {
     val context = LocalContext.current
-    val focusManager = LocalFocusManager.current
-    var selected by remember { mutableStateOf(Category.Quick) }
-    var inContent by remember { mutableStateOf(false) }
-    // Handing over to XGIMI: the cards fade, the darkening stays until XGIMI's own is on screen.
+    // The section shown, or null for the panel.
+    var page by remember { mutableStateOf<Page?>(null) }
+    // The tile to put the selection on when the panel shows: the first, or the section just left.
+    var lastPage by remember { mutableStateOf<Page?>(null) }
+    // Handing over to XGIMI: the tiles fade, the darkening stays until XGIMI's own is on screen.
     var leaving by remember { mutableStateOf(false) }
-    val cardsAlpha by animateFloatAsState(if (leaving) 0f else 1f, tween(120), label = "leave")
-    val requesters = remember { Category.entries.associateWith { FocusRequester() } }
+    val tilesAlpha by animateFloatAsState(if (leaving) 0f else 1f, tween(120), label = "leave")
+    val firstFocus = remember { FocusRequester() }
+    val contentFocus = remember { FocusRequester() }
+    val pageHold = remember { FocusRequester() }
+    var contentHasFocus by remember { mutableStateOf(false) }
+    val pageFocus = remember { Page.entries.associateWith { FocusRequester() } }
     DisposableEffect(Unit) {
         PanelState.open = true
         onDispose { PanelState.open = false }
     }
-    LaunchedEffect(Unit) {
-        repeat(10) {
-            withFrameNanos {}
-            if (runCatching { requesters.getValue(selected).requestFocus() }.isSuccess) return@LaunchedEffect
-        }
-    }
     fun back() {
-        if (inContent) runCatching { requesters.getValue(selected).requestFocus() } else onDismiss()
+        if (page != null) page = null else onDismiss()
     }
-    fun open(category: Category) {
-        when (category) {
-            Category.Quick, Category.Xgimi -> {
-                leaving = true
-                handOver { if (category == Category.Quick) context.openQuickPanel() else context.openSettings() }
-            }
-            else -> focusManager.moveFocus(FocusDirection.Right)
-        }
+    fun xgimi(quick: Boolean) {
+        leaving = true
+        handOver { if (quick) context.openQuickPanel() else context.openSettings() }
     }
     // Back with nothing focused (after a touch) goes through the dialog's dispatcher, not key events.
     if (LocalOnBackPressedDispatcherOwner.current != null) BackHandler { back() }
@@ -163,141 +162,247 @@ fun PanelScreen(
                 if (event.type == KeyEventType.KeyUp) back()
                 true
             }
-            // Touch: a tap beside the cards closes the page.
-            .pointerInput(Unit) { detectTapGestures { onDismiss() } },
+            // Touch: a tap beside the tiles closes the page.
+            .pointerInput(Unit) { detectTapGestures { onDismiss() } }
+            // Holds the selection when a section has nothing to select; after the key handlers
+            // above, so its keys still reach them.
+            .focusRequester(pageHold)
+            .focusable(),
     ) {
-        Row(
-            Modifier
-                // Where XGIMI's settings cards sit.
-                .padding(21.dp)
-                .fillMaxHeight()
-                .graphicsLayer { alpha = cardsAlpha }
-                // Taps on the cards themselves must not reach the close-on-tap backdrop.
-                .pointerInput(Unit) { detectTapGestures { } },
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        // One scroll position per view: each opens at its top.
+        key(page) {
+            val shown = page
             Column(
                 Modifier
-                    .width(272.dp)
+                    // Where XGIMI's quick panel sits, as wide.
+                    .padding(start = PanelStart, top = PanelTop, bottom = 24.dp)
+                    .width(PanelWidth)
                     .fillMaxHeight()
-                    .background(SheetBg, RoundedCornerShape(16.dp))
-                    // Coming back from the content lands on its category, not the nearest one.
-                    .focusProperties { enter = { requesters.getValue(selected) } }
-                    .focusGroup()
-                    .verticalScroll(rememberScrollState())
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .graphicsLayer { alpha = tilesAlpha }
+                    // Taps on the tiles themselves must not reach the close-on-tap backdrop.
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .verticalScroll(rememberScrollState()),
             ) {
-                Category.entries.forEach { category ->
-                    // XGIMI's two first, then Beam's own.
-                    if (category == Category.Appearance) {
-                        Box(Modifier.padding(vertical = 4.dp).fillMaxWidth().height(1.dp).background(Color(0x22FFFFFF)))
+                if (shown == null) {
+                    QuickPanel(firstFocus, pageFocus, onXgimi = ::xgimi) {
+                        lastPage = it
+                        page = it
                     }
-                    CategoryRow(
-                        category,
-                        selected = category == selected,
-                        modifier = Modifier.focusRequester(requesters.getValue(category)),
-                        onFocus = {
-                            selected = category
-                            inContent = false
-                        },
-                        onClick = { open(category) },
-                    )
+                } else {
+                    Header(shown.title) { StatusLine() }
+                    Spacer(Modifier.height(20.dp))
+                    Column(
+                        Modifier
+                            .onFocusChanged { contentHasFocus = it.hasFocus }
+                            .focusRequester(contentFocus)
+                            .focusGroup(),
+                    ) { Content(shown, onDismiss) }
                 }
             }
-            // One scroll position per category: each opens at its top.
-            key(selected) {
-                Column(
-                    Modifier
-                        .width(390.dp)
-                        .fillMaxHeight()
-                        .background(SheetBg, RoundedCornerShape(16.dp))
-                        .onFocusChanged { if (it.hasFocus) inContent = true }
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 18.dp),
-                ) {
-                    T(selected.title, 22.sp, color = PanelText)
-                    Spacer(Modifier.height(4.dp))
-                    Content(selected, onDismiss) { open(it) }
+            // The selection goes to the first tile on opening, back to the section's tile on
+            // leaving it, and into a section's first control on entering it (a group: its first).
+            // A section with nothing to select («О Beam») would leave nothing selected, and keys
+            // (Back included) would reach nothing: the page itself takes the selection then.
+            LaunchedEffect(Unit) {
+                repeat(10) {
+                    withFrameNanos {}
+                    val target = when {
+                        shown != null -> contentFocus
+                        lastPage != null -> pageFocus.getValue(lastPage!!)
+                        else -> firstFocus
+                    }
+                    if (runCatching { target.requestFocus() }.isSuccess) {
+                        if (shown != null) {
+                            withFrameNanos {}
+                            if (!contentHasFocus) runCatching { pageHold.requestFocus() }
+                        }
+                        return@LaunchedEffect
+                    }
                 }
             }
         }
     }
 }
 
+// XGIMI's quick panel, measured on the projector: 53dp in from the left and top, 350dp wide;
+// tiles 80dp tall, 10dp apart, two wide or four square to a row.
+private val PanelStart = 53.dp
+private val PanelTop = 40.dp
+private val PanelWidth = 350.dp
+private val TileHeight = 80.dp
+private val TileGap = 10.dp
+private val TileShape = RoundedCornerShape(16.dp)
+
+/** The panel: header with the gear, the pill to XGIMI's quick panel, sections, quick switches. */
 @Composable
-private fun Content(category: Category, onDismiss: () -> Unit, open: (Category) -> Unit) {
-    val context = LocalContext.current
-    fun projector(action: () -> Unit) {
-        onDismiss()
-        action()
+private fun QuickPanel(
+    firstFocus: FocusRequester,
+    pageFocus: Map<Page, FocusRequester>,
+    onXgimi: (quick: Boolean) -> Unit,
+    onPage: (Page) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // Time, network and battery, as XGIMI's panel has them: the home screen's top bar steps
+        // aside under this page, and over another app there is none.
+        Box(Modifier.weight(1f)) { StatusHeader() }
+        RoundTile(Icons.Rounded.Settings, tr(R.string.tile_all)) { onXgimi(false) }
     }
-    when (category) {
-        Category.Quick, Category.Xgimi -> {
-            Spacer(Modifier.height(8.dp))
-            T(
-                tr(if (category == Category.Quick) R.string.quick_settings_hint else R.string.xgimi_settings_hint),
-                15.sp,
-                color = PanelDim,
-                maxLines = 4,
-            )
-            Spacer(Modifier.height(16.dp))
-            ListRow(tr(R.string.menu_open)) { open(category) }
-        }
-        Category.Appearance -> AppearancePage()
-        Category.Home -> HomePage()
-        Category.Remote -> RemoteButtonsSection()
-        // XGIMI's screensaver is set up in its scenes app; others in their own app.
-        Category.Screensaver -> ScreensaverPage(onSetup = { component ->
-            projector {
-                context.launchPackage(if (component == Screensavers.XGIMI) Xgimi.SCREENSAVER_APP else component.packageName)
+    Spacer(Modifier.height(18.dp))
+    // Where XGIMI's panel has its brightness bar.
+    WideTile(Icons.Rounded.Tune, tr(R.string.tile_quick), Modifier.fillMaxWidth().height(64.dp).focusRequester(firstFocus), chevron = true) { onXgimi(true) }
+    Spacer(Modifier.height(TileGap + 6.dp))
+    listOf(Page.Appearance to Page.Home, Page.Remote to Page.Screensaver).forEach { (a, b) ->
+        Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+            listOf(a, b).forEach { p ->
+                WideTile(p.icon, p.title, Modifier.weight(1f).height(TileHeight).focusRequester(pageFocus.getValue(p))) { onPage(p) }
             }
-        })
-        Category.About -> AboutBeamPage()
+        }
+        Spacer(Modifier.height(TileGap))
+    }
+    // Quick switches, like the small tiles on XGIMI's panel: each shows its state, OK flips it.
+    Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+        val dark = LauncherSettings.dark
+        SquareTile(if (dark) Icons.Rounded.DarkMode else Icons.Rounded.LightMode, tr(if (dark) R.string.theme_dark else R.string.theme_light), Modifier.weight(1f)) {
+            LauncherSettings.dark = !dark
+        }
+        val sounds = LauncherSettings.sounds
+        SquareTile(if (sounds) Icons.Rounded.VolumeUp else Icons.Rounded.VolumeOff, tr(R.string.tile_sounds), Modifier.weight(1f), off = !sounds) {
+            LauncherSettings.sounds = !sounds
+        }
+        val tint = LauncherSettings.ambientTint
+        SquareTile(if (tint) Icons.Rounded.InvertColors else Icons.Rounded.InvertColorsOff, tr(R.string.tile_tint), Modifier.weight(1f), off = !tint) {
+            LauncherSettings.ambientTint = !tint
+        }
+        SquareTile(Page.About.icon, Page.About.title, Modifier.weight(1f).focusRequester(pageFocus.getValue(Page.About))) { onPage(Page.About) }
     }
 }
 
 /**
- * A category like XGIMI's settings list: a round icon and the name. Focused: white with dark text
- * and a light disc; selected while its content has the focus: a faint fill.
+ * The panel's top, like XGIMI's: the time large, network and battery beside it, the date under
+ * it. Always the panel's dark colours, whatever the launcher's theme.
  */
 @Composable
-private fun CategoryRow(
-    category: Category,
-    selected: Boolean,
-    modifier: Modifier,
-    onFocus: () -> Unit,
-    onClick: () -> Unit,
-) {
+private fun StatusHeader() {
+    Column(Modifier.padding(start = 6.dp)) {
+        // Sized to leave the gear its room even with the battery stand's charge in the row.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Clock(38.sp, PanelText)
+            Spacer(Modifier.width(12.dp))
+            VpnIcon(PanelText, 20.dp, 8.dp)
+            NetworkIcon(PanelText, 20.dp)
+            Spacer(Modifier.width(8.dp))
+            BatteryIndicator(16.sp, PanelText, iconScale = 0.65f)
+        }
+        T(today(), 15.sp, color = PanelDim)
+    }
+}
+
+/** Inside a section: the time, network and battery in one small line under its name. */
+@Composable
+private fun StatusLine() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Clock(15.sp, PanelDim)
+        Spacer(Modifier.width(10.dp))
+        VpnIcon(PanelDim, 16.dp, 8.dp)
+        NetworkIcon(PanelDim, 16.dp)
+        Spacer(Modifier.width(8.dp))
+        BatteryIndicator(15.sp, PanelDim, iconScale = 0.55f)
+    }
+}
+
+/** "15 октября 2026 · Чт", as under the clock on XGIMI's panel. */
+@Composable
+private fun today(): String {
+    val locale = AppLanguage.locale
+    return remember(locale) {
+        SimpleDateFormat("d MMMM yyyy · EE", locale).format(Date()).replaceFirstChar { it.titlecase(locale) }
+            .let { s -> s.substringBeforeLast("· ") + "· " + s.substringAfterLast("· ").replaceFirstChar { it.titlecase(locale) } }
+    }
+}
+
+/** A section's name large, and a line under it. */
+@Composable
+private fun Header(title: String, under: @Composable () -> Unit) {
+    Column(Modifier.padding(start = 6.dp)) {
+        T(title, 34.sp, color = PanelText, weight = FontWeight.Light)
+        under()
+    }
+}
+
+/** A tile with an icon and its name side by side, like XGIMI's wide tiles. Focused: white. */
+@Composable
+private fun WideTile(icon: ImageVector, title: String, modifier: Modifier, chevron: Boolean = false, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val fg = if (focused) FocusText else PanelText
     Row(
         modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .background(
-                when {
-                    focused -> FocusBg
-                    selected -> CardBg
-                    else -> Color.Transparent
-                },
-                RoundedCornerShape(16.dp),
-            )
-            .panelControl({
-                focused = it
-                if (it) onFocus()
-            }, onClick)
-            .padding(horizontal = 8.dp),
+            .background(if (focused) FocusBg else CardBg, TileShape)
+            .panelControl({ focused = it }, onClick)
+            .padding(start = 16.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(48.dp).background(if (focused) Color(0xFFE5E5E5) else Color(0xFF474747), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(category.icon, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(if (focused) FocusText else PanelText))
-        }
+        Image(icon, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(fg))
         Spacer(Modifier.width(12.dp))
-        T(category.title, 16.sp, color = fg)
+        // Two lines break between words ("Главный / экран"), like XGIMI's "Bluetooth" tile.
+        T(title, 15.sp, Modifier.weight(1f), color = fg, maxLines = 2)
+        if (chevron) Image(Icons.Rounded.ChevronRight, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(fg))
+    }
+}
+
+/**
+ * A small square tile, like XGIMI's icon tiles, with a short caption under the icon (XGIMI's have
+ * none, but its icons are its own). [off]: drawn dimmer.
+ */
+@Composable
+private fun SquareTile(icon: ImageVector, caption: String, modifier: Modifier, off: Boolean = false, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val fg = when {
+        focused -> FocusText
+        off -> PanelDim
+        else -> PanelText
+    }
+    Column(
+        modifier
+            .height(TileHeight)
+            .background(if (focused) FocusBg else CardBg, TileShape)
+            .panelControl({ focused = it }, onClick)
+            .padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Image(icon, caption, Modifier.size(26.dp), colorFilter = ColorFilter.tint(fg))
+        Spacer(Modifier.height(5.dp))
+        T(caption, 12.sp, color = fg)
+    }
+}
+
+/** A round icon button, like the gear on XGIMI's panel. */
+@Composable
+private fun RoundTile(icon: ImageVector, description: String, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .size(48.dp)
+            .background(if (focused) FocusBg else CardBg, CircleShape)
+            .panelControl({ focused = it }, onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(icon, description, Modifier.size(26.dp), colorFilter = ColorFilter.tint(if (focused) FocusText else PanelText))
+    }
+}
+@Composable
+private fun Content(section: Page, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    when (section) {
+        Page.Appearance -> AppearancePage()
+        Page.Home -> HomePage()
+        Page.Remote -> RemoteButtonsSection()
+        // XGIMI's screensaver is set up in its scenes app; others in their own app.
+        Page.Screensaver -> ScreensaverPage(onSetup = { component ->
+            onDismiss()
+            context.launchPackage(if (component == Screensavers.XGIMI) Xgimi.SCREENSAVER_APP else component.packageName)
+        })
+        Page.About -> AboutBeamPage()
     }
 }
 

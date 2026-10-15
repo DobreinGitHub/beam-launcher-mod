@@ -82,11 +82,12 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 
 **Settings**
 
-- **One settings page**, laid out like XGIMI's full settings: categories with round icons on the
-  left, the selected one's content beside them. The first two, "Quick settings" and "XGIMI
-  settings", open the projector's own panel and settings (focus, keystone, picture, sound,
-  Bluetooth, network, source); then Beam's: appearance, home screen, remote buttons, screensaver,
-  About. Power off, restart and the sleep timer are in XGIMI's menu on the remote's power button.
+- **The settings page looks like XGIMI's quick panel**: tiles straight over the darkening, a header
+  with a round gear on top (as on XGIMI's panel, it opens the projector's full settings), "XGIMI
+  quick settings" under it; then tiles for Beam's sections (appearance, home screen, remote buttons,
+  screensaver) and small square switches: theme, sounds, tint, About. A section opens in the
+  panel's place; Back returns to its tile. The home screen's top bar steps aside under the page, as
+  under XGIMI's panel. Power off, restart and the sleep timer are in XGIMI's menu on the remote's power button.
   A Russian XGIMI interface is installed separately:
   [xgimi-play6-russifier](https://github.com/tonisaf/xgimi-play6-russifier) (the translation alone
   is enough; its launcher and remote-button module are not needed).

@@ -48,8 +48,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.VpnKey
-import androidx.compose.material.icons.rounded.Wifi
-import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material.icons.rounded.SettingsEthernet
+import androidx.compose.material.icons.rounded.SignalWifiStatusbarConnectedNoInternet4
+import androidx.compose.material.icons.rounded.SignalWifi0Bar
+import androidx.compose.material.icons.rounded.NetworkWifi1Bar
+import androidx.compose.material.icons.rounded.NetworkWifi2Bar
+import androidx.compose.material.icons.rounded.NetworkWifi3Bar
+import androidx.compose.material.icons.rounded.SignalWifi4Bar
+import androidx.compose.material.icons.rounded.SignalWifiOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -484,7 +490,7 @@ fun AllAppsArt(title: String, subtitle: String) {
 }
 
 @Composable
-fun Clock(size: TextUnit = 36.sp) {
+fun Clock(size: TextUnit = 36.sp, color: Color = Colors.Text) {
     val format = remember(AppLanguage.locale) { SimpleDateFormat("HH:mm", AppLanguage.locale) }
     val time by produceState(format.format(Date())) {
         while (true) {
@@ -492,7 +498,7 @@ fun Clock(size: TextUnit = 36.sp) {
             delay(1000 - System.currentTimeMillis() % 1000)
         }
     }
-    T(time, size, weight = FontWeight.Light)
+    T(time, size, color = color, weight = FontWeight.Light)
 }
 
 /**
@@ -501,7 +507,7 @@ fun Clock(size: TextUnit = 36.sp) {
  * whole-device ones.
  */
 @Composable
-fun VpnIcon() {
+fun VpnIcon(color: Color = Colors.Text, size: Dp = StatusIconSize, gap: Dp = StatusGap) {
     val context = LocalContext.current
     val active by produceState(initialValue = false) {
         val cm = context.getSystemService(ConnectivityManager::class.java)
@@ -525,33 +531,100 @@ fun VpnIcon() {
         awaitDispose { cm.unregisterNetworkCallback(callback) }
     }
     if (active) {
-        Image(Icons.Rounded.VpnKey, null, Modifier.size(StatusIconSize), colorFilter = ColorFilter.tint(Colors.Text))
-        Spacer(Modifier.width(StatusGap))
+        Image(Icons.Rounded.VpnKey, null, Modifier.size(size), colorFilter = ColorFilter.tint(color))
+        Spacer(Modifier.width(gap))
     }
 }
 
+/** What the network icon shows: the connection, whether it reaches the internet, Wi-Fi's bars. */
+private data class NetState(val connected: Boolean, val wifi: Boolean = true, val internet: Boolean = true, val bars: Int = 4)
+
+/**
+ * The connection as XGIMI's status bar shows it: Wi-Fi with its signal in bars (0-4), Wi-Fi with
+ * an exclamation mark when it's up but the internet isn't (Android's own check failed), Ethernet,
+ * or crossed out with nothing. Physical networks only: a VPN on top doesn't change it (it has its
+ * own key, see VpnIcon). Connection changes come from the system as they happen; the signal is
+ * read every few seconds while Wi-Fi is up (the system only reports it on large changes).
+ */
 @Composable
-fun NetworkIcon() {
+fun NetworkIcon(color: Color = Colors.Text, size: Dp = StatusIconSize) {
     val context = LocalContext.current
-    val online by produceState(initialValue = true) {
+    val state by produceState(NetState(connected = true)) {
         val cm = context.getSystemService(ConnectivityManager::class.java)
-        fun check() = cm.getNetworkCapabilities(cm.activeNetwork)
-            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-        value = check()
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { value = true }
-            override fun onLost(network: Network) { value = check() }
+        val wm = context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+        val nets = java.util.concurrent.ConcurrentHashMap<Network, NetworkCapabilities>()
+        fun bars(): Int {
+            @Suppress("DEPRECATION")
+            val rssi = runCatching { wm?.connectionInfo?.rssi }.getOrNull() ?: return 4
+            return when {
+                rssi >= -55 -> 4
+                rssi >= -66 -> 3
+                rssi >= -77 -> 2
+                rssi >= -88 -> 1
+                else -> 0
+            }
         }
-        cm.registerDefaultNetworkCallback(callback)
-        awaitDispose { cm.unregisterNetworkCallback(callback) }
+        fun update() {
+            val caps = nets.values
+            // Ethernet over Wi-Fi when both are up, as the system routes.
+            val best = caps.firstOrNull { it.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) }
+                ?: caps.firstOrNull { it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) }
+                ?: caps.firstOrNull()
+            value = if (best == null) NetState(connected = false) else {
+                val wifi = best.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                NetState(
+                    connected = true,
+                    wifi = wifi,
+                    internet = best.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+                    bars = if (wifi) bars() else 4,
+                )
+            }
+        }
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                nets[network] = caps
+                update()
+            }
+            override fun onLost(network: Network) {
+                nets.remove(network)
+                update()
+            }
+        }
+        // Not VPNs (a request excludes them unless asked), only networks that can carry the internet.
+        val request = android.net.NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        cm.registerNetworkCallback(request, callback)
+        update()
+        try {
+            while (true) {
+                delay(SIGNAL_POLL_MS)
+                if (value.connected && value.wifi) {
+                    val b = bars()
+                    if (b != value.bars) value = value.copy(bars = b)
+                }
+            }
+        } finally {
+            cm.unregisterNetworkCallback(callback)
+        }
     }
-    Image(
-        if (online) Icons.Rounded.Wifi else Icons.Rounded.WifiOff,
-        null,
-        Modifier.size(StatusIconSize),
-        colorFilter = ColorFilter.tint(Colors.Text),
-    )
+    val icon = when {
+        // The same filled family as the bars, with a slash (the outline WifiOff didn't match them).
+        !state.connected -> Icons.Rounded.SignalWifiOff
+        !state.wifi -> Icons.Rounded.SettingsEthernet
+        !state.internet -> Icons.Rounded.SignalWifiStatusbarConnectedNoInternet4
+        else -> when (state.bars) {
+            0 -> Icons.Rounded.SignalWifi0Bar
+            1 -> Icons.Rounded.NetworkWifi1Bar
+            2 -> Icons.Rounded.NetworkWifi2Bar
+            3 -> Icons.Rounded.NetworkWifi3Bar
+            else -> Icons.Rounded.SignalWifi4Bar
+        }
+    }
+    Image(icon, null, Modifier.size(size), colorFilter = ColorFilter.tint(color))
 }
+
+private const val SIGNAL_POLL_MS = 5_000L
 
 /** What the OK-hold menu shows: a tile's name, its picture and the actions. */
 class MenuRequest(

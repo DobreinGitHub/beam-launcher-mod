@@ -125,12 +125,12 @@ object XgimiScreens {
 
 /**
  * The home screen's own top bar (buttons, clock, network, battery) steps aside while XGIMI's quick
- * panel or settings is open, so their clock and battery aren't shown twice and nothing peeks out
- * behind them. Beam's own settings page has no clock of its own, so the bar stays beside it.
+ * panel or settings, or Beam's settings page, is open: they sit where the bar is, and nothing should
+ * peek out behind them.
  */
 @Composable
 fun Modifier.hiddenUnderPanels(): Modifier {
-    val alpha by animateFloatAsState(if (XgimiScreens.shown.value) 0f else 1f, tween(150), label = "chrome")
+    val alpha by animateFloatAsState(if (XgimiScreens.shown.value || PanelState.open) 0f else 1f, tween(150), label = "chrome")
     return graphicsLayer { this.alpha = alpha }
 }
 

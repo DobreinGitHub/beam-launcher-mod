@@ -83,10 +83,12 @@ internal val TvScrim = Brush.horizontalGradient(
 
 /** [TvScrim] mirrored: darkest on the left, behind sheets placed where XGIMI puts its own. */
 internal val TvScrimLeft = Brush.horizontalGradient(
+    // As dark as under XGIMI's quick panel where Beam's panel sits (the left third), so the home
+    // screen hardly shows through its tiles; clearing towards the right.
     0f to Color(0xF5000000),
-    0.06f to Color(0xEB000000),
-    0.25f to Color(0xCC000000),
-    0.5f to Color(0x99000000),
+    0.25f to Color(0xEB000000),
+    0.36f to Color(0xD9000000),
+    0.5f to Color(0xA6000000),
     0.625f to Color(0x70000000),
     0.75f to Color(0x47000000),
     0.875f to Color(0x24000000),

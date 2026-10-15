@@ -4,6 +4,10 @@
     <string name="cant_open">Не удалось открыть</string>
     <string name="all_apps">Все приложения</string>
     <string name="home_tab">Главная</string>
+    <string name="tile_quick">Быстрые настройки XGIMI</string>
+    <string name="tile_all">Все настройки</string>
+    <string name="tile_sounds">Звуки</string>
+    <string name="tile_tint">Оттенок</string>
     <string name="menu_open">Открыть</string>
     <string name="menu_show_home">Показать на главном</string>
     <string name="menu_hide_home">Скрыть с главного</string>
@@ -15,7 +19,6 @@
     <string name="move_row_hint">▲ %1$s ▼    OK — готово · Назад — отмена</string>
     <string name="usb_drive">Флешка</string>
     <string name="device_connected">Подключено устройство</string>
-    <string name="quick_settings">Быстрые настройки</string>
     <string name="settings">Настройки</string>
     <string name="appearance">Оформление</string>
     <string name="mic_not_initialized">Микрофон не инициализирован</string>
@@ -34,8 +37,6 @@
     <string name="off">Выкл</string>
     <string name="nothing">Ничего</string>
     <string name="this_panel">Настройки</string>
-    <string name="quick_settings_hint">Панель XGIMI: фокус, трапеция, яркость, сеть, Bluetooth, источник. Её же открывает кнопка настроек на пульте.</string>
-    <string name="xgimi_settings_hint">Все настройки проектора: изображение, звук, проекция, сеть, система.</string>
     <string name="app_buttons">Кнопки приложений</string>
     <string name="app_buttons_hint">Нажмите кнопку на пульте, чтобы перейти к ней. ← → — действие</string>
     <string name="color_by_month">Цвет по месяцу</string>
@@ -53,7 +54,6 @@
     <string name="idle">Бездействие</string>
     <string name="no_write_settings">Нет разрешения менять время (appops WRITE_SETTINGS)</string>
     <string name="remote_buttons">Кнопки пульта</string>
-    <string name="xgimi_settings">Настройки XGIMI</string>
     <string name="battery_low">Низкий заряд: %1$d%%. Подключите питание</string>
     <string name="battery_left_hm">≈ %1$d ч %2$02d мин</string>
     <string name="battery_left_m">≈ %1$d мин</string>
