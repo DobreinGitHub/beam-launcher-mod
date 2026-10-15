@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.svg" width="128" height="128" alt="Beam"></p>
+<p align="center"><img src="docs/beam_logo.png" width="128" height="128" alt="Beam"></p>
 
 # Beam
 
