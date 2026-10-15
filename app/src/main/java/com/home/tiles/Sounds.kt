@@ -14,11 +14,13 @@ import androidx.compose.ui.input.key.type
 /**
  * UI sounds. Moving and selecting play the system's own interface effects, the ones XGIMI's
  * settings and panels use (android_TV_scroll_* per direction, android_TV_select), so Beam sounds
- * like the rest of the projector and follows its click-sound switch. Only the voice key's
- * "listening" cue is Beam's own.
+ * like the rest of the projector. They follow XGIMI's «Звук клавиш» (Android's click-sound
+ * setting), which the system checks itself: Beam has no switch of its own. Only the voice key's
+ * "listening" cue is Beam's own, and it asks the same setting.
  */
 object Sounds {
     private var audio: AudioManager? = null
+    private var appContext: Context? = null
     private var pool: SoundPool? = null
     private var popup = 0
     private var lastArrowAt = 0L
@@ -26,6 +28,7 @@ object Sounds {
 
     fun init(context: Context) {
         if (audio == null) audio = context.getSystemService(AudioManager::class.java)
+        appContext = context.applicationContext
         if (pool != null) return
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
@@ -63,11 +66,27 @@ object Sounds {
 
     /** Only the voice key's "listening" cue: menus and panels open silently. */
     fun popup() {
-        if (popup != 0 && LauncherSettings.sounds) pool?.play(popup, 0.7f, 0.7f, 1, 0, 1f)
+        if (popup != 0 && keyTones()) pool?.play(popup, 0.7f, 0.7f, 1, 0, 1f)
     }
 
+    /** XGIMI's «Звук клавиш». */
+    fun keyTones(): Boolean = appContext?.let {
+        android.provider.Settings.System.getInt(it.contentResolver, android.provider.Settings.System.SOUND_EFFECTS_ENABLED, 1) == 1
+    } ?: true
+
+    /** Switches XGIMI's «Звук нажатия кнопок» (Beam holds WRITE_SETTINGS); false if it can't. */
+    fun setKeyTones(on: Boolean): Boolean {
+        val context = appContext ?: return false
+        return runCatching {
+            android.provider.Settings.System.putInt(context.contentResolver, android.provider.Settings.System.SOUND_EFFECTS_ENABLED, if (on) 1 else 0)
+            // As the system's own switch does, so the effects play (or stop) at once.
+            if (on) audio?.loadSoundEffects() else audio?.unloadSoundEffects()
+        }.isSuccess
+    }
+
+    // Played only while «Звук клавиш» is on: the system checks.
     private fun effect(type: Int) {
-        if (LauncherSettings.sounds) audio?.playSoundEffect(type)
+        audio?.playSoundEffect(type)
     }
 }
 

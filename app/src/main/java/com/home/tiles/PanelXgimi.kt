@@ -1,5 +1,7 @@
 package com.home.tiles
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,19 +11,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -57,16 +53,16 @@ internal fun AboutBeamPage(onDismiss: () -> Unit) {
         Updates.checkedAt > 0 -> tr(R.string.update_latest)
         else -> tr(R.string.update_never)
     }
-    T(status, 16.sp, color = if (release != null) PanelText else PanelDim, maxLines = 4)
+    T(status, 16.sp, color = if (release != null) ScrimText else ScrimDim, maxLines = 4)
     if (Updates.checkedAt > 0) {
         val format = remember(AppLanguage.locale) { SimpleDateFormat("d MMMM, HH:mm", AppLanguage.locale) }
-        T(tr(R.string.update_checked_at, format.format(Date(Updates.checkedAt))), 14.sp, color = PanelDim)
+        T(tr(R.string.update_checked_at, format.format(Date(Updates.checkedAt))), 14.sp, color = ScrimDim)
     }
     // What's new in the release found, briefly.
     release?.notes?.lineSequence()?.map { it.trim().removePrefix("- ").removePrefix("* ") }
         ?.filter { it.isNotEmpty() && !it.startsWith("#") }?.take(3)?.toList()?.takeIf { it.isNotEmpty() }?.let { lines ->
             Spacer(Modifier.height(6.dp))
-            lines.forEach { T("· $it", 14.sp, color = PanelDim, maxLines = 2) }
+            lines.forEach { T("· $it", 14.sp, color = ScrimDim, maxLines = 2) }
         }
     Spacer(Modifier.height(12.dp))
     val action = when {
@@ -85,9 +81,9 @@ internal fun AboutBeamPage(onDismiss: () -> Unit) {
 @Composable
 private fun AboutRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-        T(label, 15.sp, color = PanelDim)
+        T(label, 16.sp, color = PanelDim)
         Spacer(Modifier.weight(1f))
-        T(value, 15.sp, color = PanelText)
+        T(value, 16.sp, color = PanelText)
     }
 }
 
@@ -95,15 +91,15 @@ private const val BEAM_REPO = "github.com/tonisaf/beam-launcher"
 private const val BUILD_REPO = "github.com/DobreinGitHub/beam-launcher-mod"
 
 /**
- * The screensaver: which one runs (XGIMI Atmosphere or an installed one like Aerial Views),
+ * The screensaver: which one runs (XGIMI's own or an installed one like Aerial Views),
  * its own settings, and how long the projector waits before starting it.
  */
 @Composable
 internal fun ScreensaverPage(onSetup: (android.content.ComponentName) -> Unit) {
     val context = LocalContext.current
-    val choices by produceState(emptyList<Screensavers.Choice>()) {
-        value = withContext(Dispatchers.IO) { Screensavers.installed(context) }
-    }
+    // Read at once (a quick package query): read later, the page had already put the selection
+    // on the timeout below, the only control there was yet.
+    val choices = remember { Screensavers.installed(context) }
     var current by remember { mutableStateOf(Screensavers.current(context)) }
     if (choices.isNotEmpty()) {
         Section(tr(R.string.screensaver))
@@ -126,6 +122,6 @@ internal fun ScreensaverPage(onSetup: (android.content.ComponentName) -> Unit) {
             if (ScreensaverTimeout.set(context, next)) timeout = ScreensaverTimeout.current(context)
         }
     } else {
-        T(tr(R.string.no_write_settings), 14.sp, color = PanelDim, maxLines = 3)
+        T(tr(R.string.no_write_settings), 14.sp, color = ScrimDim, maxLines = 3)
     }
 }

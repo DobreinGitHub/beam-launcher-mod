@@ -1,5 +1,7 @@
 package com.home.tiles
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -9,10 +11,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.offset
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -25,7 +24,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,8 +35,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -61,23 +57,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Shape
@@ -99,7 +88,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -138,10 +126,12 @@ fun T(
     weight: FontWeight = FontWeight.Normal,
     align: TextAlign = TextAlign.Start,
     maxLines: Int = 1,
+    /** Digits all as wide (the clock, percentages), so the text beside them doesn't shift as they change. */
+    tabular: Boolean = false,
 ) = BasicText(
     text = text,
     modifier = modifier,
-    style = TextStyle(color = color, fontSize = size, fontWeight = weight, textAlign = align),
+    style = TextStyle(color = color, fontSize = size, fontWeight = weight, textAlign = align, fontFeatureSettings = if (tabular) "tnum" else null),
     maxLines = maxLines,
     overflow = TextOverflow.Ellipsis,
 )
@@ -348,7 +338,8 @@ private val FocusBorderWidth = 3.dp
 
 /**
  * Google TV's selection outline: a line along the rounded edge of a tile or card, drawn over its
- * picture, fading in and out with the tile's growth ([alpha] is read at draw time).
+ * picture, fading in and out with the tile's growth ([alpha] is read at draw time). White in the
+ * dark theme, XGIMI's selection blue in the light one (as everything selected there).
  */
 fun Modifier.focusBorder(corner: Dp, alpha: () -> Float): Modifier = drawWithContent {
     drawContent()
@@ -357,7 +348,7 @@ fun Modifier.focusBorder(corner: Dp, alpha: () -> Float): Modifier = drawWithCon
     val w = FocusBorderWidth.toPx()
     val r = (corner.toPx() - w / 2).coerceAtLeast(0f)
     drawRoundRect(
-        Colors.Text.copy(alpha = a),
+        (if (LauncherSettings.dark) Colors.Text else FocusBg).copy(alpha = a),
         topLeft = Offset(w / 2, w / 2),
         size = Size(size.width - w, size.height - w),
         cornerRadius = CornerRadius(r, r),
@@ -519,7 +510,7 @@ fun AllAppsArt(title: String, subtitle: String) {
 }
 
 @Composable
-fun Clock(size: TextUnit = 36.sp, color: Color = Colors.Text, weight: FontWeight = FontWeight.Light) {
+fun Clock(size: TextUnit = 34.sp, color: Color = Colors.Text, weight: FontWeight = FontWeight.Light) {
     val format = remember(AppLanguage.locale) { SimpleDateFormat("HH:mm", AppLanguage.locale) }
     val time by produceState(format.format(Date())) {
         while (true) {
@@ -527,7 +518,7 @@ fun Clock(size: TextUnit = 36.sp, color: Color = Colors.Text, weight: FontWeight
             delay(1000 - System.currentTimeMillis() % 1000)
         }
     }
-    T(time, size, color = color, weight = weight)
+    T(time, size, color = color, weight = weight, tabular = true)
 }
 
 /**
@@ -710,7 +701,7 @@ fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(96.dp, tileHeight(96.dp)).clip(RoundedCornerShape(tileCorner(tileHeight(96.dp))))) { request.art() }
                 Spacer(Modifier.width(18.dp))
-                T(request.title, 26.sp)
+                T(request.title, 22.sp)
             }
             Spacer(Modifier.height(18.dp))
             request.options.forEachIndexed { i, (text, action) ->
@@ -720,7 +711,7 @@ fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
                         .fillMaxWidth()
                         .height(54.dp)
                         // Google TV style: the selected item is a light bar with dark text.
-                        .background(if (focused) Colors.Text else Color.Transparent, RoundedCornerShape(10.dp))
+                        .background(if (focused) FocusBg else Color.Transparent, RoundedCornerShape(10.dp))
                         .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
                         .onFocusChanged {
                             focused = it.isFocused
@@ -734,7 +725,7 @@ fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
                         .padding(horizontal = 18.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    T(text, 21.sp, color = if (focused) Colors.Background else Colors.Text)
+                    T(text, 20.sp, color = if (focused) FocusText else Colors.Text)
                 }
             }
         }

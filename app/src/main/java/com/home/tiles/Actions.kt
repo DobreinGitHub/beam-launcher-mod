@@ -25,6 +25,22 @@ private fun Context.startXgimiPanel(action: String): Boolean = runCatching {
     startService(Intent(action).setPackage(XGIMI_SETTINGS)) != null
 }.getOrDefault(false)
 
+/**
+ * One page of XGIMI's settings by its link, the way XGIMI's own apps open them (the link in
+ * "data"; the list is ActionServiceConfig's PAGE_* in its settings app). Its main page if not.
+ */
+fun Context.openXgimiPage(link: String) {
+    val opened = runCatching {
+        startService(
+            Intent("com.xgimi.settings.SETTINGS").setPackage(XGIMI_SETTINGS).putExtra("data", link).putExtra("packageName", packageName),
+        ) != null
+    }.getOrDefault(false)
+    if (!opened) openSettings()
+}
+
+/** XGIMI's «Стиль темы» list (Общие → Стиль темы). */
+const val XGIMI_THEME_PAGE = "Settings://com.xgimi.settings.general/theme"
+
 fun Context.openSettings() {
     if (!startXgimiPanel("com.xgimi.settings.SETTINGS")) {
         start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

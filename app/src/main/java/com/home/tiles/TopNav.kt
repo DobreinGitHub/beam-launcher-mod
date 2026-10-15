@@ -1,5 +1,7 @@
 package com.home.tiles
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -22,15 +24,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -95,7 +95,7 @@ fun TopNav(
         Spacer(Modifier.width(18.dp))
         // Beam's settings page, which also leads to XGIMI's quick panel and settings.
         val gearFocus = remember { FocusRequester() }
-        NavIconButton(Icons.Rounded.Settings, tr(R.string.settings), onSettings, Modifier.padding(top = 2.dp).focusRequester(gearFocus).updateDot())
+        NavIconButton(Icons.Outlined.DashboardCustomize, tr(R.string.settings), onSettings, Modifier.padding(top = 2.dp).focusRequester(gearFocus).updateDot())
         val nowPlaying by rememberNowPlaying()
         val playing = nowPlaying?.takeIf { LauncherSettings.nowPlaying }
         // A device unplugged while selected hands the selection to the settings button beside it.
@@ -152,8 +152,8 @@ private fun NavTabs(
     val w = remember { Animatable(0f) }
     val shown by animateFloatAsState(if (focused >= 0) 1f else 0f, tween(150), label = "tabs")
     val dark = LauncherSettings.dark
-    val focusFill = if (dark) FocusBg else Colors.Text
-    val focusText = if (dark) FocusText else Colors.Background
+    val focusFill = FocusBg
+    val focusText = FocusText
     val currentFill = Colors.Text.copy(alpha = if (dark) 0.12f else 0.09f)
     Row(
         modifier
@@ -220,8 +220,8 @@ private val TabSlide = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy,
 private fun NavIconButton(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
     val dark = LauncherSettings.dark
-    val fill by animateColorAsState(if (focused) (if (dark) FocusBg else Colors.Text) else Colors.Button, tween(150), label = "fill")
-    val tint by animateColorAsState(if (focused) (if (dark) FocusText else Colors.Background) else Colors.Text, tween(150), label = "tint")
+    val fill by animateColorAsState(if (focused) FocusBg else Colors.Button, tween(150), label = "fill")
+    val tint by animateColorAsState(if (focused) FocusText else Colors.Text, tween(150), label = "tint")
     Box(
         modifier
             .size(TabHeight + TabInset * 2)

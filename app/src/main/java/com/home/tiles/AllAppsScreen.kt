@@ -2,6 +2,8 @@
 
 package com.home.tiles
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,10 +22,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -218,7 +219,7 @@ private fun AppCell(
         Box(modifier.onFocusChanged { onFocus(it.hasFocus) }) { content() }
         // The name only under the selected tile, like Google TV, in the gap to the next row.
         if (focused && name != null) {
-            T(name, 17.sp, Modifier.fillMaxWidth().offset(y = tileH + NameGap), align = TextAlign.Center)
+            T(name, 16.sp, Modifier.fillMaxWidth().offset(y = tileH + NameGap), align = TextAlign.Center)
         }
     }
 }
@@ -236,7 +237,7 @@ private fun GridHeader(icon: ImageVector, title: String, count: Int) {
                 Image(icon, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(Colors.Text))
             }
             Spacer(Modifier.width(10.dp))
-            T(title, 20.sp, color = Colors.Text)
+            T(title, 20.sp, color = Colors.Text, weight = FontWeight.Medium)
             T("  $count", 20.sp, color = Colors.TextDim)
         }
     }

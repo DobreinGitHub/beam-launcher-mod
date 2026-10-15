@@ -13,13 +13,35 @@ object LauncherSettings {
 
     private val darkState = mutableStateOf(false)
     private val backgroundState = mutableStateOf(0)
-    private val soundsState = mutableStateOf(true)
     private val nowPlayingState = mutableStateOf(true)
     private val secondRowState = mutableStateOf(SECOND_ROW_AUTO)
     private val xmbColorState = mutableStateOf(-1)
     private val bgAnimationState = mutableStateOf(true)
     private val ambientTintState = mutableStateOf(true)
     private val seenChannelsState = mutableStateOf<Set<String>?>(null)
+    private val followXgimiState = mutableStateOf(true)
+    private val xgimiDarkState = mutableStateOf<Boolean?>(null)
+
+    /** XGIMI's own «Стиль темы» (Общие → Стиль темы): dark, null where there's no such setting. */
+    val xgimiDark: Boolean? get() = xgimiDarkState.value
+
+    /**
+     * Reads XGIMI's theme. The firmware applies it as a skin, named in a system property: the
+     * light one has "light" in its name (xgimi-skin-black_light_blue); the dark and blue ones
+     * don't. «Авто» swaps the skin by the time of day, so following the skin covers it too.
+     * Read on resume: the setting is changed in XGIMI's own settings app.
+     */
+    fun refreshXgimiTheme() {
+        xgimiDarkState.value = runCatching {
+            Class.forName("android.os.SystemProperties").getMethod("get", String::class.java)
+                .invoke(null, "persist.sys.xgimi.theme.url") as String
+        }.getOrNull()?.takeIf { it.isNotBlank() }?.let { !it.contains("light", ignoreCase = true) }
+    }
+
+    /** Light and dark as XGIMI has them («Как в XGIMI»), unless chosen here. */
+    var followXgimi: Boolean
+        get() = followXgimiState.value && xgimiDarkState.value != null
+        set(value) { followXgimiState.value = value; prefs.edit().putBoolean("followXgimiTheme", value).apply() }
 
     fun init(context: Context) {
         // Shared by the launcher activity and the overlay service in the same process.
@@ -27,13 +49,14 @@ object LauncherSettings {
         prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         darkState.value = prefs.getBoolean("dark", false)
         backgroundState.value = prefs.getInt("background", 0).coerceIn(Backgrounds.indices)
-        soundsState.value = prefs.getBoolean("sounds", true)
         nowPlayingState.value = prefs.getBoolean("nowPlaying", true)
         secondRowState.value = prefs.getString("secondRow", SECOND_ROW_AUTO) ?: SECOND_ROW_AUTO
         xmbColorState.value = prefs.getInt("xmbColor", -1)
         bgAnimationState.value = prefs.getBoolean("bgAnimation", true)
         ambientTintState.value = prefs.getBoolean("ambientTint", true)
         seenChannelsState.value = prefs.getStringSet("seenChannels", null)?.toSet()
+        followXgimiState.value = prefs.getBoolean("followXgimiTheme", true)
+        refreshXgimiTheme()
     }
 
     /**
@@ -49,17 +72,18 @@ object LauncherSettings {
         prefs.edit().putStringSet("seenChannels", next).apply()
     }
 
+    /** The theme in use: XGIMI's while following it, else the one chosen here. Setting it chooses it here. */
     var dark: Boolean
-        get() = darkState.value
-        set(value) { darkState.value = value; prefs.edit().putBoolean("dark", value).apply() }
+        get() = if (followXgimi) xgimiDarkState.value == true else darkState.value
+        set(value) {
+            darkState.value = value
+            prefs.edit().putBoolean("dark", value).apply()
+            followXgimi = false
+        }
 
     var background: Int
         get() = backgroundState.value
         set(value) { backgroundState.value = value; prefs.edit().putInt("background", value).apply() }
-
-    var sounds: Boolean
-        get() = soundsState.value
-        set(value) { soundsState.value = value; prefs.edit().putBoolean("sounds", value).apply() }
 
     var nowPlaying: Boolean
         get() = nowPlayingState.value

@@ -2,6 +2,8 @@
 
 package com.home.tiles
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.focusRestorer
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
@@ -10,7 +12,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -58,9 +59,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -83,7 +82,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -463,8 +461,8 @@ private fun rememberRowDim(key: String, focusedRow: State<String?>): State<Float
 private fun RowsButton(newRows: List<TvChannel>, rowCount: Int, onClick: () -> Unit, modifier: Modifier) {
     var focused by remember { mutableStateOf(false) }
     val dark = LauncherSettings.dark
-    val fill = if (focused) (if (dark) FocusBg else Colors.Text) else Colors.Button
-    val fg = if (focused) (if (dark) FocusText else Colors.Background) else Colors.Text
+    val fill = if (focused) FocusBg else Colors.Button
+    val fg = if (focused) FocusText else Colors.Text
     val screenShown = LocalScreenShown.current
     // A row switched on from the list opened here pushes the button down: the page follows it.
     val bring = remember { BringIntoViewRequester() }
@@ -492,14 +490,14 @@ private fun RowsButton(newRows: List<TvChannel>, rowCount: Int, onClick: () -> U
     ) {
         Image(Icons.Rounded.Tune, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(fg))
         Spacer(Modifier.width(10.dp))
-        T(tr(R.string.rows_customize), 18.sp, color = fg)
+        T(tr(R.string.rows_customize), 20.sp, color = fg)
         if (newRows.isNotEmpty()) {
             Spacer(Modifier.width(14.dp))
             Box(Modifier.size(8.dp).background(MarkOrange, CircleShape))
             Spacer(Modifier.width(8.dp))
             T(
                 if (newRows.size == 1) tr(R.string.rows_new_one, newRows[0].label) else tr(R.string.rows_new_many, newRows.size),
-                18.sp,
+                20.sp,
                 color = fg,
             )
         }

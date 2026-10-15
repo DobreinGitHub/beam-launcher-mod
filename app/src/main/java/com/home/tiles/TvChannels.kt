@@ -2,6 +2,8 @@
 
 package com.home.tiles
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -27,7 +29,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,18 +46,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -64,6 +61,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -686,6 +684,7 @@ internal fun ChannelRow(
                 if (moving) tr(R.string.move_row_hint, channel.name) else channel.name,
                 20.sp,
                 color = if (moving) Colors.Text else Colors.TextDim,
+                weight = FontWeight.Medium,
             )
         }
         Spacer(Modifier.height(ROW_NAME_GAP))
@@ -914,7 +913,7 @@ private fun TvCard(item: TvItem, size: DpSize, poster: PosterState, onFocus: (Bo
             // No picture at all: its title where the picture would be.
             poster.done -> T(
                 item.title,
-                15.sp,
+                16.sp,
                 Modifier.align(Alignment.Center).padding(horizontal = 12.dp),
                 color = Color.White,
                 align = TextAlign.Center,
@@ -949,8 +948,8 @@ private fun AppLinkCard(channel: TvChannel, card: DpSize, onFocus: (Boolean) -> 
         ) {
             AppIcon(channel.pkg, 40.dp)
             Spacer(Modifier.height(8.dp))
-            T(tr(R.string.open_app), 13.sp, color = Colors.TextDim)
-            T(channel.app ?: channel.name, 15.sp, color = Colors.Text, align = TextAlign.Center, maxLines = 2)
+            T(tr(R.string.open_app), 14.sp, color = Colors.TextDim)
+            T(channel.app ?: channel.name, 16.sp, color = Colors.Text, align = TextAlign.Center, maxLines = 2)
         }
     }
 }

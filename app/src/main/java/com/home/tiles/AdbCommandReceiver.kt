@@ -33,12 +33,19 @@ class AdbCommandReceiver : BroadcastReceiver() {
         // --ez appearance_get true: the current background, theme and language (to put them back after a test).
         if (intent.hasExtra("appearance_get")) {
             AppLanguage.init(context)
+            LauncherSettings.refreshXgimiTheme()
             resultData = "background=${Backgrounds[LauncherSettings.background].name} dark=${LauncherSettings.dark} " +
+                "followXgimi=${LauncherSettings.followXgimi} xgimiDark=${LauncherSettings.xgimiDark} " +
                 "language=${AppLanguage.current} bg_animation=${LauncherSettings.bgAnimation} ambient_tint=${LauncherSettings.ambientTint}"
         }
         // --ez dark BOOL: the theme; --es language system|ru|en: the interface language.
         if (intent.hasExtra("dark")) {
             LauncherSettings.dark = intent.getBooleanExtra("dark", true)
+            resultData = "ok"
+        }
+        // --ez theme_follow true: the theme as XGIMI's «Стиль темы» again.
+        if (intent.hasExtra("theme_follow")) {
+            LauncherSettings.followXgimi = intent.getBooleanExtra("theme_follow", true)
             resultData = "ok"
         }
         intent.getStringExtra("language")?.let { language ->

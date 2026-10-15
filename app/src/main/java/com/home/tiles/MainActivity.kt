@@ -1,5 +1,7 @@
 package com.home.tiles
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -13,11 +15,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
@@ -84,10 +84,19 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         AccessibilityGuard.ensure(this)
+        // XGIMI's «Стиль темы» may have changed in its settings meanwhile.
+        LauncherSettings.refreshXgimiTheme()
         reload()
         resumeTick.intValue++
         // At most once a day (and not when switched off in «О Beam»).
         Updates.checkDaily(this)
+    }
+
+    // XGIMI's settings and quick panel can open over Beam without pausing it: back to Beam's
+    // window, the theme is read again (it may have been changed there).
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) LauncherSettings.refreshXgimiTheme()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -182,6 +191,15 @@ private fun LauncherApp(
         takeFocus = true
     }
     LaunchedEffect(panelRequest) { if (panelRequest > 0) panelOpen = true }
+    // XGIMI's «Стиль темы» changes at once, with its settings open over home, and «Авто» turns
+    // light and dark by the time of day.
+    LaunchedEffect(Unit) {
+        while (true) {
+            // A property read, nothing more: once a second keeps up with XGIMI's settings open beside.
+            delay(1_000)
+            LauncherSettings.refreshXgimiTheme()
+        }
+    }
     // A highlighted tab shows its screen after a moment, as on Google TV: passing over it on the
     // way to the buttons beside it, or straight down, doesn't build a screen for nothing.
     LaunchedEffect(highlight) {

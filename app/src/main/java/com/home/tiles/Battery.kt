@@ -277,7 +277,7 @@ fun BatteryIndicator(
     textSize: TextUnit = StatusTextSize,
     color: Color = Colors.Text,
     iconScale: Float = 1f,
-    weight: FontWeight = FontWeight.Light,
+    weight: FontWeight = FontWeight.Normal,
 ) {
     BatteryMonitor.start(LocalContext.current)
     val info = BatteryMonitor.info ?: return
@@ -311,7 +311,7 @@ fun BatteryIndicator(
             StandGlyph(level ?: 0, standTint, iconScale)
             level?.let {
                 Spacer(Modifier.width(8.dp * iconScale))
-                T("$it%", textSize, color = standTint, weight = weight)
+                T("$it%", textSize, color = standTint, weight = weight, tabular = true)
             }
             Spacer(Modifier.width(18.dp * iconScale))
         }
@@ -321,7 +321,7 @@ fun BatteryIndicator(
         }
         BatteryGlyph(info.percent, tint, iconScale)
         Spacer(Modifier.width(8.dp * iconScale))
-        T("${info.percent}%", textSize, color = if (low) tint else color, weight = weight)
+        T("${info.percent}%", textSize, color = if (low) tint else color, weight = weight, tabular = true)
     }
 }
 

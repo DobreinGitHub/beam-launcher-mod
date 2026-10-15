@@ -86,16 +86,25 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 
 **Appearance**
 
-- **Six new backgrounds**: Graphite, Midnight, Burgundy, Emerald, Aurora, Sand (each with a light
-  and a dark version).
-- **A "Background in app colour" switch.**
+- **The theme follows XGIMI's**: Beam turns light or dark with General → Theme style in XGIMI's
+  settings (and with its Auto through the day), at once, even while those are open. It can be pinned
+  instead. The light theme looks like XGIMI's: light tiles and a blue selection. OK on Theme opens
+  XGIMI's Theme style list.
+- **Backgrounds as a row of cards**: the background changes as soon as the selection lands on a card,
+  no OK needed; the home screen beside shows it full size. XMB is a card of its own with its
+  options. Six new backgrounds: Graphite, Midnight, Burgundy, Emerald, Aurora, Sand.
+- **A "Background in app colour" switch** (now also in the selected poster's colour).
+- **Navigation sounds are the same switch as XGIMI's key press sound**: off in one place, off in both.
+- **One type scale**: six sizes, row and section headers in Medium, the clock's and battery's digits
+  all one width so the icons beside them don't shift.
 
 **Settings**
 
 - **The settings page looks like XGIMI's quick panel**: tiles straight over the darkening, a header
   with a round gear on top (as on XGIMI's panel, it opens the projector's full settings), "XGIMI
   quick settings" under it; then tiles for Beam's sections (appearance, home screen, remote buttons,
-  screensaver) and small square switches: theme, sounds, tint, About. A section opens in the
+  screensaver) and About. Icons are outlined, like XGIMI's; Beam's settings button in the top bar
+  has its own icon, the gear only means XGIMI's settings. A section opens in the
   panel's place; Back returns to its tile. The home screen's top bar steps aside under the page, as
   under XGIMI's panel. Power off, restart and the sleep timer are in XGIMI's menu on the remote's power button.
   A Russian XGIMI interface is installed separately:
@@ -103,7 +112,8 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
   is enough; its launcher and remote-button module are not needed).
 - **One panel at a time**: Beam's page and XGIMI's panel never open together; opening one closes the
   other. The remote's settings key opens XGIMI's panel, the voice key Beam's page.
-- **Like XGIMI's**: the same darkening, white focus; it opens at once, with no animation and no sound.
+- **Like XGIMI's**: the same darkening, white focus (blue in the light theme); it opens at once, with
+  no animation and no sound. Long lists scroll to the screen's edge.
 - **System navigation sounds**, the same as in XGIMI's menus.
 - **Screensaver choice**: XGIMI's or an installed one (for example Aerial Views).
 - **An "About Beam" page**: version and credits, and **updates**: once a day (or on the button)

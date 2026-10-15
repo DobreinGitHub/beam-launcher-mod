@@ -6,8 +6,6 @@
     <string name="home_tab">Главная</string>
     <string name="tile_quick">Быстрые настройки XGIMI</string>
     <string name="tile_all">Все настройки</string>
-    <string name="tile_sounds">Звуки</string>
-    <string name="tile_tint">Оттенок</string>
     <string name="menu_open">Открыть</string>
     <string name="menu_show_home">Показать на главном</string>
     <string name="menu_hide_home">Скрыть с главного</string>
@@ -40,7 +38,7 @@
     <string name="color_by_month">Цвет по месяцу</string>
     <string name="background_animation">Анимация фона</string>
     <string name="ambient_tint">Фон в цвет приложения</string>
-    <string name="ambient_tint_hint">Лёгкий оттенок цвета выбранного приложения</string>
+    <string name="ambient_tint_hint">Лёгкий оттенок цвета выбранного приложения или обложки</string>
     <string name="listening">🎤  Слушаю…</string>
     <string name="voice_model_missing">Голосовая модель не установлена</string>
     <string name="didnt_catch">Не расслышал</string>
@@ -76,7 +74,7 @@
     <string name="screensaver">Заставка</string>
     <string name="screensaver_which">Показывать</string>
     <string name="screensaver_setup">Настроить заставку</string>
-    <string name="screensaver_xgimi">XGIMI Atmosphere</string>
+    <string name="screensaver_xgimi">XGIMI</string>
     <string name="interface_section">Интерфейс</string>
     <string name="nav_sounds">Звуки навигации</string>
     <string name="bg_normal">Обычный</string>
@@ -112,7 +110,6 @@
     <string name="apps_count">Приложений: %1$s</string>
     <string name="mic_unavailable">Микрофон недоступен: %1$s</string>
     <string name="mic_recording">Запись… говорите\nуровень: %1$s</string>
-    <string name="background_name">Фон · %1$s</string>
     <string name="button_n">Кнопка %1$s</string>
     <string name="pkg_missing">%1$s (нет на устройстве)</string>
     <string name="didnt_understand">Не понял: «%1$s»</string>
@@ -130,4 +127,7 @@
     <string name="apps_hidden">Скрытые</string>
     <string name="apps_system">Системные</string>
     <string name="app_new">Новое</string>
+    <string name="background">Фон</string>
+    <string name="theme_xgimi">Как в XGIMI</string>
+    <string name="nav_sounds_xgimi">Тот же переключатель, что «Звук нажатия кнопок» в XGIMI</string>
 </resources>

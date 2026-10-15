@@ -1,5 +1,6 @@
 package com.home.tiles
 
+import androidx.compose.runtime.setValue
 import androidx.annotation.StringRes
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
@@ -28,23 +29,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.InvertColors
-import androidx.compose.material.icons.rounded.InvertColorsOff
-import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.SettingsRemote
+import androidx.compose.material.icons.outlined.FilterVintage
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.ui.text.font.FontWeight
 import java.text.SimpleDateFormat
 import java.util.Date
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.Landscape
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.SettingsRemote
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,7 +48,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -80,11 +74,13 @@ import androidx.compose.ui.window.DialogWindowProvider
 
 /** Beam's own sections of the settings page; XGIMI's panel and settings are the tiles above them. */
 private enum class Page(@StringRes val titleRes: Int, val icon: ImageVector) {
-    Appearance(R.string.appearance, Icons.Rounded.Palette),
-    Home(R.string.home_screen, Icons.Rounded.Dashboard),
-    Remote(R.string.remote_buttons, Icons.Rounded.SettingsRemote),
-    Screensaver(R.string.screensaver, Icons.Rounded.Landscape),
-    About(R.string.about_beam, Icons.Rounded.Info);
+    // Outlined, like the line icons of XGIMI's quick panel and settings beside this page; the
+    // screensaver's is the flower XGIMI's «Заставки» tile has.
+    Appearance(R.string.appearance, Icons.Outlined.Palette),
+    Home(R.string.home_screen, Icons.Outlined.Home),
+    Remote(R.string.remote_buttons, Icons.Outlined.SettingsRemote),
+    Screensaver(R.string.screensaver, Icons.Outlined.FilterVintage),
+    About(R.string.about_beam, Icons.Outlined.Info);
 
     val title: String get() = tr(titleRes)
 }
@@ -180,7 +176,9 @@ fun PanelScreen(
             Column(
                 Modifier
                     // Where XGIMI's quick panel sits, as wide.
-                    .padding(start = PanelStart, top = PanelTop, bottom = 24.dp)
+                    // Down to the screen's edge, so a long list runs off it rather than being cut
+                    // on a line above it; the end of the content has its own room (below).
+                    .padding(start = PanelStart, top = PanelTop)
                     .width(PanelWidth)
                     .fillMaxHeight()
                     .graphicsLayer { alpha = tilesAlpha }
@@ -203,6 +201,8 @@ fun PanelScreen(
                             .focusGroup(),
                     ) { Content(shown, onDismiss) }
                 }
+                // Room after the last item, so it scrolls clear of the screen's edge.
+                Spacer(Modifier.height(48.dp))
             }
             // The selection goes to the first tile on opening, back to the section's tile on
             // leaving it, and into a section's first control on entering it (a group: its first).
@@ -250,11 +250,11 @@ private fun QuickPanel(
         // Time, network and battery, as XGIMI's panel has them: the home screen's top bar steps
         // aside under this page, and over another app there is none.
         Box(Modifier.weight(1f)) { StatusHeader() }
-        RoundTile(Icons.Rounded.Settings, tr(R.string.tile_all)) { onXgimi(false) }
+        RoundTile(Icons.Outlined.Settings, tr(R.string.tile_all)) { onXgimi(false) }
     }
     Spacer(Modifier.height(18.dp))
     // Where XGIMI's panel has its brightness bar.
-    WideTile(Icons.Rounded.Tune, tr(R.string.tile_quick), Modifier.fillMaxWidth().height(64.dp).focusRequester(firstFocus), chevron = true) { onXgimi(true) }
+    WideTile(Icons.Outlined.Tune, tr(R.string.tile_quick), Modifier.fillMaxWidth().height(64.dp).focusRequester(firstFocus), chevron = true) { onXgimi(true) }
     Spacer(Modifier.height(TileGap + 6.dp))
     listOf(Page.Appearance to Page.Home, Page.Remote to Page.Screensaver).forEach { (a, b) ->
         Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
@@ -264,22 +264,13 @@ private fun QuickPanel(
         }
         Spacer(Modifier.height(TileGap))
     }
-    // Quick switches, like the small tiles on XGIMI's panel: each shows its state, OK flips it.
-    Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
-        val dark = LauncherSettings.dark
-        SquareTile(if (dark) Icons.Rounded.DarkMode else Icons.Rounded.LightMode, tr(if (dark) R.string.theme_dark else R.string.theme_light), Modifier.weight(1f)) {
-            LauncherSettings.dark = !dark
-        }
-        val sounds = LauncherSettings.sounds
-        SquareTile(if (sounds) Icons.Rounded.VolumeUp else Icons.Rounded.VolumeOff, tr(R.string.tile_sounds), Modifier.weight(1f), off = !sounds) {
-            LauncherSettings.sounds = !sounds
-        }
-        val tint = LauncherSettings.ambientTint
-        SquareTile(if (tint) Icons.Rounded.InvertColors else Icons.Rounded.InvertColorsOff, tr(R.string.tile_tint), Modifier.weight(1f), off = !tint) {
-            LauncherSettings.ambientTint = !tint
-        }
-        SquareTile(Page.About.icon, Page.About.title, Modifier.weight(1f).focusRequester(pageFocus.getValue(Page.About)).updateDot()) { onPage(Page.About) }
-    }
+    // No quick switches: the theme and sounds follow XGIMI's own settings, and the rest are set
+    // once and live in their sections. «О Beam» closes the panel, wide like the pill above.
+    WideTile(
+        Page.About.icon, Page.About.title,
+        Modifier.fillMaxWidth().height(64.dp).focusRequester(pageFocus.getValue(Page.About)).updateDot(),
+        chevron = true,
+    ) { onPage(Page.About) }
 }
 
 /**
@@ -291,16 +282,16 @@ private fun StatusHeader() {
     Column(Modifier.padding(start = 6.dp)) {
         // Sized to leave the gear its room even with the battery stand's charge in the row.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Clock(38.sp, PanelText)
+            Clock(34.sp, ScrimText)
             Spacer(Modifier.width(12.dp))
-            VpnIcon(PanelText, 20.dp, 8.dp)
-            NetworkIcon(PanelText, 20.dp)
+            VpnIcon(ScrimText, 20.dp, 8.dp)
+            NetworkIcon(ScrimText, 20.dp)
             Spacer(Modifier.width(8.dp))
-            BatteryIndicator(16.sp, PanelText, iconScale = 0.65f)
+            BatteryIndicator(16.sp, ScrimText, iconScale = 0.65f)
         }
         // On battery or the stand, how long the charge lasts follows the date (the top bar has no room).
         val left = batteryTimeLeft()
-        T(if (left != null) "${today()} · $left" else today(), 15.sp, color = PanelDim)
+        T(if (left != null) "${today()} · $left" else today(), 14.sp, color = ScrimDim)
     }
 }
 
@@ -308,12 +299,12 @@ private fun StatusHeader() {
 @Composable
 private fun StatusLine() {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Clock(15.sp, PanelDim)
+        Clock(14.sp, ScrimDim, weight = FontWeight.Normal)
         Spacer(Modifier.width(10.dp))
-        VpnIcon(PanelDim, 16.dp, 8.dp)
-        NetworkIcon(PanelDim, 16.dp)
+        VpnIcon(ScrimDim, 16.dp, 8.dp)
+        NetworkIcon(ScrimDim, 16.dp)
         Spacer(Modifier.width(8.dp))
-        BatteryIndicator(15.sp, PanelDim, iconScale = 0.55f)
+        BatteryIndicator(14.sp, ScrimDim, iconScale = 0.55f)
     }
 }
 
@@ -331,7 +322,7 @@ private fun today(): String {
 @Composable
 private fun Header(title: String, under: @Composable () -> Unit) {
     Column(Modifier.padding(start = 6.dp)) {
-        T(title, 34.sp, color = PanelText, weight = FontWeight.Light)
+        T(title, 34.sp, color = ScrimText, weight = FontWeight.Light)
         under()
     }
 }
@@ -351,7 +342,7 @@ private fun WideTile(icon: ImageVector, title: String, modifier: Modifier, chevr
         Image(icon, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(fg))
         Spacer(Modifier.width(12.dp))
         // Two lines break between words ("Главный / экран"), like XGIMI's "Bluetooth" tile.
-        T(title, 15.sp, Modifier.weight(1f), color = fg, maxLines = 2)
+        T(title, 16.sp, Modifier.weight(1f), color = fg, maxLines = 2)
         if (chevron) Image(Icons.Rounded.ChevronRight, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(fg))
     }
 }
@@ -401,7 +392,7 @@ private fun RoundTile(icon: ImageVector, description: String, onClick: () -> Uni
 private fun Content(section: Page, onDismiss: () -> Unit) {
     val context = LocalContext.current
     when (section) {
-        Page.Appearance -> AppearancePage()
+        Page.Appearance -> AppearancePage(onDismiss)
         Page.Home -> HomePage()
         Page.Remote -> RemoteButtonsSection()
         // XGIMI's screensaver is set up in its scenes app; others in their own app.
