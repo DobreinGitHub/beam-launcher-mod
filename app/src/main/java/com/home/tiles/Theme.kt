@@ -19,6 +19,7 @@ object LauncherSettings {
     private val xmbColorState = mutableStateOf(-1)
     private val bgAnimationState = mutableStateOf(true)
     private val ambientTintState = mutableStateOf(true)
+    private val seenChannelsState = mutableStateOf<Set<String>?>(null)
 
     fun init(context: Context) {
         // Shared by the launcher activity and the overlay service in the same process.
@@ -32,6 +33,20 @@ object LauncherSettings {
         xmbColorState.value = prefs.getInt("xmbColor", -1)
         bgAnimationState.value = prefs.getBoolean("bgAnimation", true)
         ambientTintState.value = prefs.getBoolean("ambientTint", true)
+        seenChannelsState.value = prefs.getStringSet("seenChannels", null)?.toSet()
+    }
+
+    /**
+     * Channels the rows list has shown; the others are new («Новый»). Null until the channels are
+     * first read, when all of them count as seen (a first start doesn't call everything new).
+     */
+    val seenChannels: Set<String>? get() = seenChannelsState.value
+
+    fun markChannelsSeen(keys: Collection<String>) {
+        val next = seenChannelsState.value.orEmpty() + keys
+        if (next == seenChannelsState.value) return
+        seenChannelsState.value = next
+        prefs.edit().putStringSet("seenChannels", next).apply()
     }
 
     var dark: Boolean

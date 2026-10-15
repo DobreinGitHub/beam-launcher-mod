@@ -52,11 +52,22 @@ fun HomeScreen(
     onOpenAll: () -> Unit,
     onMenu: (MenuRequest) -> Unit,
     onChanged: () -> Unit,
+    /** Opens the rows list (Settings → Home screen). */
+    onRows: () -> Unit,
 ) {
     val context = LocalContext.current
     val apps = loadedApps.orEmpty()
     val channels by rememberTvChannels(resumeTick)
     val channelRows = pickChannelRows(channels.orEmpty(), LauncherSettings.secondRow)
+    // Channels that turned up since the rows list was last open, and aren't on the page already.
+    LaunchedEffect(channels) {
+        val read = channels ?: return@LaunchedEffect
+        if (LauncherSettings.seenChannels == null) LauncherSettings.markChannelsSeen(read.map { it.key })
+    }
+    val seen = LauncherSettings.seenChannels
+    val newRows = if (seen == null) emptyList() else channels.orEmpty().filter {
+        it.items.isNotEmpty() && it.key !in seen && channelRows.none { row -> row.key == it.key }
+    }
     // Until the channels are read, the chosen rows' places are held by placeholders, so the
     // apps row doesn't jump when they arrive.
     val placeholderRows = if (channels != null) 0 else when (LauncherSettings.secondRow) {
@@ -118,7 +129,7 @@ fun HomeScreen(
     }
     fun rowMenu(channel: TvChannel, item: TvItem) = onMenu(
         MenuRequest(
-            title = channel.name,
+            title = channel.label,
             art = { TvItemArt(item) },
             options = buildList<Pair<String, () -> Unit>> {
                 add(tr(R.string.menu_open) to { context.openTvItem(item) })
@@ -127,10 +138,11 @@ fun HomeScreen(
                     rowsBeforeMove = LauncherSettings.secondRow
                     movingRow = channel.key
                 })
-                // It comes back with its switch in Settings → Home screen.
+                // It comes back with its switch in the rows list.
                 add(tr(R.string.menu_hide_row) to {
                     LauncherSettings.secondRow = hideChannelRow(LauncherSettings.secondRow, channel.key)
                 })
+                add(tr(R.string.rows_customize) to onRows)
             },
         ),
     )
@@ -157,6 +169,8 @@ fun HomeScreen(
             MoveControl(moving, ::moveStep, ::moveDone, ::moveCancel),
             MoveControl(movingRow, ::rowStep, ::rowDone, ::rowCancel),
             ::rowMenu,
+            newRows,
+            onRows,
         )
     }
 }

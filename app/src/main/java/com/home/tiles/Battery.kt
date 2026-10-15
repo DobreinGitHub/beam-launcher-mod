@@ -67,9 +67,11 @@ private fun standState(type: Int?): StandState = when (type) {
 }
 
 /**
- * [minutesLeft]: on battery or the stand, how long the charge in use lasts at the recent rate; null
- * until known. [stand]: the battery stand's state; [standLevel]: its charge, null when it isn't
- * attached or doesn't report it (while it charges); [standCharging]: its own charger is in.
+ * [minutesLeft]: on battery or the stand, how long the projector runs at the recent rate (on the
+ * stand: the stand's charge, then its own); null until known. [minutesAtLeast]: on the stand before
+ * the projector's own battery has been timed, so only the stand's part is counted. [stand]: the
+ * battery stand's state; [standLevel]: its charge, null when it isn't attached or doesn't report it
+ * (while it charges); [standCharging]: its own charger is in.
  */
 class BatteryInfo(
     val percent: Int,
@@ -77,6 +79,7 @@ class BatteryInfo(
     val minutesLeft: Int?,
     val stand: StandState = StandState.NONE,
     val standLevel: Int? = null,
+    val minutesAtLeast: Boolean = false,
 ) {
     val standCharging get() = stand == StandState.CHARGING
 }
@@ -129,11 +132,15 @@ object BatteryMonitor {
     private val warned = mutableSetOf<Int>()
     private val standWarned = mutableSetOf<Int>()
     private var hadStand: Boolean? = null
+    // How long one percent of the projector's own battery lasts, timed whenever it runs on it and
+    // kept: on the stand the projector goes on with its own charge once the stand's runs out.
+    private var ownMsPerPercent: Long? = null
 
     @Synchronized
     fun start(context: Context) {
         if (appContext != null) return
         appContext = context.applicationContext
+        ownMsPerPercent = prefs(context).getLong(KEY_OWN_RATE, 0L).takeIf { it > 0 }
         executor.scheduleWithFixedDelay({ runCatching { sample() } }, 0, POLL_S, TimeUnit.SECONDS)
     }
 
@@ -172,11 +179,23 @@ object BatteryMonitor {
             else -> PowerSource.CHARGING
         }
         // Two percents at least, so one step of the level doesn't make a wild guess.
-        val draining = power == PowerSource.BATTERY || power == PowerSource.STAND
-        val minutesLeft = if (draining && span >= MIN_TREND_MS && change <= -2) {
-            (level * span / -change / 60_000).toInt()
-        } else null
-        state.value = BatteryInfo(reading.level, power, minutesLeft, reading.stand, reading.standLevel)
+        val msPerPercent = if (span >= MIN_TREND_MS && change <= -2) span / -change else null
+        if (power == PowerSource.BATTERY && msPerPercent != null && msPerPercent != ownMsPerPercent) {
+            ownMsPerPercent = msPerPercent
+            appContext?.let { prefs(it).edit().putLong(KEY_OWN_RATE, msPerPercent).apply() }
+        }
+        val own = ownMsPerPercent
+        val minutesLeft = when {
+            msPerPercent == null -> null
+            power == PowerSource.BATTERY -> (level * msPerPercent / 60_000).toInt()
+            // The stand's charge, then the projector's own (it stays full while the stand carries it).
+            power == PowerSource.STAND -> ((level * msPerPercent + reading.level * (own ?: 0L)) / 60_000).toInt()
+            else -> null
+        }
+        state.value = BatteryInfo(
+            reading.level, power, minutesLeft, reading.stand, reading.standLevel,
+            minutesAtLeast = power == PowerSource.STAND && own == null,
+        )
         noteStand(reading)
         warnIfLow(reading)
     }
@@ -382,5 +401,11 @@ private fun DrawScope.drawBattery(percent: Int, tint: Color, scale: Float, at: O
 @Composable
 fun batteryTimeLeft(): String? {
     BatteryMonitor.start(LocalContext.current)
-    return BatteryMonitor.info?.minutesLeft?.let(::timeLeft)
+    val info = BatteryMonitor.info ?: return null
+    // Only the stand's part known yet: "> 1 ч 10 мин".
+    return info.minutesLeft?.let(::timeLeft)?.let { if (info.minutesAtLeast) it.replaceFirst("≈", ">") else it }
 }
+
+private const val KEY_OWN_RATE = "ownMsPerPercent"
+
+private fun prefs(context: Context) = context.getSharedPreferences("battery", Context.MODE_PRIVATE)

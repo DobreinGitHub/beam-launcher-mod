@@ -326,8 +326,9 @@ internal fun Modifier.updateDot(): Modifier = drawWithContent {
     drawContent()
     if (Updates.release != null) {
         val r = 5.dp.toPx()
-        drawCircle(UpdateOrange, r, Offset(size.width - r * 2.4f, r * 2.4f))
+        drawCircle(MarkOrange, r, Offset(size.width - r * 2.4f, r * 2.4f))
     }
 }
 
-private val UpdateOrange = Color(0xFFFF6B2C)
+/** Something new to look at: a waiting update, a new app or channel row. */
+internal val MarkOrange = Color(0xFFFF6B2C)

@@ -3,13 +3,10 @@
 package com.home.tiles
 
 import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,8 +14,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,8 +31,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -47,6 +46,16 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
@@ -55,7 +64,13 @@ import androidx.compose.ui.platform.LocalDensity
 private val GridStart = 108.dp
 private val GridEnd = 108.dp
 private const val Columns = 5
+private const val SYSTEM_KEY = "__system__"
 
+/**
+ * Every app by name in two parts under small headers, the apps on the home screen and the hidden
+ * ones (the headers say what a crossed-out eye on each tile used to). Hidden system apps, which
+ * are rarely opened from here, wait behind one tile that opens them out in its place.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AllAppsScreen(
@@ -67,10 +82,18 @@ fun AllAppsScreen(
     onOptions: (AppEntry) -> Unit,
 ) {
     val context = LocalContext.current
-    // The apps on the home screen first, then the hidden ones; each by name.
-    val sorted = remember(apps) { apps.sortedWith(compareBy({ it.hidden }, { it.label.lowercase() })) }
+    val byName = remember(apps) { apps.sortedBy { it.label.lowercase() } }
+    val onHome = byName.filter { !it.hidden }
+    val hiddenOwn = byName.filter { it.hidden && !it.isSystem }
+    val hiddenSystem = byName.filter { it.hidden && it.isSystem }
+    // Opened out until the screen is left; folded again on the next visit.
+    var systemOpen by remember { mutableStateOf(false) }
+    val shown = LocalScreenShown.current
+    LaunchedEffect(shown) { if (!shown) systemOpen = false }
     var focusedKey by remember { mutableStateOf<String?>(null) }
     val first = remember { FocusRequester() }
+    val firstSystem = remember { FocusRequester() }
+    val firstKey = (onHome.firstOrNull() ?: hiddenOwn.firstOrNull() ?: hiddenSystem.firstOrNull())?.pkg
     val gridState = rememberLazyGridState()
 
     // Shown only under the highlighted tab, the selection stays on the tab.
@@ -79,6 +102,12 @@ fun AllAppsScreen(
         withFrameNanos {}
         runCatching { first.requestFocus() }
         onFocusTaken()
+    }
+    // The system apps take the place of their tile, the selection on the first of them.
+    LaunchedEffect(systemOpen) {
+        if (!systemOpen) return@LaunchedEffect
+        withFrameNanos {}
+        runCatching { firstSystem.requestFocus() }
     }
 
     // The top bar is over this screen (see LauncherApp); Back is handled there too.
@@ -90,7 +119,35 @@ fun AllAppsScreen(
         // The tiles' lights, behind the whole grid like on the home row.
         val glows = rememberTileGlows()
         val density = LocalDensity.current
-        val keyline = remember(density, tile) { GridKeyline(with(density) { (GridTop + tileH + RowGap + tileH / 2).toPx() }) }
+        val keyline = remember(density, tile) { GridKeyline(with(density) { (HeaderHeight + tileH + RowGap + tileH / 2).toPx() }) }
+        fun LazyGridScope.header(key: String, icon: ImageVector, title: String, count: Int) =
+            item(key = key, span = { GridItemSpan(maxLineSpan) }, contentType = "header") { GridHeader(icon, title, count) }
+        fun LazyGridScope.tiles(list: List<AppEntry>, firstOf: FocusRequester? = null) =
+            items(list, key = { it.pkg }, contentType = { "app" }) { entry ->
+                val focused = focusedKey == entry.pkg
+                val glowColor by produceState(repo.cachedArt(entry)?.glow ?: Colors.Text, entry.pkg) {
+                    repo.loadArt(entry)?.glow?.let { value = it }
+                }
+                RegisterTileGlow(glows, entry.pkg, focused, glowColor)
+                // An app without a banner has its name on the tile already.
+                val named = repo.cachedArt(entry)?.isBanner == false
+                AppCell(
+                    tile, tileH, focused,
+                    name = if (named) null else entry.label,
+                    modifier = Modifier
+                        .then(if (entry.pkg == firstKey) Modifier.focusRequester(first) else Modifier)
+                        .then(if (firstOf != null && entry == list.first()) Modifier.focusRequester(firstOf) else Modifier),
+                    onFocus = { on -> if (on) focusedKey = entry.pkg else if (focusedKey == entry.pkg) focusedKey = null },
+                ) {
+                    Tile(
+                        width = tile,
+                        highlighted = focused,
+                        newMark = entry.isNew,
+                        onClick = { context.launchApp(entry) },
+                        onLongClick = { onOptions(entry) },
+                    ) { AppTileArt(repo, entry) }
+                }
+            }
         CompositionLocalProvider(LocalBringIntoViewSpec provides keyline) {
         LazyVerticalGrid(
             state = gridState,
@@ -109,40 +166,31 @@ fun AllAppsScreen(
                 }
             },
             columns = GridCells.Fixed(Columns),
-            contentPadding = PaddingValues(GridStart, GridTop, GridEnd, 40.dp),
+            contentPadding = PaddingValues(GridStart, 0.dp, GridEnd, 40.dp),
             horizontalArrangement = Arrangement.spacedBy(ColumnGap),
-            verticalArrangement = Arrangement.spacedBy(RowGap),
         ) {
-            itemsIndexed(sorted, key = { _, e -> e.pkg }) { i, entry ->
-                val focused = focusedKey == entry.pkg
-                val glowColor by produceState(repo.cachedArt(entry)?.glow ?: Colors.Text, entry.pkg) {
-                    repo.loadArt(entry)?.glow?.let { value = it }
-                }
-                RegisterTileGlow(glows, entry.pkg, focused, glowColor)
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                    Tile(
-                        width = tile,
-                        highlighted = focused,
-                        hiddenMark = entry.hidden,
-                        modifier = Modifier
-                            .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
-                            // Cleared when the selection leaves for the top bar, so no tile stays lit.
-                            .onFocusChanged {
-                                if (it.isFocused) focusedKey = entry.pkg
-                                else if (focusedKey == entry.pkg) focusedKey = null
-                            },
-                        onClick = { context.launchApp(entry) },
-                        onLongClick = { onOptions(entry) },
-                    ) { AppTileArt(repo, entry) }
-                    // The name only under the selected tile, like Google TV, in the gap to the next
-                    // row: offset, so it takes no room and the rows stay put.
-                    if (focused) {
-                        T(
-                            entry.label,
-                            17.sp,
-                            Modifier.fillMaxWidth().offset(y = tileH + NameGap),
-                            align = TextAlign.Center,
-                        )
+            if (onHome.isNotEmpty()) {
+                header("h:home", Icons.Rounded.Home, tr(R.string.apps_on_home), onHome.size)
+                tiles(onHome)
+            }
+            if (hiddenOwn.isNotEmpty() || hiddenSystem.isNotEmpty()) {
+                header("h:hidden", Icons.Rounded.VisibilityOff, tr(R.string.apps_hidden), hiddenOwn.size + hiddenSystem.size)
+                tiles(hiddenOwn)
+                when {
+                    hiddenSystem.isEmpty() -> {}
+                    systemOpen -> tiles(hiddenSystem, firstOf = firstSystem)
+                    else -> item(key = SYSTEM_KEY, contentType = "app") {
+                        val focused = focusedKey == SYSTEM_KEY
+                        RegisterTileGlow(glows, SYSTEM_KEY, focused, Colors.Text)
+                        AppCell(
+                            tile, tileH, focused, name = null,
+                            modifier = if (firstKey == null) Modifier.focusRequester(first) else Modifier,
+                            onFocus = { on -> if (on) focusedKey = SYSTEM_KEY else if (focusedKey == SYSTEM_KEY) focusedKey = null },
+                        ) {
+                            Tile(width = tile, highlighted = focused, onClick = { systemOpen = true }) {
+                                AllAppsArt(tr(R.string.apps_system), tr(R.string.apps_count, hiddenSystem.size))
+                            }
+                        }
                     }
                 }
             }
@@ -152,7 +200,49 @@ fun AllAppsScreen(
     }
 }
 
-private val GridTop = 14.dp
+/** A grid cell: the tile, and under the selected one its [name] (null: the tile shows it). */
+@Composable
+private fun AppCell(
+    tile: Dp,
+    tileH: Dp,
+    focused: Boolean,
+    name: String?,
+    modifier: Modifier,
+    onFocus: (Boolean) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    // The gap to the next row is part of the cell, so the headers between parts sit close above
+    // their tiles, not a whole gap away.
+    Box(Modifier.fillMaxWidth().height(tileH + RowGap), contentAlignment = Alignment.TopCenter) {
+        // Cleared when the selection leaves for the top bar, so no tile stays lit.
+        Box(modifier.onFocusChanged { onFocus(it.hasFocus) }) { content() }
+        // The name only under the selected tile, like Google TV, in the gap to the next row.
+        if (focused && name != null) {
+            T(name, 17.sp, Modifier.fillMaxWidth().offset(y = tileH + NameGap), align = TextAlign.Center)
+        }
+    }
+}
+
+/**
+ * A part's name and how many apps it has, over its first row, after a symbol in the same rounded
+ * square as the app icons by the home screen's row names (a glyph on a plain fill, so it doesn't
+ * read as an app).
+ */
+@Composable
+private fun GridHeader(icon: ImageVector, title: String, count: Int) {
+    Box(Modifier.fillMaxWidth().height(HeaderHeight), contentAlignment = Alignment.BottomStart) {
+        Row(Modifier.padding(bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(26.dp).background(Colors.Button, RoundedCornerShape(26.dp * 0.22f)), contentAlignment = Alignment.Center) {
+                Image(icon, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(Colors.Text))
+            }
+            Spacer(Modifier.width(10.dp))
+            T(title, 20.sp, color = Colors.Text)
+            T("  $count", 20.sp, color = Colors.TextDim)
+        }
+    }
+}
+
+private val HeaderHeight = 52.dp
 // The home row's gap between tiles.
 private val ColumnGap = 28.dp
 // Room for the selected tile's name between the rows.

@@ -35,7 +35,19 @@ data class AppEntry(
     val pinned: Boolean,
     val isSystem: Boolean,
     val updated: Long,
-)
+    /** When it was first installed (0 when unknown). */
+    val installed: Long = 0L,
+) {
+    /** Installed this past week and not opened since: marked «Новое». */
+    val isNew: Boolean
+        get() = installed > 0 && System.currentTimeMillis() - installed < NEW_APP_MS && lastUsed < installed
+}
+
+private const val NEW_APP_MS = 7L * 24 * 60 * 60 * 1000
+
+/** An app icon on a tile without a banner: its height in the tile's, and its left edge in the tile's width. */
+internal const val ICON_HEIGHT = 0.5f
+internal const val ICON_START = 0.07f
 
 class TileArt(
     val image: ImageBitmap,
@@ -46,14 +58,18 @@ class TileArt(
     val fullBleed: Boolean = false,
     /** The light around the tile when selected: the picture's liveliest colour, see [glowOf]. */
     val glow: Color = Color.White,
+    /** The app's name beside its icon (no banner): dark on a light tile, white otherwise. */
+    val label: Color = Color.White,
 )
+
+private fun labelOn(background: Color) = if (background.luminance() > 0.6f) Color(0xFF1A1A1A) else Color.White
 
 /**
  * The colour a selected tile glows in, Google TV style: the picture's most vivid colour (YouTube
  * red, Kinopoisk orange) rather than its edge, which banners often leave black. Lifted towards
  * white when dark, so the glow shows on a dark background; white when the picture has no colour.
  */
-private fun glowOf(bitmap: Bitmap): Color {
+internal fun glowOf(bitmap: Bitmap): Color {
     val palette = Palette.from(bitmap).generate()
     val rgb = palette.vibrantSwatch?.rgb
         ?: palette.lightVibrantSwatch?.rgb
@@ -73,7 +89,7 @@ class AppRepository(private val context: Context) {
     private val artWidth = (MAX_TILE_WIDTH_DP * FOCUS_SCALE_LIFTED * context.resources.displayMetrics.density).roundToInt()
     private val artHeight = artWidth * 9 / 16
     // A logo on a coloured card fills 62% of the tile's height (see AppArt).
-    private val iconSide = (artHeight * 0.62f).roundToInt()
+    private val iconSide = (artHeight * ICON_HEIGHT).roundToInt()
 
     // Bounded, so a long list of apps (All apps loads them all) can't grow it without end;
     // at about half a megabyte a picture it holds some fifty.
@@ -184,7 +200,7 @@ class AppRepository(private val context: Context) {
         val pins = pinned
         val entries = found.mapNotNull { (pkg, value) ->
             val appInfo = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return@mapNotNull null
-            val updated = runCatching { pm.getPackageInfo(pkg, 0).lastUpdateTime }.getOrDefault(0L)
+            val info = runCatching { pm.getPackageInfo(pkg, 0) }.getOrNull()
             AppEntry(
                 pkg = pkg,
                 component = value.first,
@@ -194,7 +210,8 @@ class AppRepository(private val context: Context) {
                 pinned = pkg in pins,
                 isSystem = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0 &&
                     appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP == 0,
-                updated = updated,
+                updated = info?.lastUpdateTime ?: 0L,
+                installed = info?.firstInstallTime ?: 0L,
             )
         }
         // The first start fixes the order once the old way: pinned, then recently used, then by name.
@@ -281,14 +298,15 @@ class AppRepository(private val context: Context) {
         )
         // Keep white/pale icons readable.
         if (base.luminance() > 0.6f) base = lerp(base, Color.Black, 0.45f)
-        return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = lerp(base, Color.Black, 0.3f), glow = glowOf(bitmap))
+        return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = lerp(base, Color.Black, 0.3f), glow = glowOf(bitmap), label = labelOn(base))
     }
 
     /**
      * Draws an adaptive icon across the whole 16:9 tile, so the tile is the icon itself instead
      * of a badge on a colored card: the background layer covers the tile (as a square as wide as
-     * it, cropped top and bottom), the foreground sits in the middle. Layers are 108dp with the
-     * visible icon in the middle 72dp, which is sized to 3/4 of the tile's height.
+     * it, cropped top and bottom), the foreground sits at the left where a plain icon does, with
+     * the app's name beside it (see AppArt). Layers are 108dp with the visible icon in the middle
+     * 72dp, which is sized like a plain icon.
      */
     private fun adaptiveTile(icon: AdaptiveIconDrawable): TileArt? {
         val background = icon.background ?: return null
@@ -300,14 +318,19 @@ class AppRepository(private val context: Context) {
         background.setBounds(0, top, w, top + w)
         background.draw(canvas)
         icon.foreground?.let { foreground ->
-            val side = (h * 0.75f * 108 / 72).toInt()
-            val left = (w - side) / 2
+            val visible = h * ICON_HEIGHT
+            val side = (visible * 108 / 72).toInt()
+            val left = (w * ICON_START - (side - visible) / 2).toInt()
             val fgTop = (h - side) / 2
             foreground.setBounds(left, fgTop, left + side, fgTop + side)
             foreground.draw(canvas)
         }
         val base = Color(Palette.from(bitmap).generate().getDominantColor(FALLBACK_TILE))
-        return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = base, fullBleed = true, glow = glowOf(bitmap))
+        // Where the name goes, right of the icon: the background layer there, not the picture's
+        // main colour (Palette leaves white out, and a red icon on white got white words).
+        val behindName = listOf(0.6f to 0.3f, 0.75f to 0.5f, 0.9f to 0.7f).map { (x, y) -> Color(bitmap.getPixel((w * x).toInt(), (h * y).toInt())) }
+        val label = labelOn(Color(behindName.map { it.red }.average().toFloat(), behindName.map { it.green }.average().toFloat(), behindName.map { it.blue }.average().toFloat()))
+        return TileArt(bitmap.asImageBitmap(), isBanner = false, top = base, bottom = base, fullBleed = true, glow = glowOf(bitmap), label = label)
     }
 
     private fun highResIcon(entry: AppEntry): Drawable? = runCatching {

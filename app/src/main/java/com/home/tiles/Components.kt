@@ -46,7 +46,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
-import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.SettingsEthernet
 import androidx.compose.material.icons.rounded.SignalWifiStatusbarConnectedNoInternet4
@@ -70,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.graphics.drawOutline
@@ -371,8 +371,8 @@ fun Tile(
     width: Dp,
     highlighted: Boolean,
     modifier: Modifier = Modifier,
-    /** Hidden from the home screen: marked with a crossed-out eye in the corner. */
-    hiddenMark: Boolean = false,
+    /** Installed this past week and not opened yet: «Новое» in the corner. */
+    newMark: Boolean = false,
     /** Picked up to be moved: drawn larger still than a selected tile. */
     lifted: Boolean = false,
     onClick: () -> Unit,
@@ -420,33 +420,62 @@ fun Tile(
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.fillMaxSize().focusBorder(corner) { border }.clip(RoundedCornerShape(corner))) { content() }
-        if (hiddenMark) {
-            Box(
+        if (newMark) {
+            T(
+                tr(R.string.app_new),
+                12.sp,
                 Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
-                    .size(30.dp)
-                    .background(Color(0xB3000000), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(Icons.Rounded.VisibilityOff, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(Color.White))
-            }
+                    .background(MarkOrange, CircleShape)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                color = Color.White,
+                weight = FontWeight.Medium,
+            )
         }
     }
 }
 
+/**
+ * An app's tile picture. A banner fills the tile. An app without one shows its icon at the left
+ * and its name beside it, as Android TV does, so it can be told apart without selecting it; on a
+ * tile too small for words (a menu's picture) the icon alone.
+ */
 @Composable
 fun AppArt(art: TileArt?, label: String) {
     val brush = when {
         art == null -> Brush.verticalGradient(listOf(Color(0xFF6A6A6A), Color(0xFF4A4A4A)))
         else -> Brush.verticalGradient(listOf(art.top, art.bottom))
     }
-    Box(Modifier.fillMaxSize().background(brush), contentAlignment = Alignment.Center) {
-        when {
-            art == null -> T(label.take(1).uppercase(), 64.sp, color = Color.White, weight = FontWeight.Light)
-            // Banners are 16:9 like the tile; Crop only trims an off-ratio banner's edges.
-            art.fullBleed || art.isBanner -> Image(art.image, label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            else -> Image(art.image, label, Modifier.fillMaxHeight(0.62f).aspectRatio(1f))
+    if (art != null && art.isBanner) {
+        // Banners are 16:9 like the tile; Crop only trims an off-ratio banner's edges.
+        Box(Modifier.fillMaxSize().background(brush)) {
+            Image(art.image, label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        }
+        return
+    }
+    BoxWithConstraints(Modifier.fillMaxSize().background(brush), contentAlignment = Alignment.CenterStart) {
+        val w = maxWidth
+        val h = maxHeight
+        val roomy = w >= 160.dp
+        // An adaptive icon's picture is the whole tile, its icon already at the left (see AppRepository).
+        if (art != null && art.fullBleed) Image(art.image, label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if (!roomy) {
+            if (art != null && !art.fullBleed) Image(art.image, label, Modifier.align(Alignment.Center).fillMaxHeight(ICON_HEIGHT).aspectRatio(1f))
+            if (art == null) T(label.take(1).uppercase(), (h.value * 0.5f).sp, Modifier.align(Alignment.Center), color = Color.White, weight = FontWeight.Light)
+            return@BoxWithConstraints
+        }
+        Row(Modifier.fillMaxSize().padding(start = w * ICON_START, end = w * 0.06f), verticalAlignment = Alignment.CenterVertically) {
+            val icon = h * ICON_HEIGHT
+            when {
+                art == null -> Box(Modifier.size(icon), contentAlignment = Alignment.Center) {
+                    T(label.take(1).uppercase(), (h.value * 0.4f).sp, color = Color.White, weight = FontWeight.Light)
+                }
+                art.fullBleed -> Spacer(Modifier.width(icon))
+                else -> Image(art.image, null, Modifier.size(icon))
+            }
+            Spacer(Modifier.width(w * 0.05f))
+            T(label, (h.value * 0.13f).sp, color = art?.label ?: Color.White, weight = FontWeight.Medium, maxLines = 2)
         }
     }
 }

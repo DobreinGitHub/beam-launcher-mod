@@ -33,8 +33,6 @@
     <string name="usb_size">USB · %1$d GB</string>
     <string name="second_row">Channel rows</string>
     <string name="channel_rows_hint">Change the order on the home screen: hold OK on a card → "Move row"</string>
-    <string name="auto">Auto</string>
-    <string name="off">Off</string>
     <string name="nothing">Nothing</string>
     <string name="this_panel">Settings</string>
     <string name="app_buttons">App buttons</string>
@@ -123,4 +121,13 @@
     <string name="bg_xmb">XMB</string>
     <string name="app_name">Beam</string>
     <string name="panel_overlay_description">Opens the Beam panel with the remote\'s voice button, over any app.</string>
+    <string name="rows_customize">Customize rows</string>
+    <string name="rows_new_one">New row: %1$s</string>
+    <string name="rows_new_many">New rows: %1$d</string>
+    <string name="row_new">New</string>
+    <string name="open_app">Open</string>
+    <string name="apps_on_home">On the home screen</string>
+    <string name="apps_hidden">Hidden</string>
+    <string name="apps_system">System apps</string>
+    <string name="app_new">New</string>
 </resources>

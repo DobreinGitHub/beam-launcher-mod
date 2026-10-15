@@ -33,8 +33,6 @@
     <string name="usb_size">USB · %1$d ГБ</string>
     <string name="second_row">Ряды каналов</string>
     <string name="channel_rows_hint">Порядок рядов меняется на главном экране: зажмите OK на карточке → «Переместить ряд»</string>
-    <string name="auto">Авто</string>
-    <string name="off">Выкл</string>
     <string name="nothing">Ничего</string>
     <string name="this_panel">Настройки</string>
     <string name="app_buttons">Кнопки приложений</string>
@@ -123,4 +121,13 @@
     <string name="bg_xmb">XMB</string>
     <string name="app_name">Beam</string>
     <string name="panel_overlay_description">Открывает панель Beam голосовой кнопкой пульта поверх любого приложения.</string>
+    <string name="rows_customize">Настроить ряды</string>
+    <string name="rows_new_one">Новый ряд: %1$s</string>
+    <string name="rows_new_many">Новых рядов: %1$d</string>
+    <string name="row_new">Новый</string>
+    <string name="open_app">Открыть</string>
+    <string name="apps_on_home">На главном экране</string>
+    <string name="apps_hidden">Скрытые</string>
+    <string name="apps_system">Системные</string>
+    <string name="app_new">Новое</string>
 </resources>

@@ -139,6 +139,8 @@ class AdbCommandReceiver : BroadcastReceiver() {
                 "${ch.key} [${ch.items.size}] ${ch.items.firstOrNull()?.poster ?: "-"}"
             }.ifEmpty { "none" }
         }
+        // --ez channels_fields true: which optional fields each channel's programs fill in.
+        if (intent.hasExtra("channels_fields")) resultData = describeChannelFields(context)
         // --ez order_get true: the home row's saved order (row keys, comma-separated).
         if (intent.hasExtra("order_get")) resultData = AppRepository(context).savedOrder().joinToString(",").ifEmpty { "none" }
         intent.getStringExtra("bt_name")?.let { name ->

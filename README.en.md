@@ -49,10 +49,18 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 - **The top bar makes way for XGIMI's panel**: while XGIMI's quick settings or settings are open
   (they have their own clock and battery), the home's buttons, clock and status hide, so nothing
   is shown twice. Next to Beam's settings the bar stays.
-- **Several channel rows** (Settings → Home screen → "Channel rows") with Google TV style
-  paging between rows. VoKino and Kinopoisk posters load even with a VPN on. To reorder rows,
-  hold OK on a card → "Move row", ▲ ▼ move the row, OK to finish, Back to cancel; "Remove row from
-  home" is there too. The top bar stays put, and rows fade softly under it instead of being cut.
+- **Several channel rows** with Google TV style paging between rows. VoKino and Kinopoisk
+  posters load even with a VPN on. To reorder rows, hold OK on a card → "Move row", ▲ ▼ move the
+  row, OK to finish, Back to cancel; "Remove row from home" is there too. The top bar stays put,
+  and rows fade softly under it instead of being cut.
+- **Channel rows like Google TV's**: cards show the art alone, the title under the selected one;
+  movie posters stand upright instead of being cut to a strip; "Continue watching" shows how far
+  you got; each row ends with an "Open VoKino" card. The row's name has its app's icon. The row
+  you're in is bright, the others dimmed, and the background takes the selected poster's colour.
+  Back in the rows goes up to the apps.
+- **"Customize rows"**, a button under the rows (and in a card's menu): every channel grouped by
+  app, with posters and a switch; new ones are marked "New", and the button mentions them. A row
+  switched on folds open, one taken off folds away and the selection moves to its neighbour.
 - **Smooth loading**: while the apps and channels are read, placeholders with a moving shine hold
   their places, so the screen doesn't jump.
 - **Smoother scrolling**: posters are kept downscaled, shadows and needless redraws are gone.
@@ -63,9 +71,11 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 
 **All apps**
 
-- **Apps on the home screen first, then the hidden ones**, each by name.
-- **Hidden apps carry a mark** in the tile's corner.
-- **The name shows only under the selected tile**, so the rows sit closer.
+- **Two parts**: "On the home screen" and "Hidden", each by name. Hidden system apps wait behind
+  one "System apps" tile; OK opens them out.
+- **Apps without a banner show their icon and name on the tile**, as on Android TV; the others
+  show the name only under the selected tile.
+- **"New"** on the tile of an app installed this past week and not opened yet.
 - **The grid pages a whole row at a time**, like Google TV, and stays put on moves sideways.
 
 **Status bar**

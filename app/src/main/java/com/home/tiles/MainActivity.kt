@@ -174,6 +174,8 @@ private fun LauncherApp(
     var menu by remember { mutableStateOf<MenuRequest?>(null) }
     val context = LocalContext.current
     var panelOpen by remember { mutableStateOf(false) }
+    // The rows list on its own, from the button under the rows or a card's menu.
+    var rowsOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(resumeTick) {
         screen = NavTab.Home
@@ -233,6 +235,7 @@ private fun LauncherApp(
                         onOpenAll = { open(NavTab.AllApps) },
                         onMenu = { menu = it },
                         onChanged = onChanged,
+                        onRows = { rowsOpen = true },
                     )
                     NavTab.AllApps -> AllAppsScreen(
                         repo, apps.orEmpty(),
@@ -245,6 +248,7 @@ private fun LauncherApp(
             }
         }
         if (panelOpen) SettingsPanel(onDismiss = { panelOpen = false })
+        if (rowsOpen) SettingsPanel(onDismiss = { rowsOpen = false }, rows = true)
         menu?.let { request ->
             OptionsDialog(request, onDismiss = { menu = null })
         }

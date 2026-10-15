@@ -7,8 +7,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -65,34 +76,92 @@ internal fun AppearancePage() {
     }
 }
 
+/**
+ * The home screen's section: the now-playing bar, and the channel rows, every channel the apps
+ * publish grouped under its app, with a few of its posters, so «Популярное» in one app can be
+ * told from «Популярное» in another. A switch each; switched on, a row joins the home screen's end
+ * (the order is changed there). Channels new since this list was last open are marked «Новый».
+ */
 @Composable
 internal fun HomePage() {
     val context = LocalContext.current
     val channels by produceState(emptyList<TvChannel>()) {
         value = withContext(Dispatchers.IO) { queryTvChannels(context).filter { it.items.isNotEmpty() } }
     }
+    // Shown here once: the marks go when the list closes (not as it opens, so they can be seen).
+    val seen = remember { LauncherSettings.seenChannels }
+    val latest by rememberUpdatedState(channels)
+    DisposableEffect(Unit) {
+        onDispose { if (latest.isNotEmpty()) LauncherSettings.markChannelsSeen(latest.map { it.key }) }
+    }
     Section(tr(R.string.show))
     Toggle(tr(R.string.now_playing), LauncherSettings.nowPlaying, Modifier.fillMaxWidth()) {
         LauncherSettings.nowPlaying = !LauncherSettings.nowPlaying
     }
     Section(tr(R.string.second_row))
-    PairRow {
-        Chip(tr(R.string.auto), LauncherSettings.secondRow == SECOND_ROW_AUTO, Modifier.weight(1f)) {
-            LauncherSettings.secondRow = SECOND_ROW_AUTO
+    T(tr(R.string.channel_rows_hint), 14.sp, color = PanelDim, maxLines = 3)
+    // Auto shows the row it picks as switched on; switching any row turns auto into a plain list.
+    val shown = shownChannelRows(LauncherSettings.secondRow, channels)
+    // Watch Next (no app of its own) first, then the apps with rows on the home screen, then the
+    // others, by name; each app's channels in its order. Settled as the list opens, so switching
+    // rows doesn't reorder it under the selection.
+    val onAtOpen = remember(channels.isNotEmpty()) { shownChannelRows(LauncherSettings.secondRow, channels).toSet() }
+    val groups = channels.groupBy { it.pkg }.entries.sortedWith(
+        compareBy(
+            { it.key.isNotEmpty() },
+            { group -> group.value.none { it.key in onAtOpen } },
+            { it.value.first().app?.lowercase() ?: it.key },
+        ),
+    )
+    groups.forEach { (pkg, list) ->
+        if (pkg.isNotEmpty()) {
+            Row(Modifier.padding(start = 4.dp, top = 16.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                AppIcon(pkg, 20.dp)
+                Spacer(Modifier.width(8.dp))
+                T(list.first().app ?: pkg, 14.sp, color = PanelDim)
+            }
         }
-        Chip(tr(R.string.off), LauncherSettings.secondRow == SECOND_ROW_OFF, Modifier.weight(1f)) {
-            LauncherSettings.secondRow = SECOND_ROW_OFF
+        list.forEach { channel ->
+            Spacer(Modifier.height(8.dp))
+            ChannelToggle(channel, channel.key in shown, isNew = seen != null && channel.key !in seen) {
+                LauncherSettings.secondRow = toggleChannelRow(LauncherSettings.secondRow, channel.key, channels)
+            }
         }
     }
-    // Any number of channels, each its own row. The chosen ones come first, in their order on
-    // the home screen (changed there: hold OK on a card → "Move row"); new ones join the end.
-    val chosen = channelRowKeys(LauncherSettings.secondRow)
-    T(tr(R.string.channel_rows_hint), 14.sp, color = PanelDim, maxLines = 3)
-    channels.sortedBy { chosen.indexOf(it.key).let { i -> if (i < 0) Int.MAX_VALUE else i } }.forEach { channel ->
-        Spacer(Modifier.height(10.dp))
-        Toggle(channel.name, channel.key in chosen, Modifier.fillMaxWidth()) {
-            LauncherSettings.secondRow = toggleChannelRow(LauncherSettings.secondRow, channel.key)
+}
+
+/** A channel's switch: its name (and «Новый»), its first posters under it, the switch at the right. */
+@Composable
+private fun ChannelToggle(channel: TvChannel, checked: Boolean, isNew: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val fg = if (focused) FocusText else PanelText
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(if (focused) FocusBg else CardBg, RoundedCornerShape(16.dp))
+            .panelControl({ focused = it }, onClick)
+            .padding(start = 16.dp, end = 18.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(channel.name, 16.sp, Modifier.weight(1f, fill = false), color = fg)
+                if (isNew) {
+                    Spacer(Modifier.width(8.dp))
+                    T(
+                        tr(R.string.row_new),
+                        11.sp,
+                        Modifier.background(MarkOrange, CircleShape).padding(horizontal = 7.dp, vertical = 1.dp),
+                        color = Color.White,
+                        weight = FontWeight.Medium,
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            ChannelThumbs(channel)
         }
+        Spacer(Modifier.width(12.dp))
+        SwitchTrack(checked, focused)
     }
 }
 

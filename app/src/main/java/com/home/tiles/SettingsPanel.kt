@@ -89,9 +89,12 @@ private enum class Page(@StringRes val titleRes: Int, val icon: ImageVector) {
     val title: String get() = tr(titleRes)
 }
 
-/** The settings page as a dialog over the launcher, when the overlay service isn't running. */
+/**
+ * The settings page as a dialog over the launcher, when the overlay service isn't running; with
+ * [rows], the home screen's section alone, for its rows list (from the button under the rows).
+ */
 @Composable
-fun SettingsPanel(onDismiss: () -> Unit) {
+fun SettingsPanel(onDismiss: () -> Unit, rows: Boolean = false) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -103,7 +106,7 @@ fun SettingsPanel(onDismiss: () -> Unit) {
     ) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         SideEffect { window?.setDimAmount(0f) }
-        PanelScreen(onDismiss)
+        PanelScreen(onDismiss, rows = rows)
     }
 }
 
@@ -122,10 +125,12 @@ fun PanelScreen(
     onDismiss: () -> Unit,
     /** Opens XGIMI's panel or settings in this page's place; the overlay keeps its darkening until XGIMI's is up. */
     handOver: (open: () -> Unit) -> Unit = { open -> onDismiss(); open() },
+    /** Open on the home screen's section; Back then closes, back to the home screen it came from. */
+    rows: Boolean = false,
 ) {
     val context = LocalContext.current
     // The section shown, or null for the panel.
-    var page by remember { mutableStateOf<Page?>(null) }
+    var page by remember { mutableStateOf(if (rows) Page.Home else null) }
     // The tile to put the selection on when the panel shows: the first, or the section just left.
     var lastPage by remember { mutableStateOf<Page?>(null) }
     // Handing over to XGIMI: the tiles fade, the darkening stays until XGIMI's own is on screen.
@@ -141,7 +146,7 @@ fun PanelScreen(
         onDispose { PanelState.open = false }
     }
     fun back() {
-        if (page != null) page = null else onDismiss()
+        if (page != null && !rows) page = null else onDismiss()
     }
     fun xgimi(quick: Boolean) {
         leaving = true

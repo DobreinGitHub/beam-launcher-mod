@@ -207,7 +207,6 @@ internal fun Swatch(brush: Brush, selected: Boolean, onClick: () -> Unit) {
 @Composable
 internal fun Toggle(text: String, checked: Boolean, modifier: Modifier, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val knob by animateFloatAsState(if (checked) 1f else 0f, tween(150), label = "knob")
     Row(
         modifier
             .height(56.dp)
@@ -217,27 +216,33 @@ internal fun Toggle(text: String, checked: Boolean, modifier: Modifier, onClick:
         verticalAlignment = Alignment.CenterVertically,
     ) {
         T(text, 16.sp, Modifier.weight(1f), color = if (focused) FocusText else PanelText)
-        // Material 3 switch: filled track when on.
+        SwitchTrack(checked, focused)
+    }
+}
+
+/** A Material 3 switch's look (filled track when on), on a control that is [focused] or not. */
+@Composable
+internal fun SwitchTrack(checked: Boolean, focused: Boolean) {
+    val knob by animateFloatAsState(if (checked) 1f else 0f, tween(150), label = "knob")
+    Box(
+        Modifier
+            .size(width = 50.dp, height = 30.dp)
+            .background(
+                when {
+                    checked && focused -> FocusFill
+                    checked -> Accent
+                    else -> Color(0xFF5F6368)
+                },
+                CircleShape,
+            )
+            .padding(4.dp),
+    ) {
         Box(
             Modifier
-                .size(width = 50.dp, height = 30.dp)
-                .background(
-                    when {
-                        checked && focused -> FocusFill
-                        checked -> Accent
-                        else -> Color(0xFF5F6368)
-                    },
-                    CircleShape,
-                )
-                .padding(4.dp),
-        ) {
-            Box(
-                Modifier
-                    .offset(x = 20.dp * knob)
-                    .size(22.dp)
-                    .background(if (checked) (if (focused) FocusBg else OnText) else Color(0xFFC4C7C5), CircleShape),
-            )
-        }
+                .offset(x = 20.dp * knob)
+                .size(22.dp)
+                .background(if (checked) (if (focused) FocusBg else OnText) else Color(0xFFC4C7C5), CircleShape),
+        )
     }
 }
 
