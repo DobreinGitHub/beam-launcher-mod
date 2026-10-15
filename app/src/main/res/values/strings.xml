@@ -57,6 +57,10 @@
     <string name="battery_low">Низкий заряд: %1$d%%. Подключите питание</string>
     <string name="battery_left_hm">≈ %1$d ч %2$02d мин</string>
     <string name="battery_left_m">≈ %1$d мин</string>
+    <string name="stand_on">Подставка подключена · %1$d%%</string>
+    <string name="stand_on_plain">Подставка подключена</string>
+    <string name="stand_off">Подставка отключена</string>
+    <string name="stand_low">Заряд подставки: %1$d%%. Потом проектор перейдёт на свою батарею</string>
     <string name="screensaver">Заставка</string>
     <string name="screensaver_which">Показывать</string>
     <string name="screensaver_setup">Настроить заставку</string>

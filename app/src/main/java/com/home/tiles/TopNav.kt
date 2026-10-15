@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -75,7 +76,8 @@ fun TopNav(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(start = 48.dp, end = 60.dp, top = 30.dp)
+            // The same margin on both sides, so the bar sits evenly on the screen.
+            .padding(start = 48.dp, end = 48.dp, top = 30.dp)
             .height(100.dp)
             .hiddenUnderPanels()
             // A group, so moving between its buttons doesn't report the selection leaving.
@@ -94,22 +96,29 @@ fun TopNav(
         // Beam's settings page, which also leads to XGIMI's quick panel and settings.
         val gearFocus = remember { FocusRequester() }
         NavIconButton(Icons.Rounded.Settings, tr(R.string.settings), onSettings, Modifier.padding(top = 2.dp).focusRequester(gearFocus))
-        // A device unplugged while selected hands the selection to the settings button beside it.
-        ConnectedDevices(onGone = { runCatching { gearFocus.requestFocus() } }, Modifier.padding(start = 30.dp, top = 2.dp))
-        Spacer(Modifier.weight(1f))
         val nowPlaying by rememberNowPlaying()
-        nowPlaying?.takeIf { LauncherSettings.nowPlaying }?.let {
+        val playing = nowPlaying?.takeIf { LauncherSettings.nowPlaying }
+        // A device unplugged while selected hands the selection to the settings button beside it.
+        // With more beside them than one pill's room, the devices show as round icons.
+        ConnectedDevices(
+            onGone = { runCatching { gearFocus.requestFocus() } },
+            crowded = playing != null,
+            modifier = Modifier.padding(start = 30.dp, top = 2.dp),
+        )
+        Spacer(Modifier.weight(1f))
+        playing?.let {
             NowPlayingBar(it)
             Spacer(Modifier.width(32.dp))
         }
         Row(Modifier.height(66.dp), verticalAlignment = Alignment.CenterVertically) {
             // Clock, network and battery share one text size, icon height and spacing.
-            Clock(StatusTextSize)
+            // Regular, like the tab labels: Light strokes go thin on a projected picture at this size.
+            Clock(StatusTextSize, weight = FontWeight.Normal)
             Spacer(Modifier.width(StatusGap))
             VpnIcon()
             NetworkIcon()
             Spacer(Modifier.width(StatusGap))
-            BatteryIndicator()
+            BatteryIndicator(iconScale = 0.8f, weight = FontWeight.Normal)
         }
     }
 }
@@ -233,16 +242,19 @@ private fun NavIconButton(icon: ImageVector, description: String, onClick: () ->
 
 /**
  * What is plugged in, as chips after the buttons, like the inputs entry on Google TV: drives open
- * the file manager, HDMI devices their input. Nothing shows while nothing is connected.
+ * the file manager, HDMI devices their input. Nothing shows while nothing is connected. With two
+ * or more, or [crowded] (music playing beside them), each is a round icon that opens out into its
+ * pill while selected: a full pill each didn't fit the bar beside the clock and the batteries.
  */
 @Composable
-private fun ConnectedDevices(onGone: () -> Unit, modifier: Modifier = Modifier) {
+private fun ConnectedDevices(onGone: () -> Unit, crowded: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val drives by rememberUsbDrives()
     val hdmi by rememberLiveHdmi()
+    val compact = crowded || drives.size + hdmi.size >= 2
     Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = modifier) {
-        hdmi.forEach { key("hdmi:${it.id}") { HdmiChip(it, onGone) { Xgimi.openInput(context, it) } } }
-        drives.forEach { key("usb:${it.key}") { UsbChip(it, onGone) { context.launchPackage(FILE_MANAGER) } } }
+        hdmi.forEach { key("hdmi:${it.id}") { HdmiChip(it, compact, onGone) { Xgimi.openInput(context, it) } } }
+        drives.forEach { key("usb:${it.key}") { UsbChip(it, compact, onGone) { context.launchPackage(FILE_MANAGER) } } }
     }
 }
 

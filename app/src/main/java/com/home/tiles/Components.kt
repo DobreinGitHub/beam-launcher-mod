@@ -125,9 +125,9 @@ private const val TILE_CORNER = 0.1f
 private fun tileCorner(size: Dp) = size * TILE_CORNER
 
 /** Top-right status cluster (clock, network, battery) metrics, kept identical across its items. */
-val StatusTextSize = 30.sp
-val StatusIconSize = 28.dp
-val StatusGap = 22.dp
+val StatusTextSize = 22.sp
+val StatusIconSize = 24.dp
+val StatusGap = 16.dp
 
 @Composable
 fun T(
@@ -490,7 +490,7 @@ fun AllAppsArt(title: String, subtitle: String) {
 }
 
 @Composable
-fun Clock(size: TextUnit = 36.sp, color: Color = Colors.Text) {
+fun Clock(size: TextUnit = 36.sp, color: Color = Colors.Text, weight: FontWeight = FontWeight.Light) {
     val format = remember(AppLanguage.locale) { SimpleDateFormat("HH:mm", AppLanguage.locale) }
     val time by produceState(format.format(Date())) {
         while (true) {
@@ -498,7 +498,7 @@ fun Clock(size: TextUnit = 36.sp, color: Color = Colors.Text) {
             delay(1000 - System.currentTimeMillis() % 1000)
         }
     }
-    T(time, size, color = color, weight = FontWeight.Light)
+    T(time, size, color = color, weight = weight)
 }
 
 /**

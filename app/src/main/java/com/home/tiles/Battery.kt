@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
@@ -44,12 +45,43 @@ enum class PowerSource {
 
     /** On the adapter with a full battery. */
     FULL,
+
+    /** On XGIMI's battery stand (its power bank), without the adapter: the stand's charge goes first. */
+    STAND,
 }
 
-/** [minutesLeft]: on battery, how long the charge lasts at the recent rate; null until known. */
-class BatteryInfo(val percent: Int, val power: PowerSource, val minutesLeft: Int?)
+/**
+ * XGIMI's battery stand as the firmware reports it (its "copower" device type, in the order of the
+ * firmware's CopowerDeviceTypeEnum): 0 a plain adapter, 1 the stand powering the projector, 2 the
+ * stand too low to, 3 the projector's own battery, 4 the stand with its charger plugged in, which
+ * passes the charger's power on. With 0 and 3 there is no stand, whatever its last level says (the
+ * firmware keeps the last one after the stand is taken off).
+ */
+enum class StandState { NONE, POWERING, LOW, CHARGING }
 
-private class Reading(val level: Int, val adapter: Boolean, val full: Boolean)
+private fun standState(type: Int?): StandState = when (type) {
+    1 -> StandState.POWERING
+    2 -> StandState.LOW
+    4 -> StandState.CHARGING
+    else -> StandState.NONE
+}
+
+/**
+ * [minutesLeft]: on battery or the stand, how long the charge in use lasts at the recent rate; null
+ * until known. [stand]: the battery stand's state; [standLevel]: its charge, null when it isn't
+ * attached or doesn't report it (while it charges); [standCharging]: its own charger is in.
+ */
+class BatteryInfo(
+    val percent: Int,
+    val power: PowerSource,
+    val minutesLeft: Int?,
+    val stand: StandState = StandState.NONE,
+    val standLevel: Int? = null,
+) {
+    val standCharging get() = stand == StandState.CHARGING
+}
+
+private class Reading(val level: Int, val adapter: Boolean, val full: Boolean, val stand: StandState, val standLevel: Int?)
 
 /**
  * The XGIMI projector's Android battery service is a stub ("not present", always 100%); the real
@@ -63,7 +95,13 @@ private fun readXgimiBattery(): Reading? = runCatching {
     val level = (cls.getMethod("getBatteryLevel").invoke(pm) as Number).toInt()
     val adapter = cls.getMethod("isAdapterPowered").invoke(pm) as? Boolean ?: false
     val full = runCatching { cls.getMethod("isBatteryChargedFull").invoke(pm) as? Boolean }.getOrNull() ?: false
-    if (level in 0..100) Reading(level, adapter, full) else null
+    // XGIMI's battery stand is its "copower" device, see StandState.
+    val stand = standState(runCatching { (cls.getMethod("getCopowerDeviceType").invoke(pm) as Number).toInt() }.getOrNull())
+    // While it charges the stand reports 0 ("invalid" in the firmware's log): no level then.
+    val standLevel = if (stand == StandState.NONE) null else
+        runCatching { (cls.getMethod("getCopowerBatteryLevel").invoke(pm) as Number).toInt() }.getOrNull()
+            ?.takeIf { it in 0..100 && !(stand == StandState.CHARGING && it == 0) }
+    if (level in 0..100) Reading(level, adapter, full, stand, standLevel) else null
 }.onFailure { android.util.Log.w("Battery", "XGIMI battery unavailable", it) }.getOrNull()
 
 /**
@@ -83,10 +121,14 @@ object BatteryMonitor {
 
     private var appContext: Context? = null
     private val executor = Executors.newSingleThreadScheduledExecutor()
-    private val samples = ArrayDeque<Pair<Long, Int>>() // elapsed time, level
-    private var lastAdapter: Boolean? = null
+    private val samples = ArrayDeque<Pair<Long, Int>>() // elapsed time, level of the charge in use
+    private val standSamples = ArrayDeque<Pair<Long, Int>>() // elapsed time, the stand's level
+    private var lastSource: Pair<Boolean, StandState>? = null // adapter, stand
     private var trend = 0
+    private var standTrend = 0
     private val warned = mutableSetOf<Int>()
+    private val standWarned = mutableSetOf<Int>()
+    private var hadStand: Boolean? = null
 
     @Synchronized
     fun start(context: Context) {
@@ -98,35 +140,89 @@ object BatteryMonitor {
     private fun sample() {
         val reading = readXgimiBattery() ?: return
         val now = SystemClock.elapsedRealtime()
-        if (reading.adapter != lastAdapter) {
+        // The stand carries the projector (the adapter flag is set then too, so it goes first).
+        val onStand = reading.stand == StandState.POWERING || reading.stand == StandState.LOW
+        // The charge in use: the stand's while it carries the projector, else the projector's own.
+        val level = if (onStand) reading.standLevel ?: reading.level else reading.level
+        val source = reading.adapter to reading.stand
+        if (source != lastSource) {
             samples.clear()
+            standSamples.clear()
             trend = 0
-            lastAdapter = reading.adapter
+            standTrend = 0
+            lastSource = source
         }
-        samples.addLast(now to reading.level)
-        while (samples.size > 1 && now - samples.first().first > WINDOW_MS) samples.removeFirst()
-        val (since, then) = samples.first()
-        val span = now - since
-        val change = reading.level - then
+        fun ArrayDeque<Pair<Long, Int>>.add(value: Int): Pair<Long, Int> {
+            addLast(now to value)
+            while (size > 1 && now - first().first > WINDOW_MS) removeFirst()
+            val (since, then) = first()
+            return (now - since) to (value - then)
+        }
+        val (span, change) = samples.add(level)
         if (span >= MIN_TREND_MS && change != 0) trend = if (change > 0) 1 else -1
+        reading.standLevel?.let { stand ->
+            val (standSpan, standChange) = standSamples.add(stand)
+            if (standSpan >= MIN_TREND_MS && standChange != 0) standTrend = if (standChange > 0) 1 else -1
+        }
         val power = when {
+            onStand -> PowerSource.STAND
             !reading.adapter -> PowerSource.BATTERY
             reading.full || reading.level >= 100 -> PowerSource.FULL
             trend < 0 -> PowerSource.PLUGGED_DRAINING
             else -> PowerSource.CHARGING
         }
         // Two percents at least, so one step of the level doesn't make a wild guess.
-        val minutesLeft = if (power == PowerSource.BATTERY && span >= MIN_TREND_MS && change <= -2) {
-            (reading.level * span / -change / 60_000).toInt()
+        val draining = power == PowerSource.BATTERY || power == PowerSource.STAND
+        val minutesLeft = if (draining && span >= MIN_TREND_MS && change <= -2) {
+            (level * span / -change / 60_000).toInt()
         } else null
-        state.value = BatteryInfo(reading.level, power, minutesLeft)
+        state.value = BatteryInfo(reading.level, power, minutesLeft, reading.stand, reading.standLevel)
+        noteStand(reading)
         warnIfLow(reading)
     }
 
-    /** Once per threshold while on battery; the adapter resets it. */
+    /** A short notice when the stand is attached or taken off (not for how things are at start). */
+    private fun noteStand(reading: Reading) {
+        val has = reading.stand != StandState.NONE
+        val before = hadStand
+        hadStand = has
+        if (before == null || before == has) return
+        say(
+            when {
+                !has -> tr(R.string.stand_off)
+                reading.standLevel != null -> tr(R.string.stand_on, reading.standLevel)
+                else -> tr(R.string.stand_on_plain)
+            },
+        )
+    }
+
+    private fun say(text: String) {
+        if (PanelOverlay.running) {
+            PanelOverlay.caption(text, hideAfterMs = 6_000)
+        } else {
+            val context = appContext ?: return
+            Handler(Looper.getMainLooper()).post { Toast.makeText(context, text, Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    /**
+     * Once per threshold while on battery, or on the stand for the stand's charge; the adapter
+     * resets them.
+     */
     private fun warnIfLow(reading: Reading) {
+        val stand = reading.standLevel
+        if (reading.stand == StandState.POWERING || reading.stand == StandState.LOW) {
+            if (stand == null) return
+            val threshold = WARN_AT.filter { stand <= it }.minOrNull() ?: return
+            if (threshold in standWarned) return
+            standWarned += WARN_AT.filter { it >= threshold }
+            say(tr(R.string.stand_low, stand))
+            return
+        }
         if (reading.adapter) {
             warned.clear()
+            // The stand's warnings come again once it has been charged.
+            if (reading.stand == StandState.CHARGING) standWarned.clear()
             return
         }
         val threshold = WARN_AT.filter { reading.level <= it }.minOrNull() ?: return
@@ -154,66 +250,137 @@ private fun timeLeft(minutes: Int): String =
 /**
  * Switch-style battery readout for the top bar; hidden when the device has no battery.
  * Charging: green battery with a bolt. On the adapter but draining: an amber plug. Full: a green
- * plug. On battery: the time left once it can be told, and red at 15% and below.
+ * plug. On battery: red at 15% and below (the time left is in Beam's settings header, see batteryTimeLeft).
+ * [weight]: of the percentages; Regular beside the top bar's tabs, Light in a large header.
  */
 @Composable
-fun BatteryIndicator(textSize: TextUnit = StatusTextSize, color: Color = Colors.Text, iconScale: Float = 1f) {
+fun BatteryIndicator(
+    textSize: TextUnit = StatusTextSize,
+    color: Color = Colors.Text,
+    iconScale: Float = 1f,
+    weight: FontWeight = FontWeight.Light,
+) {
     BatteryMonitor.start(LocalContext.current)
     val info = BatteryMonitor.info ?: return
     val low = info.power == PowerSource.BATTERY && info.percent <= 15
     val tint = when (info.power) {
         PowerSource.CHARGING, PowerSource.FULL -> ChargingGreen
         PowerSource.BATTERY -> if (low) LowRed else color
-        PowerSource.PLUGGED_DRAINING -> color
+        PowerSource.PLUGGED_DRAINING, PowerSource.STAND -> color
     }
     val badge = when (info.power) {
         PowerSource.CHARGING -> Icons.Rounded.Bolt to ChargingGreen
         PowerSource.FULL -> Icons.Rounded.Power to ChargingGreen
         PowerSource.PLUGGED_DRAINING -> Icons.Rounded.Power to DrainAmber
-        PowerSource.BATTERY -> null
+        PowerSource.BATTERY, PowerSource.STAND -> null
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
+        // XGIMI's battery stand, while attached: its own charge first (on it, it's the one in use);
+        // green with a bolt while its charger is in (it doesn't report its level then), red when
+        // it's too low to carry the projector or at 15% and below. Then the projector's battery.
+        if (info.stand != StandState.NONE) {
+            val level = info.standLevel
+            val standTint = when {
+                info.standCharging -> ChargingGreen
+                info.stand == StandState.LOW || (level != null && level <= 15) -> LowRed
+                else -> color
+            }
+            if (info.standCharging) {
+                Image(Icons.Rounded.Bolt, null, Modifier.size(26.dp * iconScale), colorFilter = ColorFilter.tint(ChargingGreen))
+                Spacer(Modifier.width(2.dp))
+            }
+            StandGlyph(level ?: 0, standTint, iconScale)
+            level?.let {
+                Spacer(Modifier.width(8.dp * iconScale))
+                T("$it%", textSize, color = standTint, weight = weight)
+            }
+            Spacer(Modifier.width(18.dp * iconScale))
+        }
         badge?.let { (icon, badgeTint) ->
             Image(icon, null, Modifier.size(26.dp * iconScale), colorFilter = ColorFilter.tint(badgeTint))
             Spacer(Modifier.width(2.dp))
         }
-        BatteryGlyph(info, tint, iconScale)
+        BatteryGlyph(info.percent, tint, iconScale)
         Spacer(Modifier.width(8.dp * iconScale))
-        T("${info.percent}%", textSize, color = if (low) tint else color, weight = FontWeight.Light)
-        info.minutesLeft?.let {
-            Spacer(Modifier.width(10.dp))
-            T(timeLeft(it), textSize * 0.6f, color = Colors.TextDim, weight = FontWeight.Light)
-        }
+        T("${info.percent}%", textSize, color = if (low) tint else color, weight = weight)
     }
 }
 
 /** Horizontal battery like the Switch's: outline and a fill proportional to the charge. */
 @Composable
-private fun BatteryGlyph(info: BatteryInfo, tint: Color, scale: Float = 1f) {
+private fun BatteryGlyph(percent: Int, tint: Color, scale: Float = 1f) {
     // Same height as the Wi-Fi glyph's visible part, so the two icons line up.
-    Box(Modifier.size(width = 40.dp * scale, height = 20.dp * scale), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.matchParentSize()) {
-            val stroke = 2.5.dp.toPx() * scale.coerceAtLeast(0.7f)
-            val nub = 3.dp.toPx() * scale
-            val body = Size(size.width - nub - stroke, size.height - stroke)
-            val corner = CornerRadius(4.dp.toPx())
-            drawRoundRect(tint, Offset(stroke / 2, stroke / 2), body, corner, style = Stroke(stroke))
+    Canvas(Modifier.size(width = 40.dp * scale, height = 20.dp * scale)) {
+        drawBattery(percent, tint, scale, Offset.Zero, size)
+    }
+}
+
+/**
+ * XGIMI's battery stand: a vertical battery (its pole is the battery) on two feet (its tripod),
+ * filling from the bottom with its charge. Upright, so it reads apart from the projector's
+ * battery beside it; one shape, so it stays clear at status size. Centred on the same line as
+ * [BatteryGlyph].
+ */
+@Composable
+private fun StandGlyph(percent: Int, tint: Color, scale: Float = 1f) {
+    Canvas(Modifier.size(width = 18.dp * scale, height = 26.dp * scale)) {
+        val stroke = 2.4.dp.toPx() * scale.coerceAtLeast(0.7f)
+        val cx = size.width / 2
+        // Body: an upright battery outline, its nub on top.
+        val bodyW = size.width * 0.72f
+        val nubH = size.height * 0.09f
+        val bodyTop = nubH
+        val bodyBottom = size.height * 0.78f
+        val nubW = bodyW * 0.45f
+        drawRoundRect(tint, Offset(cx - nubW / 2, 0f), Size(nubW, nubH + stroke / 2), CornerRadius(1.dp.toPx()))
+        val body = Size(bodyW - stroke, bodyBottom - bodyTop - stroke)
+        val bodyAt = Offset(cx - bodyW / 2 + stroke / 2, bodyTop + stroke / 2)
+        drawRoundRect(tint, bodyAt, body, CornerRadius(3.dp.toPx() * scale.coerceAtLeast(0.7f)), style = Stroke(stroke))
+        // Fill from the bottom with the charge.
+        val inset = stroke + 1.5.dp.toPx() * scale.coerceAtLeast(0.7f)
+        val inner = body.height - inset * 2 + stroke
+        val fill = inner * (percent.coerceIn(0, 100) / 100f)
+        if (fill > 0f) {
             drawRoundRect(
                 tint,
-                Offset(size.width - nub, size.height * 0.32f),
-                Size(nub, size.height * 0.36f),
+                Offset(bodyAt.x + inset - stroke / 2, bodyAt.y + inset - stroke / 2 + (inner - fill)),
+                Size(body.width - inset * 2 + stroke, fill),
                 CornerRadius(1.5.dp.toPx()),
             )
-            val inset = stroke + 2.dp.toPx()
-            val fillWidth = (body.width - inset * 2 + stroke) * (info.percent.coerceIn(0, 100) / 100f)
-            if (fillWidth > 0f) {
-                drawRoundRect(
-                    tint,
-                    Offset(inset, inset),
-                    Size(fillWidth, size.height - inset * 2),
-                    CornerRadius(2.dp.toPx()),
-                )
-            }
         }
+        // Two feet, out from under the battery.
+        val foot = Offset(cx, bodyBottom)
+        val cap = androidx.compose.ui.graphics.StrokeCap.Round
+        drawLine(tint, foot, Offset(stroke * 0.9f, size.height - stroke / 2), stroke, cap)
+        drawLine(tint, foot, Offset(size.width - stroke * 0.9f, size.height - stroke / 2), stroke, cap)
     }
+}
+
+/** A battery outline with its nub and a fill for [percent], in the box at [at] of [box]. */
+private fun DrawScope.drawBattery(percent: Int, tint: Color, scale: Float, at: Offset, box: Size) {
+    val stroke = 2.5.dp.toPx() * scale.coerceAtLeast(0.7f)
+    val nub = 3.dp.toPx() * scale
+    val body = Size(box.width - nub - stroke, box.height - stroke)
+    val corner = CornerRadius(4.dp.toPx() * scale.coerceAtLeast(0.7f))
+    drawRoundRect(tint, at + Offset(stroke / 2, stroke / 2), body, corner, style = Stroke(stroke))
+    drawRoundRect(
+        tint,
+        at + Offset(box.width - nub, box.height * 0.32f),
+        Size(nub, box.height * 0.36f),
+        CornerRadius(1.5.dp.toPx()),
+    )
+    val inset = stroke + 2.dp.toPx() * scale.coerceAtLeast(0.7f)
+    val fillWidth = (body.width - inset * 2 + stroke) * (percent.coerceIn(0, 100) / 100f)
+    if (fillWidth > 0f) {
+        drawRoundRect(tint, at + Offset(inset, inset), Size(fillWidth, box.height - inset * 2), CornerRadius(2.dp.toPx()))
+    }
+}
+/**
+ * The time the charge in use lasts, "≈ 1 ч 20 мин", once it can be told; null otherwise. Shown in
+ * Beam's settings header, not the top bar: there it would crowd the devices and the clock.
+ */
+@Composable
+fun batteryTimeLeft(): String? {
+    BatteryMonitor.start(LocalContext.current)
+    return BatteryMonitor.info?.minutesLeft?.let(::timeLeft)
 }

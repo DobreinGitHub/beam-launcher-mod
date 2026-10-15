@@ -18,6 +18,11 @@ import android.os.StatFs
 import android.os.storage.StorageManager
 import android.service.notification.NotificationListenerService
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -269,10 +274,19 @@ private fun queryLiveHdmi(context: Context): List<Xgimi.Input> {
 /**
  * A connected device in the top bar, shown only while it is plugged in: a pill like the now-playing
  * bar with a round icon in the device's colour, its name and a second line (size, port). Selected,
- * it fills like the top-bar buttons.
+ * it fills like the top-bar buttons. [compact]: just the round icon, opening out into the pill
+ * while selected (the bar has no room for several full pills).
  */
 @Composable
-fun DeviceChip(icon: ImageVector, tint: Color, title: String, subtitle: String, onGone: () -> Unit, onClick: () -> Unit) {
+fun DeviceChip(
+    icon: ImageVector,
+    tint: Color,
+    title: String,
+    subtitle: String,
+    compact: Boolean,
+    onGone: () -> Unit,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     // Unplugged while selected: the selection would go with the chip and leave nothing selected
     // (the remote then did nothing); it moves to a neighbour instead, once the chip is gone.
@@ -282,6 +296,7 @@ fun DeviceChip(icon: ImageVector, tint: Color, title: String, subtitle: String, 
     val focusText = if (LauncherSettings.dark) FocusText else Colors.Background
     val fill by animateColorAsState(if (focused) focusFill else Colors.Button, tween(150), label = "fill")
     val text by animateColorAsState(if (focused) focusText else Colors.Text, tween(150), label = "text")
+    val open = !compact || focused
     Row(
         Modifier
             .height(64.dp)
@@ -294,16 +309,25 @@ fun DeviceChip(icon: ImageVector, tint: Color, title: String, subtitle: String, 
                 Sounds.activate()
                 onClick()
             }
-            .padding(start = 8.dp, end = 22.dp),
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp).background(Colors.Background, CircleShape), contentAlignment = Alignment.Center) {
-            Image(icon, null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(tint))
+            Image(icon, title, Modifier.size(26.dp), colorFilter = ColorFilter.tint(tint))
         }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.widthIn(max = 220.dp)) {
-            T(title, 18.sp, color = text)
-            T(subtitle, 14.sp, color = text.copy(alpha = 0.7f))
+        AnimatedVisibility(
+            open,
+            enter = expandHorizontally(tween(180), expandFrom = Alignment.Start) + fadeIn(tween(180)),
+            exit = shrinkHorizontally(tween(150), shrinkTowards = Alignment.Start) + fadeOut(tween(100)),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.widthIn(max = 220.dp)) {
+                    T(title, 18.sp, color = text)
+                    T(subtitle, 14.sp, color = text.copy(alpha = 0.7f))
+                }
+                Spacer(Modifier.width(14.dp))
+            }
         }
     }
 }
@@ -313,22 +337,24 @@ val UsbTint get() = if (LauncherSettings.dark) Color(0xFFFFB27A) else Color(0xFF
 val HdmiTint get() = if (LauncherSettings.dark) Color(0xFFB3A9FF) else Color(0xFF6A5AD6)
 
 @Composable
-fun UsbChip(drive: UsbDrive, onGone: () -> Unit, onClick: () -> Unit) = DeviceChip(
+fun UsbChip(drive: UsbDrive, compact: Boolean, onGone: () -> Unit, onClick: () -> Unit) = DeviceChip(
     Icons.Rounded.Usb,
     UsbTint,
     drive.label.ifBlank { tr(R.string.usb_drive) },
     if (drive.totalBytes > 0) tr(R.string.usb_size, (drive.totalBytes / 1_000_000_000.0).roundToInt()) else "USB",
+    compact,
     onGone,
     onClick,
 )
 
 /** The device's own name when it gives one (HDMI-CEC), with the port under it; else the port. */
 @Composable
-fun HdmiChip(input: Xgimi.Input, onGone: () -> Unit, onClick: () -> Unit) = DeviceChip(
+fun HdmiChip(input: Xgimi.Input, compact: Boolean, onGone: () -> Unit, onClick: () -> Unit) = DeviceChip(
     Icons.Rounded.SettingsInputHdmi,
     HdmiTint,
     input.label,
     if (input.device != null) input.port else tr(R.string.device_connected),
+    compact,
     onGone,
     onClick,
 )

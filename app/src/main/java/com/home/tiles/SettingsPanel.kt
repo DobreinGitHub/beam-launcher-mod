@@ -293,7 +293,9 @@ private fun StatusHeader() {
             Spacer(Modifier.width(8.dp))
             BatteryIndicator(16.sp, PanelText, iconScale = 0.65f)
         }
-        T(today(), 15.sp, color = PanelDim)
+        // On battery or the stand, how long the charge lasts follows the date (the top bar has no room).
+        val left = batteryTimeLeft()
+        T(if (left != null) "${today()} · $left" else today(), 15.sp, color = PanelDim)
     }
 }
 
