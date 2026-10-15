@@ -95,7 +95,7 @@ fun TopNav(
         Spacer(Modifier.width(18.dp))
         // Beam's settings page, which also leads to XGIMI's quick panel and settings.
         val gearFocus = remember { FocusRequester() }
-        NavIconButton(Icons.Rounded.Settings, tr(R.string.settings), onSettings, Modifier.padding(top = 2.dp).focusRequester(gearFocus))
+        NavIconButton(Icons.Rounded.Settings, tr(R.string.settings), onSettings, Modifier.padding(top = 2.dp).focusRequester(gearFocus).updateDot())
         val nowPlaying by rememberNowPlaying()
         val playing = nowPlaying?.takeIf { LauncherSettings.nowPlaying }
         // A device unplugged while selected hands the selection to the settings button beside it.

@@ -96,7 +96,13 @@ panel → "About Beam"). What's changed compared to Beam 0.3:
 - **Like XGIMI's**: the same darkening, white focus; it opens at once, with no animation and no sound.
 - **System navigation sounds**, the same as in XGIMI's menus.
 - **Screensaver choice**: XGIMI's or an installed one (for example Aerial Views).
-- **An "About Beam" page**: version and credits.
+- **An "About Beam" page**: version and credits, and **updates**: once a day (or on the button)
+  Beam checks this build's GitHub releases, shows when it last checked, and for a new version
+  downloads it, verifies its SHA-256, signature and version code, and hands it to Android's
+  installer, which asks to confirm. An orange dot on the gear and on "About Beam" means a new
+  version is waiting. The install script allows this itself; for a manual install it takes one
+  command: `adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow` (the firmware has
+  no screen for that permission). The update code is ported from Beam 1.0.1 (tonisaf, MIT).
 
 **Installation (`restore.ps1`)**
 

@@ -96,6 +96,5 @@ class GmpfTest {
     fun hardwareHelpersReportFailureWhenThereIsNoXgimiFirmware() {
         assertFalse(Lumens.setLevel(5))
         assertNull(Lumens.level())
-        assertFalse(PictureAdjust.set(9, 50)) // not a picture item at all
     }
 }

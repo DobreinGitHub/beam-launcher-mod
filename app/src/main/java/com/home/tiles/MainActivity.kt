@@ -86,6 +86,8 @@ class MainActivity : ComponentActivity() {
         AccessibilityGuard.ensure(this)
         reload()
         resumeTick.intValue++
+        // At most once a day (and not when switched off in «О Beam»).
+        Updates.checkDaily(this)
     }
 
     override fun onNewIntent(intent: Intent) {

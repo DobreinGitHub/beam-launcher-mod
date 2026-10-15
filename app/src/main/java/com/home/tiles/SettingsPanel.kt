@@ -273,7 +273,7 @@ private fun QuickPanel(
         SquareTile(if (tint) Icons.Rounded.InvertColors else Icons.Rounded.InvertColorsOff, tr(R.string.tile_tint), Modifier.weight(1f), off = !tint) {
             LauncherSettings.ambientTint = !tint
         }
-        SquareTile(Page.About.icon, Page.About.title, Modifier.weight(1f).focusRequester(pageFocus.getValue(Page.About))) { onPage(Page.About) }
+        SquareTile(Page.About.icon, Page.About.title, Modifier.weight(1f).focusRequester(pageFocus.getValue(Page.About)).updateDot()) { onPage(Page.About) }
     }
 }
 
@@ -404,7 +404,7 @@ private fun Content(section: Page, onDismiss: () -> Unit) {
             onDismiss()
             context.launchPackage(if (component == Screensavers.XGIMI) Xgimi.SCREENSAVER_APP else component.packageName)
         })
-        Page.About -> AboutBeamPage()
+        Page.About -> AboutBeamPage(onDismiss)
     }
 }
 

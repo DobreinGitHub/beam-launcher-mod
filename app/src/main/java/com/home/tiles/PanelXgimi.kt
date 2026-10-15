@@ -25,13 +25,17 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 
-/** Beam's version and who made it: the original author and this build's modifications. */
+/**
+ * Beam's version and who made it, and its updates: what the last check found and when, one
+ * button that checks, then downloads and installs, and the daily check's switch.
+ */
 @Composable
-internal fun AboutBeamPage() {
+internal fun AboutBeamPage(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val version = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
     }
+    remember { Updates.init(context) }
     Spacer(Modifier.height(12.dp))
     Column(Modifier.fillMaxWidth().background(CardBg, RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
         version?.let { AboutRow(tr(R.string.version), it) }
@@ -39,6 +43,42 @@ internal fun AboutBeamPage() {
         T(BEAM_REPO, 14.sp, Modifier.fillMaxWidth().padding(bottom = 5.dp), color = PanelDim, align = TextAlign.End)
         AboutRow(tr(R.string.modified_by), "Dobrein")
         T(BUILD_REPO, 14.sp, Modifier.fillMaxWidth().padding(bottom = 5.dp), color = PanelDim, align = TextAlign.End)
+    }
+
+    Section(tr(R.string.updates))
+    val release = Updates.release
+    val status = when {
+        Updates.needsGrant -> tr(R.string.update_needs_grant)
+        Updates.progress >= 0 -> tr(R.string.update_downloading, Updates.progress)
+        Updates.busy -> tr(R.string.update_checking)
+        Updates.error -> tr(R.string.update_failed)
+        Updates.ready != null && release != null -> tr(R.string.update_ready, release.tag.removePrefix("v"))
+        release != null -> tr(R.string.update_available, release.tag.removePrefix("v"))
+        Updates.checkedAt > 0 -> tr(R.string.update_latest)
+        else -> tr(R.string.update_never)
+    }
+    T(status, 16.sp, color = if (release != null) PanelText else PanelDim, maxLines = 4)
+    if (Updates.checkedAt > 0) {
+        val format = remember(AppLanguage.locale) { SimpleDateFormat("d MMMM, HH:mm", AppLanguage.locale) }
+        T(tr(R.string.update_checked_at, format.format(Date(Updates.checkedAt))), 14.sp, color = PanelDim)
+    }
+    // What's new in the release found, briefly.
+    release?.notes?.lineSequence()?.map { it.trim().removePrefix("- ").removePrefix("* ") }
+        ?.filter { it.isNotEmpty() && !it.startsWith("#") }?.take(3)?.toList()?.takeIf { it.isNotEmpty() }?.let { lines ->
+            Spacer(Modifier.height(6.dp))
+            lines.forEach { T("· $it", 14.sp, color = PanelDim, maxLines = 2) }
+        }
+    Spacer(Modifier.height(12.dp))
+    val action = when {
+        Updates.ready != null -> tr(R.string.update_install)
+        release != null -> tr(R.string.update_download)
+        else -> tr(R.string.update_check)
+    }
+    ListRow(action) { if (!Updates.busy) Updates.act(context, onDismiss) }
+    var auto by remember { mutableStateOf(Updates.autoEnabled(context)) }
+    Toggle(tr(R.string.update_auto), auto, Modifier.fillMaxWidth()) {
+        auto = !auto
+        Updates.setAuto(context, auto)
     }
 }
 

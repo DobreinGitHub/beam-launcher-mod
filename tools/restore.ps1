@@ -371,6 +371,7 @@ Step "Системные настройки (восстановление спе
 }
 Step "Микрофон пульта (голосовая кнопка)" { Check (Adb shell pm grant com.home.tiles android.permission.RECORD_AUDIO) }
 Step "Время до заставки (screen_off_timeout)" { Check (Adb shell appops set com.home.tiles WRITE_SETTINGS allow) }
+Step "Обновления Beam (установка загруженной версии)" { Check (Adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow) }
 $script:HomeSet = $false
 Step "Домашний экран" {
     Expect (Adb shell cmd package set-home-activity com.home.tiles/.MainActivity) "Success"
