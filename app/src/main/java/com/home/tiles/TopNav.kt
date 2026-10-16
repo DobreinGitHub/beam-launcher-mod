@@ -107,10 +107,10 @@ fun TopNav(
             crowded = playing != null,
             modifier = Modifier.padding(start = 30.dp, top = 2.dp),
         )
-        Spacer(Modifier.weight(1f))
-        playing?.let {
-            NowPlayingBar(it)
-            Spacer(Modifier.width(32.dp))
+        // What's playing takes the room left, at the right: measured after the clock and the batteries,
+        // so with devices plugged in as well it shortens its title instead of pushing them off the screen.
+        Box(Modifier.weight(1f).padding(start = 24.dp, end = 32.dp), contentAlignment = Alignment.CenterEnd) {
+            playing?.let { NowPlayingBar(it) }
         }
         Row(Modifier.height(66.dp), verticalAlignment = Alignment.CenterVertically) {
             // Clock, network and battery share one text size, icon height and spacing.

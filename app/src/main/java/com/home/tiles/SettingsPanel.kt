@@ -280,7 +280,7 @@ private fun QuickPanel(
     val context = LocalContext.current
     Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
         SectionTile(Page.Appearance, appearanceStatus(), pageFocus, onPage)
-        SectionTile(Page.Home, tr(R.string.home_status), pageFocus, onPage)
+        SectionTile(Page.Home, null, pageFocus, onPage)
     }
     Spacer(Modifier.height(TileGap))
     Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
@@ -297,18 +297,14 @@ private fun QuickPanel(
 }
 
 @Composable
-private fun RowScope.SectionTile(page: Page, status: String, pageFocus: Map<Page, FocusRequester>, onPage: (Page) -> Unit) {
-    StatusTile(page.icon, page.title, status, Modifier.weight(1f).focusRequester(pageFocus.getValue(page)), statusLines = 1) { onPage(page) }
+private fun RowScope.SectionTile(page: Page, status: String?, pageFocus: Map<Page, FocusRequester>, onPage: (Page) -> Unit) {
+    StatusTile(page.icon, page.title, status, Modifier.weight(1f).focusRequester(pageFocus.getValue(page))) { onPage(page) }
 }
 
-/** «Как в XGIMI · Обычный»: the theme and the background. */
+/** «Тёмная · Обычный»: the theme in use (XGIMI's, when following it) and the background. */
 @Composable
 private fun appearanceStatus(): String {
-    val theme = when {
-        LauncherSettings.followXgimi -> tr(R.string.theme_xgimi)
-        LauncherSettings.dark -> tr(R.string.theme_dark)
-        else -> tr(R.string.theme_light)
-    }
+    val theme = if (LauncherSettings.dark) tr(R.string.theme_dark) else tr(R.string.theme_light)
     return theme + " · " + tr(Backgrounds[LauncherSettings.background].nameRes)
 }
 
@@ -431,12 +427,8 @@ private fun FastModeTile(modifier: Modifier) {
     val context = LocalContext.current
     var on by remember { mutableStateOf(FastMode.on(context)) }
     var denied by remember { mutableStateOf(false) }
-    val status = when {
-        denied -> tr(R.string.fast_denied)
-        on -> tr(R.string.fast_on)
-        else -> tr(R.string.fast_off)
-    }
-    StatusTile(Icons.Outlined.Bolt, tr(R.string.tile_fast), status, modifier, on = on) {
+    // On or off shows in the tile's fill, as on XGIMI's switches; a line only if it can't switch.
+    StatusTile(Icons.Outlined.Bolt, tr(R.string.tile_fast), if (denied) tr(R.string.fast_denied) else null, modifier, on = on) {
         if (FastMode.set(context, !on)) on = !on else denied = true
     }
 }
@@ -449,7 +441,7 @@ private fun FastModeTile(modifier: Modifier) {
 private fun StatusTile(
     icon: ImageVector,
     title: String,
-    status: String,
+    status: String?,
     modifier: Modifier,
     on: Boolean = false,
     height: Dp = TileHeight,
@@ -479,7 +471,7 @@ private fun StatusTile(
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             T(title, 16.sp, color = fg, maxLines = 2)
-            T(status, 14.sp, Modifier.padding(top = 2.dp), color = dim, maxLines = statusLines)
+            status?.let { T(it, 14.sp, Modifier.padding(top = 2.dp), color = dim, maxLines = statusLines) }
         }
     }
 }

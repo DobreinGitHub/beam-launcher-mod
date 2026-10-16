@@ -14,7 +14,8 @@ A modification of the [Beam](https://github.com/tonisaf/beam-launcher) launcher 
 
 **Home screen**
 
-- A row of 16:9 tiles in your order: hold OK → "Move", ◀ ▶, OK. "Hide" and "Uninstall" are there too.
+- A row of 16:9 tiles in your order: hold OK → "Move", ◀ ▶, OK. The OK-hold menu opens beside the tile,
+  as on Google TV: "Open", "Move", "Hide", "Uninstall".
 - A Google TV style top bar: Home and All apps tabs, the settings button, clock, Wi-Fi, VPN, battery.
 - Plugged-in drives and HDMI devices as pills at the top, with the device's name ("PlayStation 5 · HDMI 1").
 - Rows of other apps' channels (SmartTube, VoKino, Kinopoisk, "Continue watching"): switched on, off
@@ -36,12 +37,16 @@ real drain), warnings at 15% and 5% over any app.
 - Navigation sounds are the same switch as XGIMI's key press sound.
 - The interface language is chosen in Beam Mod: the firmware refuses English as the system language.
 
-**Settings**: a page in the style of XGIMI's quick panel, over any app on the remote's voice button:
-appearance, home screen, screensaver (XGIMI's or Aerial Views), About Beam Mod. XGIMI's
-panel and settings open from there too; only one of the panels is ever open.
+**Settings**: a page in the style of XGIMI's quick panel, over any app on the remote's voice button.
+Quick tiles on top: Memory (how much is free; OK closes the apps idling in the background) and Fast
+mode (no window animations, none of Beam Mod's extra effects). Then the sections, each showing how it
+is set: appearance, home screen, screensaver (XGIMI's or Aerial Views), remote buttons; About Beam Mod
+at the bottom. XGIMI's panel and settings open from there too; only one of the panels is ever open.
 
-**Remote buttons**: the four Chinese video service buttons can be assigned to any app or action: in XGIMI's
-settings → General → «Кнопки пульта» (tonisaf's module, installed by the installer).
+**Remote buttons**: the remote's app buttons (极光TV, bilibili, Ambient, Source, or Youku, Tencent, iQIYI,
+Mango on the other model) can be set to an app, play/pause, next track, the settings or the firmware's
+own action. The page draws the remote and lights up the button pressed. XGIMI's settings → General →
+«Кнопки пульта» opens it too.
 
 **Updates**: About Beam Mod checks this build's releases once a day, verifies the SHA-256, signature and
 version, and hands the APK to Android's installer (code ported from Beam 1.0.1).
@@ -74,17 +79,17 @@ installs this build; Beam Mod's settings start over.
 
 The screenshots show the Russian interface.
 
-| Home screen | Beam Mod settings panel |
+| Home screen | All apps |
 |---|---|
-| ![Home screen](docs/screenshots/home.jpg) | ![Beam Mod settings panel](docs/screenshots/panel.jpg) |
+| ![Home screen](docs/screenshots/home.jpg) | ![All apps](docs/screenshots/all-apps.jpg) |
 
-| Appearance | Moving a tile |
+| Appearance | Beam Mod settings page |
 |---|---|
-| ![Appearance](docs/screenshots/appearance.jpg) | ![Moving a tile](docs/screenshots/move.jpg) |
+| ![Appearance](docs/screenshots/appearance.jpg) | ![Beam Mod settings page](docs/screenshots/panel.jpg) |
 
-| All apps | OK-hold menu |
+| Remote buttons | OK-hold menu |
 |---|---|
-| ![All apps](docs/screenshots/all-apps.jpg) | ![OK-hold menu](docs/screenshots/menu.jpg) |
+| ![Remote buttons](docs/screenshots/remote.jpg) | ![OK-hold menu](docs/screenshots/menu.jpg) |
 
 ## Installation
 
@@ -117,8 +122,6 @@ The stock settings have no ADB switch; the SystemUI Tuner app turns it on:
    - **translate XGIMI's menus** — XGIMI's settings and panel in Russian
      ([xgimi-play6-russifier](https://github.com/tonisaf/xgimi-play6-russifier) by tonisaf). On a new
      projector: yes. Not asked if the translation is already installed;
-   - **the remote buttons module** — the four Chinese service buttons are assigned in XGIMI's settings →
-     General → «Кнопки пульта» (a module from the russifier's kit, yes by default);
    - **the [Aerial Views](https://github.com/theothernt/AerialViews) screensaver** — 4K videos instead of
      XGIMI's screensaver (a third-party app, no by default);
    - **don't close background apps** — the firmware stops closing a VPN or music when you switch apps
@@ -128,13 +131,14 @@ The stock settings have no ADB switch; the SystemUI Tuner app turns it on:
    window. At the end it starts in Beam Mod.
 
 The installer downloads adb (if there is none), the russifier (about 190 MB) and the LeanKey keyboard,
-and checks them against their SHA-256. Beam Mod is already in the archive.
+and checks them against their SHA-256. Beam Mod is already in the archive. tonisaf's «Кнопки пульта»
+module, if installed, is replaced: the buttons are in Beam Mod itself now.
 What changes on the projector: [below](#what-restoreps1-changes). It can be run again safely.
 
 ### Step 3. Check
 
 Press Home: Beam Mod should open. The remote's voice button opens Beam Mod's settings, the settings button
-XGIMI's panel. The remote's four app buttons are assigned in XGIMI's settings → General → «Кнопки пульта».
+XGIMI's panel. The remote's app buttons are assigned in Beam Mod's settings → «Кнопки пульта».
 
 ### If something doesn't work
 
@@ -177,8 +181,10 @@ Replace `192.168.1.50` with the projector's IP. Parameters:
 
 Read this before running it:
 
-- installs Beam Mod and removes the remote button stubs of earlier versions (tonisaf's module assigns the
-  buttons now; real apps with the same package names stay);
+- installs Beam Mod and a tiny app, `com.beam.remote`, through which XGIMI's settings → General →
+  «Кнопки пульта» opens Beam Mod's page (tonisaf's module of that name is replaced: the same buttons
+  are in Beam Mod now); removes the remote button stubs of earlier versions (real apps with the same
+  package names stay);
 - **disables** (`pm disable-user`, nothing is uninstalled) the stock launcher `com.xgimi.home`, the
   Sogou keyboard, ads, telemetry, bug reporting, the Chinese app store, and XGIMI's voice and IoT
   services. The full list is in the script, section 2. The stock launcher is disabled only after
@@ -205,8 +211,8 @@ Read this before running it:
 ```
 
 The script enables everything it disabled (the stock launcher first), restores the system
-keyboard, removes Beam Mod from the accessibility services (the others stay), and then removes Beam Mod itself (and remote button stubs of earlier versions, if any). The russifier
-and the remote buttons module stay: they're removed with the russifier's own installer. If the stock launcher can't be enabled, Beam Mod is not removed,
+keyboard, removes Beam Mod from the accessibility services (the others stay), and then removes Beam Mod itself, its `com.beam.remote` and remote button stubs of earlier versions, if
+any. The russifier stays: it's removed with its own installer. If the stock launcher can't be enabled, Beam Mod is not removed,
 so you don't end up without a home screen. The language, time zone and Bluetooth name are not
 reverted: the previous values are unknown. The screensaver goes back to XGIMI's (Aerial Views stays
 installed) and the firmware closes background apps again. If Projectivy is installed, it is enabled again too,
@@ -248,10 +254,10 @@ used for the pictures of other apps' channels and for checking Beam Mod's update
 You need JDK 17 and the Android SDK (the path in `ANDROID_HOME` or `local.properties`).
 
 ```sh
-./gradlew :app:assembleRelease
+./gradlew :app:assembleRelease :remote-entry:assembleRelease
 ```
 
-The APK appears in `app/build/outputs/apk/release/`.
+The APKs appear in `app/build/outputs/apk/release/` and `remote-entry/build/outputs/apk/release/`.
 
 ### Signing
 

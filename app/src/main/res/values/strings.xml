@@ -124,7 +124,7 @@
     <string name="theme_xgimi">Как в XGIMI</string>
     <string name="nav_sounds_xgimi">Тот же переключатель, что «Звук нажатия кнопок» в XGIMI</string>
     <string name="remote_buttons">Кнопки пульта</string>
-    <string name="remote_hint">Нажмите кнопку на пульте, чтобы перейти к ней. ← → — действие, OK — все варианты</string>
+    <string name="remote_hint">Нажмите кнопку на пульте — перейдёте к ней</string>
     <string name="remote_model">Пульт</string>
     <string name="action_firmware">Как в прошивке</string>
     <string name="nothing">Ничего</string>
@@ -134,10 +134,10 @@
     <string name="action_previous">Предыдущий трек</string>
     <string name="remote_actions">Действия</string>
     <string name="remote_apps">Приложения</string>
-    <string name="stock_opens">Прошивка: открывает %1$s</string>
-    <string name="stock_missing">Прошивка: ничего (%1$s не установлен)</string>
-    <string name="stock_ambient">Прошивка: открывает «Атмосферу»</string>
-    <string name="stock_source">Прошивка: выбор источника</string>
+    <string name="stock_opens">Прошивка: %1$s</string>
+    <string name="stock_missing">Прошивка: ничего</string>
+    <string name="stock_ambient">Прошивка: Атмосфера</string>
+    <string name="stock_source">Прошивка: источники</string>
     <string name="pkg_missing">%1$s (нет на устройстве)</string>
     <string name="remote_module_remove">Удалить модуль «Кнопки пульта»</string>
     <string name="remote_module">Старый модуль tonisaf занимает эти кнопки: пока он стоит, назначения здесь не работают</string>    <string name="tile_memory">Память</string>
@@ -145,10 +145,9 @@
     <string name="memory_clearing">Очистка…</string>
     <string name="memory_freed">Освобождено %1$s</string>
     <string name="memory_nothing">Нечего очищать</string>
-    <string name="megabytes">%1$d МБ</string>
+    <string name="megabytes">%1$d\u00A0МБ</string>
     <string name="tile_fast">Быстрый режим</string>
-    <string name="fast_on">Без анимаций</string>
-    <string name="fast_off">С анимациями</string>
-    <string name="fast_denied">Нет разрешения</string>    <string name="home_status">Приложения и ряды</string>
     <string name="remote_set">Назначено: %1$d</string>
+    <string name="off_in_fast_mode">Выключено в быстром режиме</string>
+    <string name="fast_denied">Нет разрешения</string>
 </resources>

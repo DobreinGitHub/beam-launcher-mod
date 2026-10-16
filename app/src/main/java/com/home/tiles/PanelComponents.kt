@@ -185,20 +185,23 @@ internal fun Chip(
     }
 }
 
-/** A switch with its name, and under it a dimmer line saying what it does ([subtitle]). */
+/**
+ * A switch with its name, and under it a dimmer line saying what it does ([subtitle]). Not [enabled]:
+ * drawn dimmer and does nothing (something else holds it, like fast mode).
+ */
 @Composable
-internal fun Toggle(text: String, checked: Boolean, modifier: Modifier, subtitle: String? = null, onClick: () -> Unit) {
+internal fun Toggle(text: String, checked: Boolean, modifier: Modifier, subtitle: String? = null, enabled: Boolean = true, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Row(
         modifier
             .heightIn(min = 56.dp)
             .background(if (focused) FocusBg else CardBg, RoundedCornerShape(16.dp))
-            .panelControl({ focused = it }, onClick)
+            .panelControl({ focused = it }) { if (enabled) onClick() }
             .padding(horizontal = 18.dp, vertical = if (subtitle != null) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            T(text, 16.sp, color = if (focused) FocusText else PanelText)
+            T(text, 16.sp, color = (if (focused) FocusText else PanelText).copy(alpha = if (enabled) 1f else 0.55f))
             subtitle?.let { T(it, 14.sp, Modifier.padding(top = 2.dp), color = if (focused) FocusText.copy(alpha = 0.7f) else PanelDim, maxLines = 2) }
         }
         Spacer(Modifier.width(12.dp))

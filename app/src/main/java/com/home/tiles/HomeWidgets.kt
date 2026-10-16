@@ -165,7 +165,8 @@ fun NowPlayingBar(np: NowPlaying) {
             }
         }
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.widthIn(max = 220.dp)) {
+        // Gives way first when the bar is full (the title ends in «…»).
+        Column(Modifier.weight(1f, fill = false).widthIn(max = 220.dp)) {
             T(np.title, 16.sp)
             if (np.artist.isNotEmpty()) T(np.artist, 14.sp, color = Colors.TextDim)
         }
@@ -186,8 +187,8 @@ private fun MediaButton(icon: ImageVector, onClick: () -> Unit) {
     Box(
         Modifier
             .size(44.dp)
-            // Neutral like the rest of the selection (no coloured frame).
-            .background(if (focused) Colors.Text.copy(alpha = 0.22f) else Color.Transparent, CircleShape)
+            // Selected like the other top bar buttons: white, the icon dark.
+            .background(if (focused) FocusBg else Color.Transparent, CircleShape)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) Sounds.navigate()
@@ -198,7 +199,7 @@ private fun MediaButton(icon: ImageVector, onClick: () -> Unit) {
             },
         contentAlignment = Alignment.Center,
     ) {
-        Image(icon, null, Modifier.size(30.dp), colorFilter = ColorFilter.tint(Colors.Text))
+        Image(icon, null, Modifier.size(30.dp), colorFilter = ColorFilter.tint(if (focused) FocusText else Colors.Text))
     }
 }
 
@@ -326,7 +327,8 @@ fun DeviceChip(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.width(12.dp))
-                Column(Modifier.widthIn(max = 220.dp)) {
+                // Gives way first when the bar is full (the title ends in «…»).
+        Column(Modifier.weight(1f, fill = false).widthIn(max = 220.dp)) {
                     T(title, 16.sp, color = text)
                     T(subtitle, 14.sp, color = text.copy(alpha = 0.7f))
                 }

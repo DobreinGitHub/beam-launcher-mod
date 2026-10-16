@@ -81,11 +81,13 @@ internal fun AppearancePage(onDismiss: () -> Unit) {
     Spacer(Modifier.height(ControlGap))
     XmbCard()
     Spacer(Modifier.height(ControlGap))
+    // Fast mode holds it off (the choice stays, for when fast mode is off again).
     Toggle(
         tr(R.string.ambient_tint),
-        LauncherSettings.ambientTint,
+        LauncherSettings.ambientTint && !Effects.reduced,
         Modifier.fillMaxWidth(),
-        subtitle = tr(R.string.ambient_tint_hint),
+        subtitle = if (Effects.reduced) tr(R.string.off_in_fast_mode) else tr(R.string.ambient_tint_hint),
+        enabled = !Effects.reduced,
     ) { LauncherSettings.ambientTint = !LauncherSettings.ambientTint }
     Section(tr(R.string.interface_section))
     // Each language is named in itself, so it can be found whatever the interface is set to.
@@ -312,7 +314,13 @@ private fun XmbOptions() {
     }
     Spacer(Modifier.height(ControlGap))
     Row(Modifier.fillMaxWidth()) {
-        Toggle(tr(R.string.background_animation), LauncherSettings.bgAnimation, Modifier.weight(1f)) {
+        Toggle(
+            tr(R.string.background_animation),
+            LauncherSettings.bgAnimation && !Effects.reduced,
+            Modifier.weight(1f),
+            subtitle = if (Effects.reduced) tr(R.string.off_in_fast_mode) else null,
+            enabled = !Effects.reduced,
+        ) {
             LauncherSettings.bgAnimation = !LauncherSettings.bgAnimation
         }
     }

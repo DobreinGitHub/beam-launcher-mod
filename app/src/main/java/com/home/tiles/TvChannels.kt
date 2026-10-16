@@ -869,6 +869,8 @@ private fun CardFrame(
     Box(
         Modifier
             .size(size)
+            // The OK-hold menu opens beside the card.
+            .menuAnchor()
             // Not on the screen kept ready behind the shown one.
             .focusProperties { canFocus = screenShown }
             .onFocusChanged {

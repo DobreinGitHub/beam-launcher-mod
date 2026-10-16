@@ -1,5 +1,10 @@
 package com.home.tiles
 
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.activity.compose.BackHandler
@@ -123,19 +128,18 @@ fun HomeScreen(
     fun rowMenu(channel: TvChannel, item: TvItem) = onMenu(
         MenuRequest(
             title = channel.label,
-            art = { TvItemArt(item) },
-            options = buildList<Pair<String, () -> Unit>> {
-                add(tr(R.string.menu_open) to { context.openTvItem(item) })
+            items = buildList {
+                add(MenuItem(tr(R.string.menu_open), Icons.Outlined.PlayArrow) { context.openTvItem(item) })
                 // One row (or the automatic one) has nothing to swap with.
-                if (channelRows.size > 1) add(tr(R.string.menu_move_row) to {
+                if (channelRows.size > 1) add(MenuItem(tr(R.string.menu_move_row), Icons.Outlined.SwapVert) {
                     rowsBeforeMove = LauncherSettings.secondRow
                     movingRow = channel.key
                 })
                 // It comes back with its switch in the rows list.
-                add(tr(R.string.menu_hide_row) to {
+                add(MenuItem(tr(R.string.menu_hide_row), Icons.Outlined.VisibilityOff) {
                     LauncherSettings.secondRow = hideChannelRow(LauncherSettings.secondRow, channel.key)
                 })
-                add(tr(R.string.rows_customize) to onRows)
+                add(MenuItem(tr(R.string.rows_customize), Icons.Outlined.Tune, action = onRows))
             },
         ),
     )

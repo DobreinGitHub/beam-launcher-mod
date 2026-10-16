@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -178,7 +179,7 @@ private fun KeyRow(key: RemoteKeys.Key, action: String, modifier: Modifier, onFo
     Row(
         modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
+            .heightIn(min = 60.dp)
             .background(if (focused) FocusBg else CardBg, RoundedCornerShape(16.dp))
             .onPreviewKeyEvent { event ->
                 val code = event.nativeKeyEvent.keyCode
@@ -215,7 +216,7 @@ private fun KeyRow(key: RemoteKeys.Key, action: String, modifier: Modifier, onFo
             )
         }
         Spacer(Modifier.width(10.dp))
-        T("‹  ${actionName(context, action)}  ›", 16.sp, Modifier.width(150.dp), color = if (focused) FocusText else PanelText, align = androidx.compose.ui.text.style.TextAlign.End)
+        T("‹  ${actionName(context, action)}  ›", 16.sp, Modifier.widthIn(max = 150.dp), color = if (focused) FocusText else PanelText, align = androidx.compose.ui.text.style.TextAlign.End)
     }
 }
 
@@ -288,27 +289,27 @@ private val RemoteLit = Color(0xFF497AF5)
 
 /**
  * The top of the remote, drawn after the real one (photos of both models): power and mute, the two
- * pills of app keys, the round keys under them and the start of the dial, fading out below. The
- * key of [highlighted] lights up.
+ * pills of app keys and the round keys under them, fading out below; short, so the page fits the
+ * screen. The key of [highlighted] lights up.
  */
 @Composable
 private fun RemoteDrawing(model: RemoteKeys.Model, highlighted: Int?) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.TopCenter) {
+    Box(Modifier.fillMaxWidth().padding(bottom = 4.dp), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier
                 .width(184.dp)
-                .height(268.dp)
+                .height(160.dp)
                 // Fades out below: the rest of the remote isn't what this page is about.
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawWithContent {
                     drawContent()
                     drawRect(
-                        Brush.verticalGradient(0.62f to Color.Black, 1f to Color.Transparent),
+                        Brush.verticalGradient(0.72f to Color.Black, 1f to Color.Transparent),
                         blendMode = BlendMode.DstIn,
                     )
                 }
                 .background(RemoteBody, RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp))
-                .padding(start = 14.dp, end = 14.dp, top = 16.dp),
+                .padding(start = 14.dp, end = 14.dp, top = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -318,25 +319,20 @@ private fun RemoteDrawing(model: RemoteKeys.Model, highlighted: Int?) {
                 Spacer(Modifier.weight(1f))
                 RoundKey { KeyIcon(Icons.AutoMirrored.Outlined.VolumeOff) }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             model.keys.chunked(2).forEach { pair ->
                 Pill {
                     pair.forEachIndexed { i, key ->
                         PillHalf(key, lit = key.code == highlighted, left = i == 0)
                     }
                 }
-                Spacer(Modifier.height(9.dp))
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 RoundKey { KeyIcon(Icons.Outlined.CenterFocusWeak) }
                 RoundKey { KeyIcon(Icons.Outlined.Mic) }
                 RoundKey { Diamonds() }
-            }
-            Spacer(Modifier.height(16.dp))
-            // The dial, black like the real one.
-            Box(Modifier.size(128.dp).background(Color(0xFF16171A), CircleShape), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(58.dp).border(1.dp, Color(0x33FFFFFF), CircleShape))
             }
         }
     }
@@ -345,7 +341,7 @@ private fun RemoteDrawing(model: RemoteKeys.Model, highlighted: Int?) {
 @Composable
 private fun RoundKey(content: @Composable () -> Unit) {
     Box(
-        Modifier.size(40.dp).background(RemoteKey, CircleShape).border(1.dp, RemoteEdge, CircleShape),
+        Modifier.size(36.dp).background(RemoteKey, CircleShape).border(1.dp, RemoteEdge, CircleShape),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
@@ -372,10 +368,10 @@ private fun Pill(content: @Composable RowScope.() -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .height(30.dp)
-            .clip(RoundedCornerShape(15.dp))
+            .height(28.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(RemoteKey)
-            .border(1.dp, RemoteEdge, RoundedCornerShape(15.dp)),
+            .border(1.dp, RemoteEdge, RoundedCornerShape(14.dp)),
         content = content,
     )
 }

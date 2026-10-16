@@ -153,6 +153,7 @@ $beamPanel = "com.home.tiles/com.home.tiles.PanelOverlay"
 $beamPanelShort = "com.home.tiles/.PanelOverlay"
 # Beam Mod's release key as dumpsys package shows it (signatures:[...], Signature.hashCode in hex).
 $beamSignature = "ff3002d2"
+$entryPackage = "com.beam.remote"
 $ime = "org.liskovsoft.androidtv.rukeyboard/com.liskovsoft.leankeyboard.ime.LeanbackImeService"
 # Package names the remote-button stubs of earlier releases took over (the firmware starts these apps for the remote's keys).
 $stubPackages = @("com.cibn.tv", "com.ktcp.tvvideo", "com.gitvjimi.video", "com.hunantv.license")
@@ -214,6 +215,11 @@ if ($Revert) {
             }
             Expect (Adb shell pm uninstall $p) "Success"
         }
+    }
+    Step "«Кнопки пульта» в настройках XGIMI ($entryPackage)" {
+        # Only ours: tonisaf's module of that name is his to remove.
+        if (-not (Installed $entryPackage) -or (Adb shell dumpsys package $entryPackage) -notmatch "signatures:\[$beamSignature\]") { return $false }
+        Expect (Adb shell pm uninstall $entryPackage) "Success"
     }
     Step "Лаунчер Beam Mod" {
         if (-not $script:StockBack) { throw "стоковый лаунчер не включён: Beam оставлен" }
@@ -281,10 +287,17 @@ function Get-ReleaseFiles([string[]]$Names) {
 
 $localBeam = @($Apk, (Join-Path $Root "app\build\outputs\apk\release\app-release.apk"), (Join-Path $apkDir "app-release.apk")) |
     Where-Object { $_ -and (Test-Path $_) }
-if (-not $NoDownload -and -not $localBeam) {
+# The entry from XGIMI's settings (Общие → «Кнопки пульта»): a tiny app named com.beam.remote, the
+# remote-entry module, which opens Beam Mod's page.
+$localEntry = @((Join-Path $Root "remote-entry\build\outputs\apk\release\remote-entry-release.apk"), (Join-Path $apkDir "remote-entry-release.apk")) |
+    Where-Object { Test-Path $_ }
+if (-not $NoDownload -and (-not $localBeam -or -not $localEntry)) {
     Step "Скачивание Beam Mod из релиза GitHub" {
-        $tag = Get-ReleaseFiles @("app-release.apk")
-        Write-Host "      релиз $tag в tools\apks\" -ForegroundColor DarkGray
+        $want = @()
+        if (-not $localBeam) { $want += "app-release.apk" }
+        if (-not $localEntry) { $want += "remote-entry-release.apk" }
+        $tag = Get-ReleaseFiles $want
+        Write-Host "      релиз $tag в tools\apks\: $($want -join ', ')" -ForegroundColor DarkGray
     }
 }
 $beamApk = @(
@@ -332,19 +345,33 @@ if (-not (Installed "com.home.tiles")) {
     Write-Host "Beam Mod не установлен: дальше не продолжаю, чтобы не остаться без домашнего экрана." -ForegroundColor Red
     exit 1
 }
-# The remote-button stubs of earlier releases: tonisaf's module (XGIMI settings → Общие → Кнопки
-# пульта) assigns the keys now, and this Beam has nothing for a stub to call any more. Only stubs go:
-# a real app with the same package name stays.
+# The remote-button stubs of earlier releases: Beam Mod takes the app keys itself now («Кнопки
+# пульта»), and has nothing for a stub to call any more. Only stubs go: a real app with the same
+# package name stays.
 foreach ($pkg in $stubPackages) {
     $p = $pkg
     if ((Installed $p) -and ((Adb shell dumpsys package $p) -match 'com\.home\.tiles\.permission\.REMOTE_BUTTON')) {
         Step "Старая заглушка кнопки пульта ($p): удалить" { Expect (Adb shell pm uninstall $p) "Success" }
     }
 }
+# XGIMI settings → Общие → «Кнопки пульта» opens com.beam.remote: ours opens Beam Mod's page. tonisaf's
+# module of that name holds the same keys as Beam Mod, so it is replaced (signed with another key).
+$entryApk = @((Join-Path $Root "remote-entry\build\outputs\apk\release\remote-entry-release.apk"), (Join-Path $apkDir "remote-entry-release.apk")) |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+Step "«Кнопки пульта» в настройках XGIMI ($entryPackage)" {
+    if (-not $entryApk) { return $false }
+    if ((Installed $entryPackage) -and ((Adb shell dumpsys package $entryPackage) -notmatch "signatures:\[$beamSignature\]")) {
+        Write-Host "      модуль кнопок пульта tonisaf: заменяю (кнопки теперь в Beam Mod)" -ForegroundColor Yellow
+        Expect (Adb shell pm uninstall $entryPackage) "Success"
+    }
+    $out = Adb install -r $entryApk
+    if ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE') { return }
+    Expect $out "Success"
+}
 # Extra APKs (LeanKey, SmartTube, ...). A newer version already installed is kept. Stub APKs left
 # in the folder by earlier releases are skipped.
 if (Test-Path $apkDir) {
-    Get-ChildItem $apkDir -Filter *.apk | Where-Object { $_.FullName -ne $beamApk -and $_.Name -notmatch '^stub-button' } | ForEach-Object {
+    Get-ChildItem $apkDir -Filter *.apk | Where-Object { $_.FullName -ne $beamApk -and $_.FullName -ne $entryApk -and $_.Name -notmatch '^(stub-button|remote-entry)' } | ForEach-Object {
         $file = $_.FullName
         Step "APK $($_.Name)" {
             $out = Adb install -r $file

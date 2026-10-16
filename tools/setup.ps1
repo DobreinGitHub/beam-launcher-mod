@@ -226,20 +226,6 @@ if ($russifierInstalled) {
     $russify = Ask "Русифицировать меню XGIMI?" $true
 }
 
-# The remote-buttons module comes with the russifier's kit (tonisaf), works on the same firmware only.
-$remoteInstalled = (Adb shell pm path com.beam.remote) -match "package:"
-$remote = $false
-if ($remoteInstalled) {
-    Good "Модуль кнопок пульта уже установлен — пропускаю."
-} elseif ($fingerprint -match [regex]::Escape("/${russifierFirmware}:")) {
-    Write-Host ""
-    Info "Кнопки пульта. Четыре кнопки китайских видеосервисов на пульте можно назначить на любое"
-    Info "приложение или действие (пауза, следующий трек). Назначаются в настройках XGIMI → Общие →"
-    Info "«Кнопки пульта». Без этого модуля кнопки ничего не делают. Он из комплекта русификатора tonisaf"
-    Info "(комплект скачается, даже если сам перевод не нужен)."
-    $remote = Ask "Установить модуль кнопок пульта?" $true
-}
-
 Write-Host ""
 Info "Заставка Aerial Views: вместо заставки XGIMI — 4K-видео с видами городов и природы, часы и"
 Info "подписи на русском. Стороннее приложение: видео берёт из интернета и отправляет разработчику"
@@ -273,7 +259,6 @@ if ($btName -notmatch '^[\x20-\x7E]+$' -or $btName -eq "null" -or $btName -match
 
 Title "План"
 if ($russify) { Info "• русификация меню XGIMI ($russifierVersion)" }
-if ($remote) { Info "• модуль кнопок пульта" }
 Info "• Beam Mod: домашний экран, клавиатура LeanKey вместо Sogou, отключение рекламы и китайских сервисов"
 Info "• русский язык, часовой пояс $timeZone, Bluetooth-имя «$btName»"
 if ($aerial) { Info "• заставка Aerial Views" }
@@ -300,8 +285,8 @@ function FindKit([string]$Dir) {
 }
 $problems = @()
 $kit = $null
-if ($russify -or $remote) {
-    Title $(if ($russify) { "Русификация меню XGIMI" } else { "Модуль кнопок пульта" })
+if ($russify) {
+    Title "Русификация меню XGIMI"
     $kitRoot = KitRoot
     $kit = FindKit $kitRoot
     if (-not $kit) {
@@ -322,7 +307,7 @@ if ($russify -or $remote) {
     }
     if (-not $kit) {
         Warn "Пропускаю, Beam Mod ставлю дальше."
-        $problems += "Русификация и модуль кнопок не установлены: запустите установщик ещё раз или поставьте их отдельно (XgimiInstaller.exe из релиза русификатора)."
+        $problems += "Русификация не установлена: запустите установщик ещё раз или поставьте её отдельно (XgimiInstaller.exe из релиза русификатора)."
     } else {
         $kitHome = Split-Path -Parent $kit
         $python = Join-Path $kit "runtime\python.exe"
@@ -345,26 +330,16 @@ if ($russify -or $remote) {
                 $problems += "Русификация не завершилась. Повторить: XgimiInstaller.exe в $kitHome → «Дополнительно» → «Завершить настройку»."
             }
         }
-        $remoteDone = $false
-        if ($remote) {
-            Info "Ставлю модуль кнопок пульта…"
-            & $python -I $launch install-remote --device $Serial
-            $remoteDone = $LASTEXITCODE -eq 0
-            if (-not $remoteDone) {
-                $problems += "Модуль кнопок пульта не установился (подробности выше). Повторить: XgimiInstaller.exe в $kitHome → «Дополнительно» → кнопки пульта."
-            }
-        }
-        # One reboot for both: the firmware's memory rules for their services are read only at boot,
-        # then the russifier's «Завершить настройку» switches the services on again.
-        if ($russified -or $remoteDone) {
-            Info "Завершение: проектор перезагрузится, службы русификатора и кнопок включатся (2–4 минуты)…"
+        # The firmware's memory rules for the russifier's service are read only at boot; its
+        # «Завершить настройку» reboots and switches the service on again.
+        if ($russified) {
+            Info "Завершение: проектор перезагрузится, служба русификатора включится (2–4 минуты)…"
             & $python -I $launch finish-setup --device $Serial
             if ($LASTEXITCODE -ne 0) {
                 $problems += "Не завершилась настройка русификатора. Повторить: XgimiInstaller.exe в $kitHome → «Дополнительно» → «Завершить настройку»."
-            } elseif ($russified) {
+            } else {
                 Good "Меню XGIMI русифицированы. Папку $kitHome не удаляйте: из неё работает удаление русификации."
             }
-            if ($remoteDone -and $LASTEXITCODE -eq 0) { Good "Модуль кнопок пульта: настройки XGIMI → Общие → «Кнопки пульта»." }
         }
         EnsureConnected
     }
@@ -397,12 +372,10 @@ Start-Sleep -Seconds 15
 if (-not (RebootAndWait)) { Warn "Проектор долго не загружается."; EnsureConnected }
 $homeApp = Adb shell cmd package resolve-activity -a android.intent.action.MAIN -c android.intent.category.HOME
 if ($homeApp -match 'com\.home\.tiles') { Good "Beam Mod — домашний экран" } else { Warn "Домашний экран не Beam Mod: нажмите «Домой» на пульте и выберите Beam Mod."; $failed = $true }
-# The russifier's helper (re-applies part of the translation at every boot) and the remote module are
-# accessibility services; if the system has dropped one, the russifier's «Завершить настройку» brings
-# it back.
+# The russifier's helper re-applies part of the translation at every boot; it is an accessibility
+# service, and if the system has dropped it, the russifier's «Завершить настройку» brings it back.
 $services = @()
 if ((Adb shell pm path com.beam.russifier.boot) -match "package:") { $services += @{ Name = "Русификатор XGIMI"; Component = "com.beam.russifier.boot/"; Effect = "часть меню XGIMI после перезагрузки может быть на английском" } }
-if ((Adb shell pm path com.beam.remote) -match "package:") { $services += @{ Name = "Модуль кнопок пульта"; Component = "com.beam.remote/"; Effect = "назначенные кнопки пульта не сработают" } }
 function Missing { $list = Adb shell settings get secure enabled_accessibility_services; @($services | Where-Object { $list -notmatch [regex]::Escape($_.Component) }) }
 if ($services.Count -gt 0) {
     $missing = Missing

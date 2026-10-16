@@ -1,5 +1,27 @@
 package com.home.tiles
 
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.OpenWith
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.composed
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.net.ConnectivityManager
@@ -397,6 +419,8 @@ fun Tile(
     Box(
         modifier
             .size(width, height)
+            // The OK-hold menu opens beside the tile.
+            .menuAnchor()
             // Not on the screen kept ready behind the shown one.
             .focusProperties { canFocus = screenShown }
             .onFocusChanged { if (it.isFocused) Sounds.navigate() else pressed = false }
@@ -648,12 +672,33 @@ fun NetworkIcon(color: Color = Colors.Text, size: Dp = StatusIconSize) {
 
 private const val SIGNAL_POLL_MS = 5_000L
 
-/** What the OK-hold menu shows: a tile's name, its picture and the actions. */
+/** One action of the OK-hold menu; [destructive] ones (uninstall) come last, set apart and in red. */
+class MenuItem(val text: String, val icon: ImageVector, val destructive: Boolean = false, val action: () -> Unit)
+
+/** What the OK-hold menu shows: the name of what was held, its actions, and where it is on screen. */
 class MenuRequest(
     val title: String,
-    val art: @Composable () -> Unit,
-    val options: List<Pair<String, () -> Unit>>,
+    val items: List<MenuItem>,
+    /** The held tile or card in window pixels; the menu opens beside it. */
+    val anchor: Rect? = MenuAnchor.bounds,
 )
+
+/** Where the selected tile or card is on screen (see [menuAnchor]). */
+object MenuAnchor {
+    var bounds: Rect? = null
+}
+
+/** Keeps [MenuAnchor] on this element while it is selected; before its focus target and its scaling. */
+fun Modifier.menuAnchor(): Modifier = composed {
+    val state = remember { object { var focused = false; var coordinates: LayoutCoordinates? = null } }
+    onFocusChanged {
+        state.focused = it.isFocused
+        if (it.isFocused) state.coordinates?.takeIf { c -> c.isAttached }?.let { c -> MenuAnchor.bounds = c.boundsInWindow() }
+    }.onGloballyPositioned {
+        state.coordinates = it
+        if (state.focused) MenuAnchor.bounds = it.boundsInWindow()
+    }
+}
 
 /** The OK-hold menu of an app. [onMove] is null where the order can't change (All apps). */
 fun appMenu(
@@ -664,73 +709,142 @@ fun appMenu(
     onMove: (() -> Unit)?,
 ) = MenuRequest(
     title = entry.label,
-    art = {
-        val art by rememberArt(repo, entry)
-        AppArt(art, entry.label)
-    },
-    options = buildList<Pair<String, () -> Unit>> {
-        add(tr(R.string.menu_open) to { context.launchApp(entry) })
-        if (onMove != null && !entry.hidden) add(tr(R.string.menu_move) to onMove)
-        add((if (entry.hidden) tr(R.string.menu_show_home) else tr(R.string.menu_hide_home)) to { repo.toggleHidden(entry.pkg); onChanged() })
-        if (!entry.isSystem) add(tr(R.string.menu_uninstall) to { context.uninstall(entry.pkg) })
+    items = buildList {
+        add(MenuItem(tr(R.string.menu_open), Icons.Outlined.PlayArrow) { context.launchApp(entry) })
+        if (onMove != null && !entry.hidden) add(MenuItem(tr(R.string.menu_move), Icons.Outlined.OpenWith, action = onMove))
+        add(
+            if (entry.hidden) MenuItem(tr(R.string.menu_show_home), Icons.Outlined.Visibility) { repo.toggleHidden(entry.pkg); onChanged() }
+            else MenuItem(tr(R.string.menu_hide_home), Icons.Outlined.VisibilityOff) { repo.toggleHidden(entry.pkg); onChanged() },
+        )
+        if (!entry.isSystem) add(MenuItem(tr(R.string.menu_uninstall), Icons.Outlined.Delete, destructive = true) { context.uninstall(entry.pkg) })
     },
 )
 
 private fun isOkKey(code: Int) =
     code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER || code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
 
+/**
+ * The OK-hold menu, as Google TV and Apple TV have it: beside the held tile, which stays lit while
+ * the rest of the screen dims; a short list with an icon on each action, uninstalling last and in
+ * red. Looks like the settings page (its focus, sizes and corners).
+ */
 @Composable
 fun OptionsDialog(request: MenuRequest, onDismiss: () -> Unit) {
     val first = remember { FocusRequester() }
     // The menu opens while OK is still held: its key repeats and the release belong to the long
     // press, and would otherwise click the first item. OK counts only after a fresh press.
     var okArmed by remember { mutableStateOf(false) }
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect { window?.setDimAmount(0f) }
+        val anchor = request.anchor
+        val density = LocalDensity.current
+        Box(
             Modifier
-                .width(440.dp)
-                .onPreviewKeyEvent { event ->
+                .fillMaxSize()
+                .pointerInput(Unit) { detectTapGestures { onDismiss() } }
+                // The dimming, with the held tile left out of it (as large as it is drawn selected).
+                .drawBehind {
+                    val scrim = Path().apply {
+                        fillType = PathFillType.EvenOdd
+                        addRect(Rect(Offset.Zero, size))
+                        if (anchor != null) {
+                            val grow = anchor.width * (FOCUS_SCALE - 1f) / 2f + with(density) { 2.dp.toPx() }
+                            val r = with(density) { 14.dp.toPx() }
+                            addRoundRect(RoundRect(anchor.inflate(grow), CornerRadius(r, r)))
+                        }
+                    }
+                    drawPath(scrim, Color.Black.copy(alpha = 0.6f))
+                },
+        ) {
+            MenuPlacement(anchor) {
+                MenuCard(request, first, onDismiss, Modifier.onPreviewKeyEvent { event ->
                     val native = event.nativeKeyEvent
                     if (!isOkKey(native.keyCode)) return@onPreviewKeyEvent false
                     if (event.type == KeyEventType.KeyDown && native.repeatCount == 0) okArmed = true
                     !okArmed
-                }
-                .arrowSoundTracker()
-                .shadow(24.dp, RoundedCornerShape(18.dp))
-                .background(Colors.Surface, RoundedCornerShape(18.dp))
-                .padding(24.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(96.dp, tileHeight(96.dp)).clip(RoundedCornerShape(tileCorner(tileHeight(96.dp))))) { request.art() }
-                Spacer(Modifier.width(18.dp))
-                T(request.title, 22.sp)
-            }
-            Spacer(Modifier.height(18.dp))
-            request.options.forEachIndexed { i, (text, action) ->
-                var focused by remember { mutableStateOf(false) }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        // Google TV style: the selected item is a light bar with dark text.
-                        .background(if (focused) FocusBg else Color.Transparent, RoundedCornerShape(10.dp))
-                        .then(if (i == 0) Modifier.focusRequester(first) else Modifier)
-                        .onFocusChanged {
-                            focused = it.isFocused
-                            if (it.isFocused) Sounds.navigate()
-                        }
-                        .clickable(remember { MutableInteractionSource() }, null) {
-                            Sounds.activate()
-                            onDismiss()
-                            action()
-                        }
-                        .padding(horizontal = 18.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    T(text, 20.sp, color = if (focused) FocusText else Colors.Text)
-                }
+                })
             }
         }
     }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+}
+
+/** Puts the menu right of [anchor], or left of it near the screen's right edge; centred without one. */
+@Composable
+private fun MenuPlacement(anchor: Rect?, content: @Composable () -> Unit) {
+    Layout(content, Modifier.fillMaxSize()) { measurables, constraints ->
+        val menu = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            val margin = 40.dp.roundToPx()
+            if (anchor == null) {
+                menu.place((constraints.maxWidth - menu.width) / 2, (constraints.maxHeight - menu.height) / 2)
+                return@layout
+            }
+            val grow = (anchor.width * (FOCUS_SCALE - 1f) / 2f).toInt()
+            val gap = 20.dp.roundToPx() + grow
+            val right = anchor.right.toInt() + gap
+            val x = if (right + menu.width <= constraints.maxWidth - margin) right
+            else (anchor.left.toInt() - gap - menu.width).coerceAtLeast(margin)
+            val y = (anchor.top.toInt() - grow).coerceIn(margin, (constraints.maxHeight - margin - menu.height).coerceAtLeast(margin))
+            menu.place(x, y)
+        }
+    }
+}
+
+@Composable
+private fun MenuCard(request: MenuRequest, first: FocusRequester, onDismiss: () -> Unit, modifier: Modifier) {
+    val dark = LauncherSettings.dark
+    val (plain, destructive) = request.items.partition { !it.destructive }
+    Column(
+        modifier
+            .width(300.dp)
+            .arrowSoundTracker()
+            .background(if (dark) Color(0xFF26272A) else Color(0xFFF8F8F8), RoundedCornerShape(20.dp))
+            .padding(8.dp),
+    ) {
+        // The name: banner tiles don't show it.
+        T(request.title, 14.sp, Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 6.dp), color = Colors.TextDim, weight = FontWeight.Medium)
+        plain.forEachIndexed { i, item -> MenuRow(item, if (i == 0) Modifier.focusRequester(first) else Modifier, onDismiss) }
+        if (destructive.isNotEmpty()) {
+            Box(Modifier.padding(horizontal = 14.dp, vertical = 6.dp).fillMaxWidth().height(1.dp).background(Colors.TextDim.copy(alpha = 0.25f)))
+            destructive.forEach { MenuRow(it, Modifier, onDismiss) }
+        }
+    }
+}
+
+@Composable
+private fun MenuRow(item: MenuItem, modifier: Modifier, onDismiss: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val red = if (LauncherSettings.dark) Color(0xFFFF8A80) else Color(0xFFD93025)
+    val fg = when {
+        item.destructive && focused -> Color(0xFFD93025)
+        item.destructive -> red
+        focused -> FocusText
+        else -> Colors.Text
+    }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .background(if (focused) FocusBg else Color.Transparent, RoundedCornerShape(14.dp))
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) Sounds.navigate()
+            }
+            .clickable(remember { MutableInteractionSource() }, null) {
+                Sounds.activate()
+                onDismiss()
+                item.action()
+            }
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(item.icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(fg))
+        Spacer(Modifier.width(14.dp))
+        T(item.text, 16.sp, color = fg)
+    }
 }

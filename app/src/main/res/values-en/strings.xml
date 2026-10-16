@@ -124,7 +124,7 @@
     <string name="theme_xgimi">Same as XGIMI</string>
     <string name="nav_sounds_xgimi">The same switch as «Key press sound» in XGIMI</string>
     <string name="remote_buttons">Remote buttons</string>
-    <string name="remote_hint">Press a button on the remote to jump to it. ← → change the action, OK shows them all</string>
+    <string name="remote_hint">Press a button on the remote to jump to it</string>
     <string name="remote_model">Remote</string>
     <string name="action_firmware">As in the firmware</string>
     <string name="nothing">Nothing</string>
@@ -134,10 +134,10 @@
     <string name="action_previous">Previous track</string>
     <string name="remote_actions">Actions</string>
     <string name="remote_apps">Apps</string>
-    <string name="stock_opens">Firmware: opens %1$s</string>
-    <string name="stock_missing">Firmware: nothing (%1$s isn\'t installed)</string>
-    <string name="stock_ambient">Firmware: opens Atmosphere</string>
-    <string name="stock_source">Firmware: input source list</string>
+    <string name="stock_opens">Firmware: %1$s</string>
+    <string name="stock_missing">Firmware: nothing</string>
+    <string name="stock_ambient">Firmware: Atmosphere</string>
+    <string name="stock_source">Firmware: inputs</string>
     <string name="pkg_missing">%1$s (not installed)</string>
     <string name="remote_module_remove">Remove the «Кнопки пульта» module</string>
     <string name="remote_module">tonisaf\'s old module holds these buttons: while it is installed, the choices here don\'t work</string>    <string name="tile_memory">Memory</string>
@@ -145,10 +145,9 @@
     <string name="memory_clearing">Clearing…</string>
     <string name="memory_freed">%1$s freed</string>
     <string name="memory_nothing">Nothing to clear</string>
-    <string name="megabytes">%1$d MB</string>
+    <string name="megabytes">%1$d\u00A0MB</string>
     <string name="tile_fast">Fast mode</string>
-    <string name="fast_on">No animations</string>
-    <string name="fast_off">With animations</string>
-    <string name="fast_denied">No permission</string>    <string name="home_status">Apps and rows</string>
     <string name="remote_set">%1$d set</string>
+    <string name="off_in_fast_mode">Off in fast mode</string>
+    <string name="fast_denied">No permission</string>
 </resources>
