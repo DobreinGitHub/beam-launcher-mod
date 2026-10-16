@@ -155,6 +155,12 @@ class AdbCommandReceiver : BroadcastReceiver() {
         }
         // --ez channels_fields true: which optional fields each channel's programs fill in.
         if (intent.hasExtra("channels_fields")) resultData = describeChannelFields(context)
+        // --ez settings_export true returns all settings as base64 JSON; --es settings_import BASE64 puts them
+        // back (see SettingsBackup). After an import, restart Beam (am force-stop) so it reads them.
+        if (intent.hasExtra("settings_export")) resultData = SettingsBackup.export(context)
+        intent.getStringExtra("settings_import")?.let { data ->
+            resultData = runCatching { "imported ${SettingsBackup.import(context, data)}" }.getOrElse { "error $it" }
+        }
         // --ez order_get true: the home row's saved order (row keys, comma-separated).
         if (intent.hasExtra("order_get")) resultData = AppRepository(context).savedOrder().joinToString(",").ifEmpty { "none" }
         intent.getStringExtra("bt_name")?.let { name ->

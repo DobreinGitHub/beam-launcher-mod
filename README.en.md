@@ -1,156 +1,76 @@
-<p align="center"><img src="docs/logo.svg" width="128" height="128" alt="Beam"></p>
+<p align="center"><img src="docs/beam_logo.png" width="128" height="128" alt="Beam"></p>
 
 # Beam
 
-A home screen (launcher) for the **XGIMI Play 6** projector (Android 11), written in Jetpack Compose.
-It replaces XGIMI's stock shell with its Chinese services and ads. The firmware itself is left
-alone: everything is installed and rolled back over adb.
+A home screen for the **XGIMI Play 6** projector (Android 11), written in Jetpack Compose. It replaces
+XGIMI's stock shell with its Chinese services and ads. The firmware itself is left alone: everything is
+installed and rolled back over adb. The interface is in Russian and English. [Русская версия](README.md)
 
-The interface is available in Russian and English. The language is chosen inside Beam
-(Appearance → Language), independently of the system language, because the projector's firmware
-refuses English as a system language. Voice commands are Russian only.
-[Русская версия](README.md)
+> An unofficial project, not affiliated with XGIMI. Made and tested only on the XGIMI Play 6.
 
-> An unofficial project, not affiliated with XGIMI. Made only for the XGIMI Play 6 on Android 11.
-> On other XGIMI models the projector functions (brightness, keystone, focus, battery) may not
-> work; other devices are not supported.
-
-## This build
-
-A modification of Beam by **Dobrein**, based on the original
-[tonisaf/beam-launcher](https://github.com/tonisaf/beam-launcher) by tonisaf (version and credits:
-panel → "About Beam"). What's changed compared to Beam 0.3:
-
-**Home screen**
-
-- **Google TV style selection**: the selected tile grows a little and gets a white outline, with a
-  soft light behind it in the app's colour (red for YouTube, orange for Kinopoisk). Moving the
-  selection crossfades the light from tile to tile. Channel cards and All apps tiles are selected
-  the same way. The cyan frame and cyan captions are gone.
-- **Background in the app's colour**: the background takes on a faint tint of the selected app's
-  colour. Can be turned off in Appearance.
-- **Tiles are ordered by hand**: hold OK → "Move", ◀ ▶ move the tile, OK to finish, Back to cancel.
-  Tiles slide into place and the row scrolls along. No automatic sorting by usage, like Google TV;
-  new apps go to the end.
-- **OK-hold menu**: Open · Move · Hide from home · Uninstall. Releasing OK no longer opens the app
-  (in All apps either).
-- **16:9 tiles** to fit Android TV banners, with no bars at the top and bottom.
-- **A Google TV style top bar**: Home and All apps tabs in one pill (the current one marked, the
-  selection sliding and stretching from tab to tab), with a round settings button beside it. One
-  bar over both screens, always in view: highlighting a tab is enough, the screen under the bar
-  changes with a short slide and fade; OK goes into it. The buttons beside the tabs (settings, a
-  drive) act only on OK. Up from a screen's top row always goes to its tab; Back in All apps goes
-  to the tab first, then home. The All apps grid lines up with the home rows; the All apps tile at
-  the end of the row shows an icon, its name and the app count.
-- **Connected devices apart from the apps**, like Google TV: while something is plugged in, a pill
-  for it appears next to the top buttons. A drive with its own name and size ("External HD · USB ·
-  2000 GB", opens the file manager), HDMI with the device's name when it gives one ("PlayStation 5 ·
-  HDMI 1", switches to the input). The row holds only apps.
-- **The top bar makes way for XGIMI's panel**: while XGIMI's quick settings or settings are open
-  (they have their own clock and battery), the home's buttons, clock and status hide, so nothing
-  is shown twice. Next to Beam's settings the bar stays.
-- **Several channel rows** with Google TV style paging between rows. VoKino and Kinopoisk
-  posters load even with a VPN on. To reorder rows, hold OK on a card → "Move row", ▲ ▼ move the
-  row, OK to finish, Back to cancel; "Remove row from home" is there too. The top bar stays put,
-  and rows fade softly under it instead of being cut.
-- **Channel rows like Google TV's**: cards show the art alone, the title under the selected one;
-  movie posters stand upright instead of being cut to a strip; "Continue watching" shows how far
-  you got; each row ends with an "Open VoKino" card. The row's name has its app's icon. The row
-  you're in is bright, the others dimmed, and the background takes the selected poster's colour.
-  Back in the rows goes up to the apps.
-- **"Customize rows"**, a button under the rows (and in a card's menu): every channel grouped by
-  app, with posters and a switch; new ones are marked "New", and the button mentions them. A row
-  switched on folds open, one taken off folds away and the selection moves to its neighbour.
-- **Smooth loading**: while the apps and channels are read, placeholders with a moving shine hold
-  their places, so the screen doesn't jump.
-- **Smoother scrolling**: posters are kept downscaled, shadows and needless redraws are gone.
-  The tinted background and the selection light are drawn from ready-made pictures, and tile
-  pictures are made at the tile's size: a home screen frame takes 9–11 ms of GPU time on the
-  XGIMI Play 6 instead of 14–18, and less memory.
-- **RuStore is no longer hidden** by default.
-
-**All apps**
-
-- **Two parts**: "On the home screen" and "Hidden", each by name. Hidden system apps wait behind
-  one "System apps" tile; OK opens them out.
-- **Apps without a banner show their icon and name on the tile**, as on Android TV; the others
-  show the name only under the selected tile.
-- **"New"** on the tile of an app installed this past week and not opened yet.
-- **The grid pages a whole row at a time**, like Google TV, and stays put on moves sideways.
-
-**Status bar**
-
-- **Charging state**: charging / plugged in but draining / full.
-- **Battery time left**, and low-battery warnings at 15% and 5% over any app.
-- **A VPN icon** while a VPN is on.
-
-**Appearance**
-
-- **The theme follows XGIMI's**: Beam turns light or dark with General → Theme style in XGIMI's
-  settings (and with its Auto through the day), at once, even while those are open. It can be pinned
-  instead. The light theme looks like XGIMI's: light tiles and a blue selection. OK on Theme opens
-  XGIMI's Theme style list.
-- **Backgrounds as a row of cards**: the background changes as soon as the selection lands on a card,
-  no OK needed; the home screen beside shows it full size. XMB is a card of its own with its
-  options. Six new backgrounds: Graphite, Midnight, Burgundy, Emerald, Aurora, Sand.
-- **A "Background in app colour" switch** (now also in the selected poster's colour).
-- **Navigation sounds are the same switch as XGIMI's key press sound**: off in one place, off in both.
-- **One type scale**: six sizes, row and section headers in Medium, the clock's and battery's digits
-  all one width so the icons beside them don't shift.
-
-**Settings**
-
-- **The settings page looks like XGIMI's quick panel**: tiles straight over the darkening, a header
-  with a round gear on top (as on XGIMI's panel, it opens the projector's full settings), "XGIMI
-  quick settings" under it; then tiles for Beam's sections (appearance, home screen, remote buttons,
-  screensaver) and About. Icons are outlined, like XGIMI's; Beam's settings button in the top bar
-  has its own icon, the gear only means XGIMI's settings. A section opens in the
-  panel's place; Back returns to its tile. The home screen's top bar steps aside under the page, as
-  under XGIMI's panel. Power off, restart and the sleep timer are in XGIMI's menu on the remote's power button.
-  A Russian XGIMI interface is installed separately:
-  [xgimi-play6-russifier](https://github.com/tonisaf/xgimi-play6-russifier) (the translation alone
-  is enough; its launcher and remote-button module are not needed).
-- **One panel at a time**: Beam's page and XGIMI's panel never open together; opening one closes the
-  other. The remote's settings key opens XGIMI's panel, the voice key Beam's page.
-- **Like XGIMI's**: the same darkening, white focus (blue in the light theme); it opens at once, with
-  no animation and no sound. Long lists scroll to the screen's edge.
-- **System navigation sounds**, the same as in XGIMI's menus.
-- **Screensaver choice**: XGIMI's or an installed one (for example Aerial Views).
-- **An "About Beam" page**: version and credits, and **updates**: once a day (or on the button)
-  Beam checks this build's GitHub releases, shows when it last checked, and for a new version
-  downloads it, verifies its SHA-256, signature and version code, and hands it to Android's
-  installer, which asks to confirm. An orange dot on the gear and on "About Beam" means a new
-  version is waiting. The install script allows this itself; for a manual install it takes one
-  command: `adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow` (the firmware has
-  no screen for that permission). The update code is ported from Beam 1.0.1 (tonisaf, MIT).
-
-**Installation (`restore.ps1`)**
-
-- **Replaces the original Beam by itself** (this build is signed with another key, see below).
-- **Optional**: `-AerialViews` installs the Aerial Views screensaver, `-KeepBackgroundApps` stops the
-  firmware closing background apps (VPN, music).
-
-**Fixes**
-
-- The stock XGIMI launcher could come back after the reboot right after installing.
-- The tile order could be saved differently from what was on screen.
-
-**Coming from the original Beam:** this build is signed with another key, so the install script
-replaces it (stock launcher back first, then the old Beam and its button stubs out); Beam's own
-settings start over.
+A modification by **Dobrein** of [tonisaf/beam-launcher](https://github.com/tonisaf/beam-launcher)
+(by tonisaf). Version and credits are in the launcher itself: settings → "About Beam".
 
 ## What it does
 
-- **Home screen**: a row of app tiles in the order you set; plugged-in drives and HDMI
-  devices sit at the top, next to the buttons. Below the row are rows with other apps' channels (SmartTube subscriptions, recent Spotify,
-  "Continue watching"). Also a "Now playing" widget and the projector's battery level.
-- **Settings** over any app, opened with the remote's voice button: appearance, home screen,
-  remote buttons, screensaver; and from there XGIMI's panel and settings for the projector.
-- **App buttons on the remote**: the firmware hard-wires four buttons to Chinese video services;
-  they can be assigned to any app, to the panel, or to "home".
-- **Offline voice search** on [Vosk](https://alphacephei.com/vosk/) (the small Russian model).
-- Appearance: light and dark themes, backgrounds (including an animated PS3 XMB style one),
-  interface sounds, interface language (system, Russian or English).
+**Home screen**
+
+- A row of 16:9 tiles in your order: hold OK → "Move", ◀ ▶, OK. "Hide" and "Uninstall" are there too.
+- A Google TV style top bar: Home and All apps tabs, the settings button, clock, Wi-Fi, VPN, battery.
+- Plugged-in drives and HDMI devices as pills at the top, with the device's name ("PlayStation 5 · HDMI 1").
+- Rows of other apps' channels (SmartTube, VoKino, Kinopoisk, "Continue watching"): switched on, off
+  and reordered in "Customize rows".
+- Google TV style selection: a white outline and a glow in the app's colour; the background takes
+  that colour too.
+- "Now playing", smooth loading with placeholders, a frame in 9–11 ms instead of 14–18.
+
+**All apps**: "On the home screen" and "Hidden" sections, system apps behind one tile, a "New" mark on
+fresh installs.
+
+**Battery**: the projector's and the XGIMI stand's charge together, time left at once (learned from the
+real drain), warnings at 15% and 5% over any app.
+
+**Appearance**
+
+- The theme follows XGIMI's Theme style (and its Auto); the light one in XGIMI's colours. Or pin your own.
+- Backgrounds as cards, applied as soon as one is selected; an animated PS3 XMB style background.
+- Navigation sounds are the same switch as XGIMI's key press sound.
+- The interface language is chosen in Beam: the firmware refuses English as the system language.
+
+**Settings**: a page in the style of XGIMI's quick panel, over any app on the remote's voice button:
+appearance, home screen, remote buttons, screensaver (XGIMI's or Aerial Views), About Beam. XGIMI's
+panel and settings open from there too; only one of the panels is ever open.
+
+**Remote buttons**: the four Chinese video service buttons can be assigned to any app.
+
+**Updates**: About Beam checks this build's releases once a day, verifies the SHA-256, signature and
+version, and hands the APK to Android's installer (code ported from Beam 1.0.1).
+
+## Differences from Beam 1.0.1 (tonisaf)
+
+This build is based on Beam 0.3. After that tonisaf turned Beam into a universal launcher for any
+Android TV and took everything XGIMI-specific out of it; this build instead develops the XGIMI Play 6
+version.
+
+| | Beam 1.0.1 | This build |
+|---|---|---|
+| Interface | universal, for any Android TV | reworked for the XGIMI Play 6: Google TV style selection and transitions, an OK-hold menu, All apps in sections |
+| Type and behaviour | — | one type scale; one logic everywhere: hold OK for the menu, arrows to move, OK to finish, Back to cancel |
+| Speed | — | a home screen frame in 9–11 ms instead of 14–18, posters and background drawn ahead, less memory |
+| Devices | any Android 8+ | the XGIMI Play 6 only |
+| Installation | APK, home screen set by hand | an installer: XGIMI russifier, Chinese services off, LeanKey, permissions, home screen |
+| Home screen | "Tiles" and "Google TV" layouts | 16:9 tiles under a Google TV top bar |
+| HDMI and USB | tiles in the app row | pills in the top bar, with the device's name |
+| Tile and channel row order | yes | yes, plus "Customize rows" with posters |
+| Battery | charge | stand and projector charge, time left, warnings |
+| Theme and sounds | its own; UISFX sounds | follow XGIMI; system sounds |
+| Background | its backgrounds and your own picture | backgrounds as cards, background in the app's colour |
+| Settings panel | removed | XGIMI style, over any app |
+| Remote buttons | no stubs needed | assigned in Beam |
+
+**Coming from the original Beam.** This build is signed with another key and doesn't install over the
+original. The installer brings the stock launcher back, removes the old Beam and its button stubs and
+installs this build; Beam's settings start over.
 
 ## Screenshots
 
@@ -170,156 +90,88 @@ The screenshots show the Russian interface.
 
 ## Installation
 
-You need: a Windows computer, a USB flash drive (FAT32), and the projector on the same Wi-Fi network
-as the computer. About 15 minutes.
+You need a Windows 10 or 11 computer, a USB flash drive and the projector on the same Wi-Fi network as
+the computer. About 15 minutes, about 30 with the XGIMI russifier. Works for a projector straight out
+of the box too. The installer speaks Russian.
 
-### Step 1. Download to the computer
+### Step 1. Turn ADB on on the projector
 
-- **SystemUI Tuner** (needed to turn ADB on on the projector):
-  [github.com/zacharee/Tweaker/releases](https://github.com/zacharee/Tweaker/releases), the file
-  `SystemUITuner_…-release.apk`.
-- **Platform Tools** (the adb program):
-  [developer.android.com/tools/releases/platform-tools](https://developer.android.com/tools/releases/platform-tools).
-  Unzip it into `C:\adb`.
-- **Beam**: *Code* → *Download ZIP* on this page. Unzip it, for example into `C:\beam`. You don't need
-  to download the Beam APK: the script fetches Beam and the remote button stubs from the latest
-  [release](https://github.com/DobreinGitHub/beam-launcher-mod/releases) and verifies them against
-  `SHA256SUMS.txt` (the computer needs internet access).
-- **The LeanKey keyboard (required):** the script disables the Chinese Sogou keyboard, and without a
-  replacement there would be nothing to type with. Download
-  [LeanKeyboard…apk](https://github.com/yuliskov/LeanKeyKeyboard/releases) and put it into
-  `C:\beam\tools\apks\` (create the folder): the script installs it and makes it the system keyboard.
+The stock settings have no ADB switch; the SystemUI Tuner app turns it on:
 
-### Step 2. Install SystemUI Tuner on the projector from a flash drive
+1. Download `SystemUITuner_…-release.apk` from [github.com/zacharee/Tweaker/releases](https://github.com/zacharee/Tweaker/releases).
+2. Rename the file by adding `.1` at the end (`…-release.apk.1`): otherwise the projector's file manager
+   won't open it. If extensions are hidden: File Explorer → *View* → *Show* → *File name extensions*.
+   Copy the file to the flash drive (FAT32) and plug it into the projector.
+3. On the projector: apps → file manager → the file on the drive → OK → the last item ("More actions")
+   → APK installer → "Just once" → install → "Open".
+4. In SystemUI Tuner page through the welcome screens, find the ADB item and turn it on. Ignore a note
+   that debugging over Wi-Fi isn't supported: it works over the network anyway.
+5. Find the projector's IP: Settings → Network → Wi-Fi → the current network. To keep it from
+   changing, reserve it in your router's settings.
 
-The projector's built-in file manager doesn't open `.apk` files directly: on the computer, rename the
-file by adding `.1` at the end (you get `SystemUITuner_…-release.apk.1`). If Windows hides file
-extensions: File Explorer → *View* → *Show* → *File name extensions*. Copy the file to the flash drive
-and put it into the projector. Then:
+### Step 2. Run the installer
 
-1. In the stock launcher, open the apps tab and the file manager.
-2. Find the file on the flash drive and press OK.
-3. In the menu that opens, choose the last item ("More actions").
-4. In the "Open with" list choose the APK installer, then "Just once".
-5. Confirm the installation, and press "Open" at the end. Page through the welcome screens and accept
-   the license.
+1. Download `Beam-Setup-….zip` from the [latest release](https://github.com/DobreinGitHub/beam-launcher-mod/releases/latest)
+   and unpack it (right-click → "Extract all"). Turn off any VPN on the computer.
+2. Run **«Установить.cmd»**. If Windows says "Windows protected your PC": "More info" → "Run anyway".
+3. Enter the projector's IP. A debugging request appears on the projector: tick "Always allow" and press OK.
+4. Answer the questions, each with a short explanation; Enter takes the default:
+   - **translate XGIMI's menus** — XGIMI's settings and panel in Russian
+     ([xgimi-play6-russifier](https://github.com/tonisaf/xgimi-play6-russifier) by tonisaf). On a new
+     projector: yes. Not asked if the translation is already installed;
+   - **the [Aerial Views](https://github.com/theothernt/AerialViews) screensaver** — 4K videos instead of
+     XGIMI's screensaver (a third-party app, no by default);
+   - **don't close background apps** — the firmware stops closing a VPN or music when you switch apps
+     (yes by default);
+   - **time zone** — Europe/Moscow by default.
+5. Wait for «Всё готово». The projector restarts by itself a few times: don't turn it off or close the
+   window. At the end it starts in Beam.
 
-### Step 3. Turn ADB on
+The installer downloads adb (if there is none), the russifier (about 190 MB) and the LeanKey keyboard,
+and checks them against their SHA-256. Beam and the remote button stubs are already in the archive.
+What changes on the projector: [below](#what-restoreps1-changes). It can be run again safely.
 
-In SystemUI Tuner find the ADB item and turn it on. The "debugging over Wi-Fi" item may say that it is
-not supported on this version of Android: that's fine, the network connection works anyway.
+### Step 3. Check
 
-### Step 4. Find the projector's IP address
+Press Home: Beam should open. The remote's voice button opens Beam's settings, the settings button
+XGIMI's panel. The remote's four app buttons are assigned in Beam's settings → "Remote buttons".
 
-Projector settings → network → Wi-Fi → the current network. Or find the projector in your router's
-device list (usually `192.168.0.1` or `192.168.1.1`). To keep the address from changing, reserve it for
-the projector in the router's settings. In the examples below, replace `192.168.1.50` with your IP.
+### If something doesn't work
 
-### Step 5. Check the connection
+- **The projector doesn't answer:** same network, VPN off, the right IP. After the projector sleeps,
+  ADB sometimes turns off: turn it on again in SystemUI Tuner, the installer waits.
+- **The russifier says the firmware isn't supported:** it works only with firmware v1.7.116. Beam
+  installs without it.
+- **The russification broke off:** the installer still installs Beam. To finish the translation:
+  `XgimiInstaller.exe` in the russifier's folder (the installer prints its path at the end; usually
+  `russifier` next to it or `C:\Users\Public\Beam\russifier`) → «Дополнительно» → «Завершить
+  настройку». Keep that folder: removing the translation runs from it.
+- **`[!!]` lines:** run «Установить.cmd» again; if it repeats, send the window's output.
 
-Open the `C:\adb` folder, type `powershell` into the File Explorer address bar and press Enter. Run:
+### Installing by hand (`restore.ps1`)
 
-```powershell
-.\adb connect 192.168.1.50:5555
-.\adb devices
-```
-
-A debugging request appears on the projector's screen: tick "Always allow" and press OK. The list
-should contain the line `192.168.1.50:5555   device` (not `offline` and not `unauthorized`). Turn off
-any VPN on the computer for this: otherwise adb can't reach the projector.
-
-### Step 6. Translate XGIMI's menus to Russian (recommended)
-
-Beam itself is already in Russian; XGIMI's settings and panel are not. The russifier translates them:
-
-1. Download XGIMI-Russifier-…-Windows-Setup….zip from the
-   [russifier's releases](https://github.com/tonisaf/xgimi-play6-russifier/releases) and unpack the
-   whole archive (XgimiInstaller.exe must sit next to the kit folder). ADB is included.
-2. Run XgimiInstaller.exe and enter the projector's IP (the one from step 4).
-3. Choose «Установить русификацию». **Tick only the translation itself** (and the time zone if you
-   want it): skip its BEAM launcher and remote-button module, the next step installs this build of
-   Beam and its buttons.
-4. Press «Установить» and wait for the green message. The projector restarts by itself (2–4
-   minutes): don't turn it off or close the window.
-
-Details and removal: START-HERE.txt inside the archive.
-
-### Step 7. Install Beam
-
-Open the `C:\beam` folder the same way through PowerShell and run, as one line:
+For installing from source or keeping full control. You need adb
+([Platform Tools](https://developer.android.com/tools/releases/platform-tools)); the russifier is
+installed separately with its own installer (tick only the translation: its BEAM launcher is the
+original Beam, not this build). In PowerShell from the repository folder:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -Reboot
 ```
 
-**`192.168.1.50` is only an example: use your own projector's IP address.** `-ExecutionPolicy Bypass`
-is needed so that Windows doesn't forbid running the script, and `-Adb` says where adb is (if `adb` is
-already on `PATH`, you can leave it out). The script downloads the APKs, installs Beam and the remote
-button stubs, disables the unneeded apps, grants permissions and makes Beam the home screen. Every step
-in the output should say `[OK]`; `[!!]` lines mean an error. The projector reboots and starts straight
-into Beam.
+Replace `192.168.1.50` with the projector's IP. Parameters:
 
-**Language, time zone and Bluetooth name.** By default the script sets the system language to
-`ru-RU`, the time zone to `Europe/Moscow` and the Bluetooth name to "XGIMI Play 6". If you don't want
-that, add `-SkipSystem` (before `-Reboot`): the three settings stay as they were.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -SkipSystem -Reboot
-```
-
-**Extras (optional).** Two switches, off by default:
-
-- `-AerialViews` installs the [Aerial Views](https://github.com/theothernt/AerialViews) screensaver
-  (4K videos, clock and captions; release 1.8.5 from its author's GitHub, checked against its
-  SHA-256) and makes it the screensaver. Beam → Screensaver switches back to XGIMI's. Note that
-  Aerial Views is a third-party app: it streams its videos and sends its developer usage statistics
-  (can be turned off in its settings).
-- `-KeepBackgroundApps` stops the firmware closing background apps (VPN, music) when you switch
-  apps, from the next boot. The projector has little memory, so Android may still unload
-  something when it runs out, but no longer everything.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\restore.ps1 -Device 192.168.1.50 -Adb C:\adb\adb.exe -AerialViews -KeepBackgroundApps -Reboot
-```
-
-You can set your own time zone separately, in PowerShell from the `C:\adb` folder (the zone in the
-form `Europe/Berlin`, `Europe/Kyiv`, `Asia/Almaty`):
-
-```powershell
-.\adb shell settings put global auto_time_zone 0
-.\adb shell service call alarm 3 s16 Europe/Berlin
-.\adb shell getprop persist.sys.timezone
-```
-
-The last command should print the zone you chose (if it doesn't, replace the second command with
-`.\adb shell cmd alarm set-timezone Europe/Berlin`). Auto-detection is turned off on purpose: the
-firmware defaults to Shanghai and there is no SIM to detect the zone. Don't switch the system language
-to English: the firmware doesn't accept it and turns Chinese on. Beam's interface language is chosen
-in Beam itself: Appearance → Language. You can also set the name and the zone with the parameters
-`-BluetoothName "Your name"` and `-TimeZone Europe/Berlin` (see [below](#what-restoreps1-changes)).
-
-The script can be run again; steps for apps that are absent are skipped. APKs to install along the way
-(SmartTube, LeanKey…) go into `tools\apks\`. Your own Beam APK (a build of your own, say) goes there
-too, or pass `-Apk`: the download is skipped then. Another release: `-Release v0.2`; no download at
-all: `-NoDownload`. You can put the IP and the path to adb into `local.env` once (`DEVICE=…`, `ADB=…`),
-and then you won't need the `-Device` and `-Adb` parameters.
-
-### Step 8. Check
-
-Press "Home": Beam should open. A short press of the remote's voice button opens the quick settings
-panel. The four app buttons on the remote are assigned in the panel: "Remote buttons". Voice search:
-[Voice model](#voice-model).
-
-### If something doesn't work
-
-- **`cannot connect` / `timed out`:** check that the projector and the computer are on the same
-  network, that any VPN is off, and that the IP is right. After a reboot or sleep of the projector, ADB
-  may turn off: turn it on again in SystemUI Tuner (step 3).
-- **`unauthorized`:** confirm the debugging request on the projector's screen (step 5).
-- **"Running scripts is disabled":** run it with `-ExecutionPolicy Bypass`, as in step 6.
-- **The script can't find adb:** check the path in `-Adb`.
-- **The script can't download the APKs:** check the internet connection. You can put the APKs from the
-  [release](https://github.com/DobreinGitHub/beam-launcher-mod/releases/latest) into `tools\apks\` by hand.
+- `-TimeZone Europe/Kyiv`, `-Locale`, `-BluetoothName "Your name"` instead of Europe/Moscow, ru-RU and
+  "XGIMI Play 6"; `-SkipSystem` leaves those three alone. The firmware refuses English as the system
+  language: Beam's language is chosen in Beam.
+- `-AerialViews`: the Aerial Views screensaver (release 1.8.5, checked against its SHA-256);
+  `-KeepBackgroundApps`: don't close background apps (`persist.xgimi.restrictbackground.enable`, from
+  the next boot).
+- The Beam APK comes from the build, `tools\apks\` or `-Apk`, else it is downloaded from the release and
+  checked against `SHA256SUMS.txt` (`-Release v0.2` for another release, `-NoDownload` for none). Other
+  APKs to install along the way (LeanKey, SmartTube…) go into `tools\apks\`.
+- The IP and the path to adb can go into `local.env` once (`DEVICE=…`, `ADB=…`).
+- Every step prints `[OK]`; `[!!]` is an error.
 
 ### What `restore.ps1` changes
 
@@ -352,8 +204,7 @@ Read this before running it:
 ```
 
 The script enables everything it disabled (the stock launcher first), restores the system
-keyboard, removes Beam from the accessibility services (the others stay) and from the speech
-recognizers, and then removes the remote button stubs (only its own; real apps with the same
+keyboard, removes Beam from the accessibility services (the others stay), and then removes the remote button stubs (only its own; real apps with the same
 package names stay) and Beam itself. If the stock launcher can't be enabled, Beam is not removed,
 so you don't end up without a home screen. The language, time zone and Bluetooth name are not
 reverted: the previous values are unknown. The screensaver goes back to XGIMI's (Aerial Views stays
@@ -381,47 +232,6 @@ package name. The `stub` module builds four tiny APKs **with those package names
 except pass the key press to Beam. If the real apps with those package names are installed on the
 projector, the stubs won't install.
 
-### Voice model
-
-> **Installing the model doesn't work in this build:** the command below crashes Beam (a bug of the
-> original Beam 0.3, not fixed here). The voice button opens the panel as usual.
-
-The Vosk model (~45 MB) is not part of the APK and is not downloaded automatically: without it
-the voice button only opens the panel. Install it once over adb (the microphone permission is
-needed; `restore.ps1` grants it):
-
-```sh
-# the projector downloads the model itself (https only; add --es voice_sha256 <archive SHA-256> to verify):
-adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver \
-    --es voice_url https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
-# or push the file from the computer (see `VoiceModelProvider` in `Voice.kt`):
-adb exec-in "content write --uri content://com.home.tiles.voicemodel/model.zip" < vosk-model-small-ru-0.22.zip
-adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --ez voice_install true
-```
-
-Voice commands open SmartTube, Spotify and Jellyfin (whichever of the known builds is installed;
-apps that are not installed are not recognized). Your own apps are added over adb:
-
-```sh
-adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver \
-    --es voice_app "Kodi|org.xbmc.kodi|коди;открой коди"   # name | packages, comma-separated | phrases, separated by ;
-adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --ez voice_apps true          # list the added ones
-adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es voice_app_remove Kodi    # remove one
-```
-
-The Vosk model is Russian, so write the phrases in Russian (the way they are pronounced). The
-interface language doesn't affect voice: the commands are always Russian.
-
-Beam also answers the standard speech recognition requests from other apps (`RECOGNIZE_SPEECH`,
-`RecognitionService`). That means any installed app can get a transcript of what you say into the
-remote's microphone while you hold the voice button, even if the app itself has no microphone
-permission: that is how this Android mechanism works. Nothing is recorded unless the button is
-held. If that is unacceptable, don't make Beam the recognizer and don't install the model.
-
-To check: `--ez voice_status true`. To make the microphone buttons in other apps (for example
-SmartTube) use Beam as well, set it as the system recognizer (optional):
-`adb shell settings put secure voice_recognition_service com.home.tiles/com.home.tiles.VoskRecognitionService`.
-
 ## FAQ
 
 **Can I just install the APK, without the script?** It installs and runs, but it won't become the
@@ -434,7 +244,7 @@ order and the screensaver delay won't work. The remote's app buttons need the st
 when it starts. That can't happen without the permission from the script (`WRITE_SECURE_SETTINGS`).
 
 **English interface?** Appearance → Language. This projector's system language can't be switched
-to English (the firmware refuses it), so the language is chosen inside Beam. Voice is Russian only.
+to English (the firmware refuses it), so the language is chosen inside Beam.
 
 **Does it work on other XGIMI models?** Not tested: the launcher opens, but the projector functions
 (brightness, keystone, focus, battery) may not work.
@@ -442,8 +252,7 @@ to English (the firmware refuses it), so the language is chosen inside Beam. Voi
 **How do I put everything back?** [Rolling back](#rolling-back): `restore.ps1 -Revert`.
 
 **What about privacy?** There are no ads or analytics, and the source is open. Network access is
-used for downloading the voice model (on your command, https only) and for the pictures of other
-apps' channels. For other apps' access to speech recognition see [Voice model](#voice-model).
+used for the pictures of other apps' channels and for checking Beam's updates.
 
 ## Building
 
@@ -497,7 +306,6 @@ the way you'd expect: [docs/xgimi-firmware.en.md](docs/xgimi-firmware.en.md).
 adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es background XMB --ez bg_animation true
 adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --ez ambient_tint false   # background in app colour
 adb shell am broadcast -n com.home.tiles/.AdbCommandReceiver --es bt_name "XGIMI Play 6"
-adb shell am start -n com.home.tiles/.MicTestActivity --ei seconds 6   # test the remote's microphone
 ```
 
 ## License

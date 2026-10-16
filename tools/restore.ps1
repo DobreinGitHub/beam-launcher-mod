@@ -208,7 +208,7 @@ if ($Revert) {
         $p = $pkg
         Step "Заглушка кнопки пульта ($p)" {
             if (-not (Installed $p)) { return $false }
-            if ((Adb shell dumpsys package $p) -notmatch 'com\.home\.tiles\.stub\.StubActivity') {
+            if ((Adb shell dumpsys package $p) -notmatch 'com\.home\.tiles\.permission\.REMOTE_BUTTON') {
                 throw "это не заглушка Beam, а настоящее приложение: оставлено"
             }
             Expect (Adb shell pm uninstall $p) "Success"
@@ -302,20 +302,30 @@ Step "Лаунчер Beam" {
         throw "нет APK Beam: скачайте со страницы Releases, соберите (./gradlew :app:assembleRelease :stub:assembleRelease), положите app-release.apk в tools\apks\ или укажите -Apk"
     }
     $out = Adb install -r $beamApk
-    # A Beam signed with another key (the original one, say) can't be updated in place. The stock
+    # A Beam signed with another key (the original one, say) can't be updated in place. Android
+    # reports a newer original Beam (1.0.1 and later) as a downgrade before it looks at the key, so
+    # that case is told apart by the version name: this build's always has "-ru" in it. The stock
     # launcher comes back first so there is always a home screen, then that Beam and its
     # remote-button stubs go (only stubs: a real app with the same package name stays), and this
     # one goes in. Its own settings (theme, tile order) start over.
-    if ($out -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match') {
+    $installedVersion = if ((Adb shell dumpsys package $beamPackage) -match 'versionName=(\S+)') { $Matches[1] } else { "" }
+    $foreign = ($out -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match') -or
+        ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE' -and $installedVersion -notmatch '-ru')
+    if ($foreign) {
         Write-Host "      установлен Beam с другой подписью: заменяю его (настройки Beam сбросятся)" -ForegroundColor Yellow
         if (Installed $stockLauncher) { Expect (Adb shell pm enable --user 0 $stockLauncher) "enabled" }
         foreach ($p in $stubPackages) {
-            if ((Installed $p) -and ((Adb shell dumpsys package $p) -match 'com\.home\.tiles\.stub\.StubActivity')) {
+            if ((Installed $p) -and ((Adb shell dumpsys package $p) -match 'com\.home\.tiles\.permission\.REMOTE_BUTTON')) {
                 Adb shell pm uninstall $p | Out-Null
             }
         }
         Expect (Adb shell pm uninstall $beamPackage) "Success"
         $out = Adb install -r $beamApk
+    }
+    # Already updated past this APK (by Beam's own updater, say): keep the newer one.
+    if ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE') {
+        Write-Host "      уже установлена более новая версия Beam ($installedVersion): оставляю её" -ForegroundColor DarkGray
+        return
     }
     Expect $out "Success"
 }
@@ -328,14 +338,38 @@ if (-not (Installed "com.home.tiles")) {
 # Release stubs only (a debug build next to them would install over them in random order).
 $stubs = @(Get-ChildItem (Join-Path $Root "stub\build\outputs\apk") -Recurse -Filter *.apk -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -match '[\\/]release[\\/]' })
+# Installs an APK over whatever is there. A remote-button stub signed with another key (the original
+# Beam's) is replaced; a newer version already installed is kept.
+function Install-Apk([string]$File) {
+    $out = Adb install -r $File
+    if ($out -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match') {
+        $package = $stubFiles[[IO.Path]::GetFileName($File) -replace '^(stub-button\d).*$', '$1']
+        if ($package -and ((Adb shell dumpsys package $package) -match 'com\.home\.tiles\.permission\.REMOTE_BUTTON')) {
+            Write-Host "      заглушка $package с другой подписью: заменяю" -ForegroundColor Yellow
+            Expect (Adb shell pm uninstall $package) "Success"
+            $out = Adb install -r $File
+        }
+    }
+    if ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE') {
+        Write-Host "      уже установлена более новая версия: оставляю её" -ForegroundColor DarkGray
+        return
+    }
+    Expect $out "Success"
+}
+# Which stub APK is which package (stub/build.gradle.kts), for replacing the original Beam's stubs.
+$stubFiles = @{
+    "stub-button1" = "com.cibn.tv"; "stub-button2" = "com.ktcp.tvvideo"
+    "stub-button3" = "com.gitvjimi.video"; "stub-button4" = "com.hunantv.license"
+}
 foreach ($stub in $stubs) {
     $file = $stub.FullName
-    Step "Заглушка кнопки пульта $($stub.BaseName)" { Expect (Adb install -r $file) "Success" }
+    Step "Заглушка кнопки пульта $($stub.BaseName)" { Install-Apk $file }
 }
 if (Test-Path $apkDir) {
     Get-ChildItem $apkDir -Filter *.apk | Where-Object { $_.FullName -ne $beamApk } | ForEach-Object {
         $file = $_.FullName
-        Step "APK $($_.Name)" { Expect (Adb install -r $file) "Success" }
+        $label = if ($_.Name -match '^stub-button(\d)') { "Заглушка кнопки пульта $($Matches[1])" } else { "APK $($_.Name)" }
+        Step $label { Install-Apk $file }
     }
 }
 

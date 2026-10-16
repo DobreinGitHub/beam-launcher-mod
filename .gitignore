@@ -7,3 +7,6 @@ local.properties
 local.env
 # APKs that restore.ps1 downloads or you put there
 tools/apks/
+# What setup.ps1 downloads: adb and the russifier (keep the latter: its rollback runs from there)
+tools/adb/
+russifier/
