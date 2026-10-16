@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.animation.core.animateFloatAsState
@@ -178,6 +180,11 @@ private fun LauncherApp(
     // The last tab highlighted, counted so highlighting the same tab again still counts.
     var highlight by remember { mutableStateOf(NavTab.Home to 0) }
     var inBar by remember { mutableStateOf(false) }
+    // When a screen was last switched to from inside it (the All apps tile, coming home): for a moment
+    // after, the selection can land on a tab as the old screen lets go of it, before the new one takes it.
+    // That isn't the user highlighting the tab, and counting it switched straight back on a slow frame.
+    var switchedAt by remember { mutableLongStateOf(0L) }
+    fun settling() = SystemClock.uptimeMillis() - switchedAt < SettleMs
     val tabFocus = remember { List(NavTab.entries.size) { FocusRequester() } }
     var menu by remember { mutableStateOf<MenuRequest?>(null) }
     val context = LocalContext.current
@@ -188,6 +195,7 @@ private fun LauncherApp(
     LaunchedEffect(resumeTick) {
         screen = NavTab.Home
         takeFocus = true
+        switchedAt = SystemClock.uptimeMillis()
     }
     LaunchedEffect(panelRequest) { if (panelRequest > 0) panelOpen = true }
     // XGIMI's «Стиль темы» changes at once, with its settings open over home, and «Авто» turns
@@ -203,11 +211,12 @@ private fun LauncherApp(
     // way to the buttons beside it, or straight down, doesn't build a screen for nothing.
     LaunchedEffect(highlight) {
         delay(TabDwellMs)
-        if (inBar) screen = highlight.first
+        if (inBar && !settling()) screen = highlight.first
     }
     fun open(tab: NavTab) {
         screen = tab
         takeFocus = true
+        switchedAt = SystemClock.uptimeMillis()
     }
     // The overlay service's panel when it runs, so the remote key and this button always toggle
     // the same single panel.
@@ -229,7 +238,7 @@ private fun LauncherApp(
             // One top bar over both screens: they change under it.
             TopNav(
                 screen, tabFocus,
-                onTabHighlighted = { highlight = it to highlight.second + 1 },
+                onTabHighlighted = { if (!settling()) highlight = it to highlight.second + 1 },
                 onTabClick = ::open,
                 onSettings = openPanel,
                 onFocusInside = { inBar = it },
@@ -273,6 +282,7 @@ private fun LauncherApp(
 }
 
 private const val TabDwellMs = 150L
+private const val SettleMs = 500L
 private const val ScreenSlideMs = 260
 private val ScreenShift = 56.dp
 
