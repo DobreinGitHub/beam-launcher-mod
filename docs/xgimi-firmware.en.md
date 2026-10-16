@@ -267,7 +267,7 @@ XGIMI's sleep timer exists only in the Chinese power menu. Beam keeps its own ti
 |---|---|---|
 | Voice | `KEYCODE_F5` | The firmware doesn't use it. Beam catches it in the accessibility service across the whole system |
 | Gear (settings) | `KEYCODE_MOVE_HOME` | XGIMI's window manager opens the quick panel **before** the accessibility services see the button, and the component can't be disabled over adb. Beam closes the panel with an `ACTION_CLOSE_SYSTEM_DIALOGS` broadcast (with any `reason` except XGIMI's own): several times within ~1.5 s and right when the `com.android.newsettings` window appears |
-| The four app buttons | — | The firmware eats them before anyone else and launches fixed apps. Beam installs stubs with those package names (the `stub` module), which pass the press on to Beam |
+| The four app buttons | 2118–2121 (key 1 is the remote's scancode 240, `VIDEO0`) | XGIMI's window manager hands them to `XrmDoAction`, which launches fixed apps. An app registered through `GimiCommonService` (`IGimiInterceptKeyListener`) gets the key instead: that's how tonisaf's buttons module works (`com.beam.remote`, XGIMI settings → General → «Кнопки пульта»). With the package missing, the firmware logs "apk not install" and does nothing. Earlier Beam versions installed stubs with those package names |
 | Volume | `KEYCODE_VOLUME_UP/DOWN` | Android TV handles it in the window manager before the apps, and the firmware changes the volume before the accessibility services. When Beam intercepts these buttons (the keystone screen), it puts the volume back |
 
 Which apps the firmware launches on the app buttons:
@@ -279,8 +279,7 @@ Which apps the firmware launches on the app buttons:
 | 3 | `com.gitvjimi.video` | `com.gala.video.app.epg.HomeActivity` |
 | 4 | `com.hunantv.license` | `com.mgtv.tv.launcher.ChannelHomeActivity` |
 
-Some buttons launch the app by component, others through `getLaunchIntentForPackage`. That's why
-the stub has both the exact activity and a launcher entry.
+Some buttons launch the app by component, others through `getLaunchIntentForPackage`.
 
 **The remote's microphone.** While the voice button is held, the audio HAL (`telinkhid voice`,
 ADPCM) gives the sound from the remote's microphone to any app through the ordinary `AudioRecord`.

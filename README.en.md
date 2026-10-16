@@ -38,11 +38,11 @@ real drain), warnings at 15% and 5% over any app.
 - The interface language is chosen in Beam: the firmware refuses English as the system language.
 
 **Settings**: a page in the style of XGIMI's quick panel, over any app on the remote's voice button:
-appearance, home screen, remote buttons, screensaver (XGIMI's or Aerial Views), About Beam. XGIMI's
+appearance, home screen, screensaver (XGIMI's or Aerial Views), About Beam. XGIMI's
 panel and settings open from there too; only one of the panels is ever open.
 
 **Remote buttons**: the four Chinese video service buttons can be assigned to any app or action: in XGIMI's
-settings → General → «Кнопки пульта» (tonisaf's module, installed by the installer) or in Beam.
+settings → General → «Кнопки пульта» (tonisaf's module, installed by the installer).
 
 **Updates**: About Beam checks this build's releases once a day, verifies the SHA-256, signature and
 version, and hands the APK to Android's installer (code ported from Beam 1.0.1).
@@ -59,7 +59,6 @@ version.
 | Type and behaviour | — | one type scale; one logic everywhere: hold OK for the menu, arrows to move, OK to finish, Back to cancel |
 | Speed | — | a home screen frame in 9–11 ms instead of 14–18, posters and background drawn ahead, less memory |
 | Devices | any Android 8+ | the XGIMI Play 6 only |
-| Installation | APK, home screen set by hand | an installer: XGIMI russifier, Chinese services off, LeanKey, permissions, home screen |
 | Home screen | "Tiles" and "Google TV" layouts | 16:9 tiles under a Google TV top bar |
 | HDMI and USB | tiles in the app row | pills in the top bar, with the device's name |
 | Tile and channel row order | yes | yes, plus "Customize rows" with posters |
@@ -67,7 +66,6 @@ version.
 | Theme and sounds | its own; UISFX sounds | follow XGIMI; system sounds |
 | Background | its backgrounds and your own picture | backgrounds as cards, background in the app's colour |
 | Settings panel | removed | XGIMI style, over any app |
-| Remote buttons | no stubs needed | tonisaf's module in XGIMI's settings, or Beam |
 
 **Coming from the original Beam.** This build is signed with another key and doesn't install over the
 original. The installer brings the stock launcher back, removes the old Beam and its button stubs and
@@ -131,7 +129,7 @@ The stock settings have no ADB switch; the SystemUI Tuner app turns it on:
    window. At the end it starts in Beam.
 
 The installer downloads adb (if there is none), the russifier (about 190 MB) and the LeanKey keyboard,
-and checks them against their SHA-256. Beam and the remote button stubs are already in the archive.
+and checks them against their SHA-256. Beam is already in the archive.
 What changes on the projector: [below](#what-restoreps1-changes). It can be run again safely.
 
 ### Step 3. Check
@@ -180,7 +178,8 @@ Replace `192.168.1.50` with the projector's IP. Parameters:
 
 Read this before running it:
 
-- installs Beam and the remote button stubs (see below);
+- installs Beam and removes the remote button stubs of earlier versions (tonisaf's module assigns the
+  buttons now; real apps with the same package names stay);
 - **disables** (`pm disable-user`, nothing is uninstalled) the stock launcher `com.xgimi.home`, the
   Sogou keyboard, ads, telemetry, bug reporting, the Chinese app store, and XGIMI's voice and IoT
   services. The full list is in the script, section 2. The stock launcher is disabled only after
@@ -207,8 +206,8 @@ Read this before running it:
 ```
 
 The script enables everything it disabled (the stock launcher first), restores the system
-keyboard, removes Beam from the accessibility services (the others stay), and then removes the remote button stubs (only its own; real apps with the same
-package names stay) and Beam itself. If the stock launcher can't be enabled, Beam is not removed,
+keyboard, removes Beam from the accessibility services (the others stay), and then removes Beam itself (and remote button stubs of earlier versions, if any). The russifier
+and the remote buttons module stay: they're removed with the russifier's own installer. If the stock launcher can't be enabled, Beam is not removed,
 so you don't end up without a home screen. The language, time zone and Bluetooth name are not
 reverted: the previous values are unknown. The screensaver goes back to XGIMI's (Aerial Views stays
 installed) and the firmware closes background apps again. If Projectivy is installed, it is enabled again too,
@@ -219,28 +218,16 @@ The same by hand:
 ```sh
 adb shell pm enable com.xgimi.home          # and the other packages from section 2 of restore.ps1
 adb uninstall com.home.tiles
-adb uninstall com.cibn.tv                   # remote button stubs
-adb uninstall com.ktcp.tvvideo
-adb uninstall com.gitvjimi.video
-adb uninstall com.hunantv.license
 ```
 
 After a reboot the home screen is the stock launcher again.
-
-### Remote button stubs
-
-The firmware handles the four app buttons on the remote itself and launches fixed Chinese apps by
-package name. The `stub` module builds four tiny APKs **with those package names**
-(`com.cibn.tv`, `com.ktcp.tvvideo`, `com.gitvjimi.video`, `com.hunantv.license`). They do nothing
-except pass the key press to Beam. If the real apps with those package names are installed on the
-projector, the stubs won't install.
 
 ## FAQ
 
 **Can I just install the APK, without the script?** It installs and runs, but it won't become the
 home screen (XGIMI's stock launcher stays enabled), and without the permissions the script grants
 the panel on the voice button after a reboot, "Now playing", the channel rows, the starting tile
-order and the screensaver delay won't work. The remote's app buttons need the stubs.
+order and the screensaver delay won't work.
 
 **The panel doesn't open from the voice button.** Check that the accessibility service "Beam:
 панель" is on. The script turns it on, the firmware resets it on boot, and Beam turns it back on
@@ -262,10 +249,10 @@ used for the pictures of other apps' channels and for checking Beam's updates.
 You need JDK 17 and the Android SDK (the path in `ANDROID_HOME` or `local.properties`).
 
 ```sh
-./gradlew :app:assembleRelease :stub:assembleRelease
+./gradlew :app:assembleRelease
 ```
 
-The APKs appear in `app/build/outputs/apk/release/` and `stub/build/outputs/apk/*/release/`.
+The APK appears in `app/build/outputs/apk/release/`.
 
 ### Signing
 
@@ -292,7 +279,6 @@ SHA-256 fingerprint of this build's release certificate:
 ```sh
 cp local.env.example local.env   # put in the projector's IP (and paths if adb is not on PATH)
 ./deploy.sh                      # build and install Beam
-./deploy.sh --stubs              # the remote button stubs as well
 ./deploy.sh --no-start           # don't bring Beam to the screen after installing
 ```
 

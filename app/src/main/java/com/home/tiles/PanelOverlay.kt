@@ -53,7 +53,6 @@ class PanelOverlay : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
         LauncherSettings.init(this)
-        RemoteButtons.init(this)
         Sounds.init(this)
         XgimiService.bind(this)
         // The low-battery warning has to come over any app, not only while the launcher shows.
@@ -63,8 +62,8 @@ class PanelOverlay : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val firstDown = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
-        // The four shortcut keys never get here: the firmware consumes them before accessibility
-        // services see them (see the stub module). The settings key is left to the firmware: it
+        // The four app keys are the firmware's: it starts fixed Chinese apps for them, or hands
+        // them to tonisaf's module (XGIMI settings → Общие → Кнопки пульта). The settings key is left to the firmware: it
         // opens XGIMI's quick panel, and ours closes for it (see onAccessibilityEvent). XGIMI may
         // not open over ours, so ours steps aside at once and opens it if the firmware didn't.
         if (event.keyCode == SETTINGS_KEY) {

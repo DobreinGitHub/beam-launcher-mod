@@ -31,7 +31,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.SettingsRemote
 import androidx.compose.material.icons.outlined.FilterVintage
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
@@ -78,7 +77,6 @@ private enum class Page(@StringRes val titleRes: Int, val icon: ImageVector) {
     // screensaver's is the flower XGIMI's «Заставки» tile has.
     Appearance(R.string.appearance, Icons.Outlined.Palette),
     Home(R.string.home_screen, Icons.Outlined.Home),
-    Remote(R.string.remote_buttons, Icons.Outlined.SettingsRemote),
     Screensaver(R.string.screensaver, Icons.Outlined.FilterVintage),
     About(R.string.about_beam, Icons.Outlined.Info);
 
@@ -256,21 +254,26 @@ private fun QuickPanel(
     // Where XGIMI's panel has its brightness bar.
     WideTile(Icons.Outlined.Tune, tr(R.string.tile_quick), Modifier.fillMaxWidth().height(64.dp).focusRequester(firstFocus), chevron = true) { onXgimi(true) }
     Spacer(Modifier.height(TileGap + 6.dp))
-    listOf(Page.Appearance to Page.Home, Page.Remote to Page.Screensaver).forEach { (a, b) ->
-        Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
-            listOf(a, b).forEach { p ->
-                WideTile(p.icon, p.title, Modifier.weight(1f).height(TileHeight).focusRequester(pageFocus.getValue(p))) { onPage(p) }
-            }
-        }
-        Spacer(Modifier.height(TileGap))
-    }
     // No quick switches: the theme and sounds follow XGIMI's own settings, and the rest are set
-    // once and live in their sections. «О Beam» closes the panel, wide like the pill above.
-    WideTile(
-        Page.About.icon, Page.About.title,
-        Modifier.fillMaxWidth().height(64.dp).focusRequester(pageFocus.getValue(Page.About)).updateDot(),
-        chevron = true,
-    ) { onPage(Page.About) }
+    // once and live in their sections. The remote's app keys are assigned in XGIMI's settings
+    // (Общие → Кнопки пульта, tonisaf's module). «О Beam» closes the panel: its chevron says so.
+    Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+        listOf(Page.Appearance, Page.Home).forEach { p ->
+            WideTile(p.icon, p.title, Modifier.weight(1f).height(TileHeight).focusRequester(pageFocus.getValue(p))) { onPage(p) }
+        }
+    }
+    Spacer(Modifier.height(TileGap))
+    Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+        WideTile(
+            Page.Screensaver.icon, Page.Screensaver.title,
+            Modifier.weight(1f).height(TileHeight).focusRequester(pageFocus.getValue(Page.Screensaver)),
+        ) { onPage(Page.Screensaver) }
+        WideTile(
+            Page.About.icon, Page.About.title,
+            Modifier.weight(1f).height(TileHeight).focusRequester(pageFocus.getValue(Page.About)).updateDot(),
+            chevron = true,
+        ) { onPage(Page.About) }
+    }
 }
 
 /**
@@ -394,7 +397,6 @@ private fun Content(section: Page, onDismiss: () -> Unit) {
     when (section) {
         Page.Appearance -> AppearancePage(onDismiss)
         Page.Home -> HomePage()
-        Page.Remote -> RemoteButtonsSection()
         // XGIMI's screensaver is set up in its scenes app; others in their own app.
         Page.Screensaver -> ScreensaverPage(onSetup = { component ->
             onDismiss()

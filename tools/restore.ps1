@@ -13,14 +13,13 @@
   -Locale, -TimeZone and -BluetoothName default to LOCALE, TIMEZONE and BT_NAME from local.env, else to
   ru-RU, Europe/Moscow and "XGIMI Play 6".
   -Revert enables everything section 2 disabled (stock launcher first), puts the keyboard back, takes
-  Beam out of the accessibility services and uninstalls Beam and the remote-button stubs. The language,
+  Beam out of the accessibility services and uninstalls Beam and old remote-button stubs. The language,
   time zone and Bluetooth name are not changed back: their earlier values are not known.
   -Device and -Adb default to DEVICE and ADB from local.env (KEY=value lines, git-ignored) or the
   environment; adb itself defaults to the one on PATH.
 
   Beam is taken from -Apk, else app\build\outputs\apk\release\app-release.apk, else tools\apks\app-release.apk.
-  Remote-button stubs: stub\build\outputs\apk\*\release\ or tools\apks\.
-  Whatever of these is missing is downloaded from the latest GitHub release into tools\apks\ and checked against
+  If none is there, it is downloaded from the latest GitHub release into tools\apks\ and checked against
   the release's SHA256SUMS.txt (-Release v0.2 picks another release, -NoDownload turns this off).
   Put extra APKs to install (SmartTube, LeanKey, ...) into tools\apks\.
   Split bundles (.apks/.apkm) are not handled here; install those by hand.
@@ -153,7 +152,7 @@ $beamPackage = "com.home.tiles"
 $beamPanel = "com.home.tiles/com.home.tiles.PanelOverlay"
 $beamPanelShort = "com.home.tiles/.PanelOverlay"
 $ime = "org.liskovsoft.androidtv.rukeyboard/com.liskovsoft.leankeyboard.ime.LeanbackImeService"
-# Package names the :stub module takes over (the firmware starts these apps for the remote's keys).
+# Package names the remote-button stubs of earlier releases took over (the firmware starts these apps for the remote's keys).
 $stubPackages = @("com.cibn.tv", "com.ktcp.tvvideo", "com.gitvjimi.video", "com.hunantv.license")
 # -AerialViews: a pinned release, so its checksum can be checked; and the firmware's own screensaver.
 $aerialPackage = "com.neilturner.aerialviews"
@@ -280,16 +279,10 @@ function Get-ReleaseFiles([string[]]$Names) {
 
 $localBeam = @($Apk, (Join-Path $Root "app\build\outputs\apk\release\app-release.apk"), (Join-Path $apkDir "app-release.apk")) |
     Where-Object { $_ -and (Test-Path $_) }
-$haveStubs = (@(Get-ChildItem (Join-Path $Root "stub\build\outputs\apk") -Recurse -Filter *.apk -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match '[\\/]release[\\/]' }).Count -gt 0) -or
-    (@(Get-ChildItem $apkDir -Filter "stub-button*-release.apk" -ErrorAction SilentlyContinue).Count -gt 0)
-if (-not $NoDownload -and (-not $localBeam -or -not $haveStubs)) {
-    Step "Скачивание недостающих APK из релиза GitHub" {
-        $want = @()
-        if (-not $localBeam) { $want += "app-release.apk" }
-        if (-not $haveStubs) { $want += 1..4 | ForEach-Object { "stub-button$_-release.apk" } }
-        $tag = Get-ReleaseFiles $want
-        Write-Host "      релиз $tag в tools\apks\: $($want -join ', ')" -ForegroundColor DarkGray
+if (-not $NoDownload -and -not $localBeam) {
+    Step "Скачивание Beam из релиза GitHub" {
+        $tag = Get-ReleaseFiles @("app-release.apk")
+        Write-Host "      релиз $tag в tools\apks\" -ForegroundColor DarkGray
     }
 }
 $beamApk = @(
@@ -299,7 +292,7 @@ $beamApk = @(
 ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 Step "Лаунчер Beam" {
     if (-not $beamApk) {
-        throw "нет APK Beam: скачайте со страницы Releases, соберите (./gradlew :app:assembleRelease :stub:assembleRelease), положите app-release.apk в tools\apks\ или укажите -Apk"
+        throw "нет APK Beam: скачайте со страницы Releases, соберите (./gradlew :app:assembleRelease), положите app-release.apk в tools\apks\ или укажите -Apk"
     }
     $out = Adb install -r $beamApk
     # A Beam signed with another key (the original one, say) can't be updated in place. Android
@@ -335,44 +328,30 @@ if (-not (Installed "com.home.tiles")) {
     Write-Host "Beam не установлен: дальше не продолжаю, чтобы не остаться без домашнего экрана." -ForegroundColor Red
     exit 1
 }
-# Release stubs only (a debug build next to them would install over them in random order).
-$stubs = @(Get-ChildItem (Join-Path $Root "stub\build\outputs\apk") -Recurse -Filter *.apk -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match '[\\/]release[\\/]' })
-# Installs an APK over whatever is there. A remote-button stub signed with another key (the original
-# Beam's) is replaced; a newer version already installed is kept.
-function Install-Apk([string]$File) {
-    $out = Adb install -r $File
-    if ($out -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match') {
-        $package = $stubFiles[[IO.Path]::GetFileName($File) -replace '^(stub-button\d).*$', '$1']
-        if ($package -and ((Adb shell dumpsys package $package) -match 'com\.home\.tiles\.permission\.REMOTE_BUTTON')) {
-            Write-Host "      заглушка $package с другой подписью: заменяю" -ForegroundColor Yellow
-            Expect (Adb shell pm uninstall $package) "Success"
-            $out = Adb install -r $File
+# The remote-button stubs of earlier releases: tonisaf's module (XGIMI settings → Общие → Кнопки
+# пульта) assigns the keys now, and this Beam has nothing for a stub to call any more. Only stubs go:
+# a real app with the same package name stays.
+foreach ($pkg in $stubPackages) {
+    $p = $pkg
+    if ((Installed $p) -and ((Adb shell dumpsys package $p) -match 'com\.home\.tiles\.permission\.REMOTE_BUTTON')) {
+        Step "Старая заглушка кнопки пульта ($p): удалить" { Expect (Adb shell pm uninstall $p) "Success" }
+    }
+}
+# Extra APKs (LeanKey, SmartTube, ...). A newer version already installed is kept. Stub APKs left
+# in the folder by earlier releases are skipped.
+if (Test-Path $apkDir) {
+    Get-ChildItem $apkDir -Filter *.apk | Where-Object { $_.FullName -ne $beamApk -and $_.Name -notmatch '^stub-button' } | ForEach-Object {
+        $file = $_.FullName
+        Step "APK $($_.Name)" {
+            $out = Adb install -r $file
+            if ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE') {
+                Write-Host "      уже установлена более новая версия: оставляю её" -ForegroundColor DarkGray
+                return
+            }
+            Expect $out "Success"
         }
     }
-    if ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE') {
-        Write-Host "      уже установлена более новая версия: оставляю её" -ForegroundColor DarkGray
-        return
-    }
-    Expect $out "Success"
 }
-# Which stub APK is which package (stub/build.gradle.kts), for replacing the original Beam's stubs.
-$stubFiles = @{
-    "stub-button1" = "com.cibn.tv"; "stub-button2" = "com.ktcp.tvvideo"
-    "stub-button3" = "com.gitvjimi.video"; "stub-button4" = "com.hunantv.license"
-}
-foreach ($stub in $stubs) {
-    $file = $stub.FullName
-    Step "Заглушка кнопки пульта $($stub.BaseName)" { Install-Apk $file }
-}
-if (Test-Path $apkDir) {
-    Get-ChildItem $apkDir -Filter *.apk | Where-Object { $_.FullName -ne $beamApk } | ForEach-Object {
-        $file = $_.FullName
-        $label = if ($_.Name -match '^stub-button(\d)') { "Заглушка кнопки пульта $($Matches[1])" } else { "APK $($_.Name)" }
-        Step $label { Install-Apk $file }
-    }
-}
-
 Write-Host "`n2. Отключение китайских и лишних приложений" -ForegroundColor Cyan
 # The stock launcher is disabled only once Beam is the home screen (section 4).
 foreach ($pkg in $disable.Keys) {
@@ -418,7 +397,7 @@ Step "Стоковый лаунчер XGIMI ($stockLauncher)" {
 }
 
 Write-Host "`n5. Спец. возможности (прошивка сбрасывает их при загрузке, лаунчер потом возвращает сам)" -ForegroundColor Cyan
-Step "Панель Beam (голосовая кнопка и кнопки пульта)" {
+Step "Панель Beam (голосовая кнопка)" {
     # Added to the services already enabled (Key Mapper, ...), not replacing them.
     $component = $beamPanel
     $current = Adb shell settings get secure enabled_accessibility_services

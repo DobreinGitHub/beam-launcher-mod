@@ -293,51 +293,6 @@ private fun ChannelToggle(channel: TvChannel, checked: Boolean, isNew: Boolean, 
     }
 }
 
-/** Assigns the remote's four shortcut keys; left/right cycles the action, like XGIMI's selectors. */
-@Composable
-internal fun RemoteButtonsSection() {
-    val context = LocalContext.current
-    val choices by produceState(listOf("" to tr(R.string.nothing), RemoteButtons.PANEL to tr(R.string.this_panel), RemoteButtons.HOME to tr(R.string.home_screen))) {
-        val apps = withContext(Dispatchers.IO) { AppRepository(context).loadApps().sortedBy { it.label.lowercase() } }
-        value = value + apps.map { RemoteButtons.app(it.pkg) to it.label }
-    }
-    val requesters = remember { List(4) { FocusRequester() } }
-    val pressed = RemoteButtons.lastPressed.intValue
-    LaunchedEffect(pressed) {
-        if (pressed >= 0) {
-            runCatching { requesters[pressed].requestFocus() }
-            RemoteButtons.lastPressed.intValue = -1
-        }
-    }
-
-    Section(tr(R.string.app_buttons))
-    T(tr(R.string.app_buttons_hint), 14.sp, color = ScrimDim, maxLines = 3)
-    for (i in 0..3) {
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth()) {
-            val current = RemoteButtons.actions[i]
-            // An assignment that isn't in the list yet (the apps are still loading) or any more
-            // (the app was removed) is shown as it is, and ← → step from it: not from "Ничего".
-            val options = if (choices.any { it.first == current }) choices else choices + (current to assignedLabel(context, current))
-            val index = options.indexOfFirst { it.first == current }
-            Selector(
-                label = tr(R.string.button_n, i + 1),
-                value = options[index].second,
-                modifier = Modifier.weight(1f).focusRequester(requesters[i]),
-            ) { delta ->
-                RemoteButtons.set(i, options[(index + delta).mod(options.size)].first)
-            }
-        }
-    }
-}
-
-/** What a button assigned to [action] is called: the app's label, or its package if it is gone. */
-private fun assignedLabel(context: android.content.Context, action: String): String {
-    val pkg = RemoteButtons.packageOf(action) ?: return tr(R.string.nothing)
-    val pm = context.packageManager
-    return runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(tr(R.string.pkg_missing, pkg))
-}
-
 /** XMB colour (by month like the PS3, or fixed) and the animation switch. */
 @Composable
 private fun XmbOptions() {

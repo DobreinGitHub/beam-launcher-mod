@@ -57,7 +57,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         repo = AppRepository(this)
         LauncherSettings.init(this)
-        RemoteButtons.init(this)
         AccessibilityGuard.ensure(this)
         Sounds.init(this)
         Hdmi.migrateBootSource(this)

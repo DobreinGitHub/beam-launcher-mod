@@ -31,10 +31,6 @@
     <string name="usb_size">USB · %1$d GB</string>
     <string name="second_row">Channel rows</string>
     <string name="channel_rows_hint">Change the order on the home screen: hold OK on a card → "Move row"</string>
-    <string name="nothing">Nothing</string>
-    <string name="this_panel">Settings</string>
-    <string name="app_buttons">App buttons</string>
-    <string name="app_buttons_hint">Press a button on the remote to jump to it. ← → — action</string>
     <string name="color_by_month">Colour by month</string>
     <string name="background_animation">Background animation</string>
     <string name="ambient_tint">Background in app colour</string>
@@ -49,7 +45,6 @@
     <string name="start_after">Start after</string>
     <string name="idle">Idle time</string>
     <string name="no_write_settings">No permission to change the time (appops WRITE_SETTINGS)</string>
-    <string name="remote_buttons">Remote buttons</string>
     <string name="battery_low">Low battery: %1$d%%. Plug in the adapter</string>
     <string name="battery_left_hm">≈ %1$dh %2$02dm</string>
     <string name="battery_left_m">≈ %1$d min</string>
@@ -110,8 +105,6 @@
     <string name="apps_count">Apps: %1$s</string>
     <string name="mic_unavailable">Microphone unavailable: %1$s</string>
     <string name="mic_recording">Recording… speak now\nlevel: %1$s</string>
-    <string name="button_n">Button %1$s</string>
-    <string name="pkg_missing">%1$s (not installed)</string>
     <string name="didnt_understand">Didn\'t understand: “%1$s”</string>
     <string name="language">Language</string>
     <string name="language_system">System default</string>

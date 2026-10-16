@@ -1,6 +1,6 @@
 ﻿<#
   Packs the one-click installer for a release: Beam-Setup-<tag>.zip with Установить.cmd, tools\setup.ps1,
-  tools\restore.ps1 and this release's APKs (so Beam itself needs no download).
+  tools\restore.ps1 and this release's Beam APK (so it needs no download).
     .\tools\pack-setup.ps1 -ApkDir .publish\release-1.0-ru-v2 -Tag v1.0-ru-v2
   The APKs are checked against SHA256SUMS.txt in -ApkDir. The ZIP goes to build\setup\.
 #>
@@ -10,7 +10,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$names = @("app-release.apk") + (1..4 | ForEach-Object { "stub-button$_-release.apk" })
+$names = @("app-release.apk")
 $sums = @{}
 foreach ($line in Get-Content (Join-Path $ApkDir "SHA256SUMS.txt")) {
     if ($line -match '^([0-9a-fA-F]{64})\s+\*?(\S+)\s*$') { $sums[$Matches[2]] = $Matches[1].ToLower() }

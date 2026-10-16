@@ -14,4 +14,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = "TileLauncher"
 include(":app")
-include(":stub")

@@ -80,6 +80,13 @@ internal fun glowOf(bitmap: Bitmap): Color {
     return if (color.luminance() < 0.12f) lerp(color, Color.White, 0.5f) else color
 }
 
+/**
+ * The remote-button stubs of earlier releases (they took the package names the firmware starts for
+ * the remote's four app keys). The installer removes them now that tonisaf's module assigns the keys;
+ * where one is left, it is not an app to show.
+ */
+private val oldStubPackages = setOf("com.cibn.tv", "com.ktcp.tvvideo", "com.gitvjimi.video", "com.hunantv.license")
+
 class AppRepository(private val context: Context) {
     private val pm = context.packageManager
     private val prefs = context.getSharedPreferences("tiles", Context.MODE_PRIVATE)
@@ -187,7 +194,7 @@ class AppRepository(private val context: Context) {
             val intent = Intent(Intent.ACTION_MAIN).addCategory(category)
             for (info in pm.queryIntentActivities(intent, 0)) {
                 val activity = info.activityInfo
-                if (activity.packageName == context.packageName || activity.packageName in RemoteButtons.stubPackages) continue
+                if (activity.packageName == context.packageName || activity.packageName in oldStubPackages) continue
                 found.putIfAbsent(
                     activity.packageName,
                     ComponentName(activity.packageName, activity.name) to info.loadLabel(pm).toString(),
