@@ -7,6 +7,8 @@
         android:name="com.home.tiles.permission.OPEN_SETTINGS"
         android:protectionLevel="signature" />
 
+    <!-- «Память»: closing apps idle in the background. -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <!-- «Кнопки пульта»: the button that removes tonisaf's old module, which holds the same keys. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission

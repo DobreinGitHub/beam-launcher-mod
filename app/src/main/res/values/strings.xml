@@ -140,4 +140,13 @@
     <string name="stock_source">Прошивка: выбор источника</string>
     <string name="pkg_missing">%1$s (нет на устройстве)</string>
     <string name="remote_module_remove">Удалить модуль «Кнопки пульта»</string>
-    <string name="remote_module">Старый модуль tonisaf занимает эти кнопки: пока он стоит, назначения здесь не работают</string></resources>
+    <string name="remote_module">Старый модуль tonisaf занимает эти кнопки: пока он стоит, назначения здесь не работают</string>    <string name="tile_memory">Память</string>
+    <string name="memory_free">Свободно %1$s</string>
+    <string name="memory_clearing">Очистка…</string>
+    <string name="memory_freed">Освобождено %1$s</string>
+    <string name="memory_nothing">Нечего очищать</string>
+    <string name="megabytes">%1$d МБ</string>
+    <string name="tile_fast">Быстрый режим</string>
+    <string name="fast_on">Без анимаций</string>
+    <string name="fast_off">С анимациями</string>
+    <string name="fast_denied">Нет разрешения</string></resources>

@@ -1,0 +1,67 @@
+package com.home.tiles
+
+import android.app.ActivityManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.provider.Settings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+
+/**
+ * Memory: what is free, and clearing it by closing the apps that sit idle in the background.
+ * The projector has 1.3 GB and the firmware marks it low-RAM; with background apps kept (see
+ * restore.ps1 -KeepBackgroundApps) a few of them fill it up.
+ *
+ * Android's own killBackgroundProcesses does the closing: it ends only processes the system counts
+ * as background (cached, plain services), the same ones it ends itself when memory runs out. The app
+ * on screen, a playing player, a VPN (foreground services) and the input method stay. Only apps the
+ * user installed: XGIMI's own run the projector.
+ */
+object Memory {
+    fun availableMb(context: Context): Long = info(context).availMem / MB
+    fun totalMb(context: Context): Long = info(context).totalMem / MB
+
+    private fun info(context: Context) =
+        ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+
+    /** Closes the idle background apps; returns how many megabytes that freed. */
+    suspend fun clear(context: Context): Long = withContext(Dispatchers.IO) {
+        val manager = context.getSystemService(ActivityManager::class.java)
+        val before = availableMb(context)
+        val keyboard = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+            ?.let { ComponentName.unflattenFromString(it)?.packageName }
+        context.packageManager.getInstalledApplications(0)
+            .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 }
+            .map { it.packageName }
+            .filter { it != context.packageName && it != keyboard && !it.startsWith("com.beam.") }
+            .forEach { runCatching { manager.killBackgroundProcesses(it) } }
+        // The kernel takes a moment to hand the memory back.
+        delay(800)
+        (availableMb(context) - before).coerceAtLeast(0)
+    }
+
+    private const val MB = 1024L * 1024L
+}
+
+/**
+ * Fast mode: no window-open and transition animations, so apps open and close at once. The third
+ * scale (animator duration) is left alone: it also drives every app's own interface animations,
+ * Beam Mod's included, and turning it off makes them jump rather than feel faster.
+ * Needs WRITE_SECURE_SETTINGS, which the installer grants.
+ */
+object FastMode {
+    fun on(context: Context): Boolean {
+        val resolver = context.contentResolver
+        return Settings.Global.getFloat(resolver, Settings.Global.WINDOW_ANIMATION_SCALE, 1f) == 0f &&
+            Settings.Global.getFloat(resolver, Settings.Global.TRANSITION_ANIMATION_SCALE, 1f) == 0f
+    }
+
+    /** Returns false if the permission is missing. */
+    fun set(context: Context, on: Boolean): Boolean = runCatching {
+        val scale = if (on) 0f else 1f
+        Settings.Global.putFloat(context.contentResolver, Settings.Global.WINDOW_ANIMATION_SCALE, scale)
+        Settings.Global.putFloat(context.contentResolver, Settings.Global.TRANSITION_ANIMATION_SCALE, scale)
+    }.isSuccess
+}

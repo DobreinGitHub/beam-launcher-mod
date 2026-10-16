@@ -1,5 +1,11 @@
 package com.home.tiles
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.runtime.setValue
 import androidx.annotation.StringRes
 import android.view.KeyEvent as AndroidKeyEvent
@@ -260,8 +266,14 @@ private fun QuickPanel(
     // Where XGIMI's panel has its brightness bar.
     WideTile(Icons.Outlined.Tune, tr(R.string.tile_quick), Modifier.fillMaxWidth().height(64.dp).focusRequester(firstFocus), chevron = true) { onXgimi(true) }
     Spacer(Modifier.height(TileGap + 6.dp))
-    // No quick switches: the theme and sounds follow XGIMI's own settings, and the rest are set
-    // once and live in their sections. «О Beam Mod» wide, like the pill above.
+    // Quick tiles, where XGIMI's panel has its own: memory and fast mode. The theme and sounds follow
+    // XGIMI's own settings, and the rest are set once and live in their sections.
+    Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+        MemoryTile(Modifier.weight(1f))
+        FastModeTile(Modifier.weight(1f))
+    }
+    Spacer(Modifier.height(TileGap))
+    // «О Beam Mod» wide, like the pill above.
     listOf(Page.Appearance to Page.Home, Page.Remote to Page.Screensaver).forEach { (a, b) ->
         Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
             listOf(a, b).forEach { p ->
@@ -330,8 +342,96 @@ private fun Header(title: String, under: @Composable () -> Unit) {
     }
 }
 
-/** A tile with an icon and its name side by side, like XGIMI's wide tiles. Focused: white. */
+/**
+ * «Память»: free memory, updated while the panel is open; OK closes the apps idle in the background
+ * and says how much that freed (see [Memory]).
+ */
 @Composable
+private fun MemoryTile(modifier: Modifier) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var free by remember { mutableLongStateOf(Memory.availableMb(context)) }
+    var busy by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            free = Memory.availableMb(context)
+            delay(2_000)
+        }
+    }
+    LaunchedEffect(note) {
+        if (note == null) return@LaunchedEffect
+        delay(3_000)
+        note = null
+    }
+    val status = when {
+        busy -> tr(R.string.memory_clearing)
+        note != null -> note!!
+        else -> tr(R.string.memory_free, tr(R.string.megabytes, free))
+    }
+    StatusTile(Icons.Outlined.Memory, tr(R.string.tile_memory), status, modifier) {
+        if (busy) return@StatusTile
+        busy = true
+        scope.launch {
+            val freed = Memory.clear(context)
+            free = Memory.availableMb(context)
+            busy = false
+            note = if (freed >= 10) tr(R.string.memory_freed, tr(R.string.megabytes, freed)) else tr(R.string.memory_nothing)
+        }
+    }
+}
+
+/** «Быстрый режим»: window animations off or back on (see [FastMode]); on, the tile is filled. */
+@Composable
+private fun FastModeTile(modifier: Modifier) {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(FastMode.on(context)) }
+    var denied by remember { mutableStateOf(false) }
+    val status = when {
+        denied -> tr(R.string.fast_denied)
+        on -> tr(R.string.fast_on)
+        else -> tr(R.string.fast_off)
+    }
+    StatusTile(Icons.Outlined.Bolt, tr(R.string.tile_fast), status, modifier, on = on) {
+        if (FastMode.set(context, !on)) on = !on else denied = true
+    }
+}
+
+/**
+ * A wide tile with a status line under its name, for the quick tiles. [on]: filled with the
+ * accent, as XGIMI fills a switched-on tile.
+ */
+@Composable
+private fun StatusTile(icon: ImageVector, title: String, status: String, modifier: Modifier, on: Boolean = false, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val fg = when {
+        focused -> FocusText
+        on -> OnText
+        else -> PanelText
+    }
+    val dim = when {
+        focused -> FocusText.copy(alpha = 0.7f)
+        on -> OnText.copy(alpha = 0.75f)
+        else -> PanelDim
+    }
+    Row(
+        modifier
+            .height(TileHeight)
+            .background(if (focused) FocusBg else if (on) Accent else CardBg, TileShape)
+            .panelControl({ focused = it }, onClick)
+            .padding(start = 14.dp, end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(icon, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(fg))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            T(title, 16.sp, color = fg, maxLines = 2)
+            T(status, 14.sp, Modifier.padding(top = 2.dp), color = dim, maxLines = 2)
+        }
+    }
+}
+
+/** A tile with an icon and its name side by side, like XGIMI's wide tiles. Focused: white. */@Composable
 private fun WideTile(icon: ImageVector, title: String, modifier: Modifier, chevron: Boolean = false, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val fg = if (focused) FocusText else PanelText

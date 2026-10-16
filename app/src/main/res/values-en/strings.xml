@@ -140,4 +140,13 @@
     <string name="stock_source">Firmware: input source list</string>
     <string name="pkg_missing">%1$s (not installed)</string>
     <string name="remote_module_remove">Remove the «Кнопки пульта» module</string>
-    <string name="remote_module">tonisaf\'s old module holds these buttons: while it is installed, the choices here don\'t work</string></resources>
+    <string name="remote_module">tonisaf\'s old module holds these buttons: while it is installed, the choices here don\'t work</string>    <string name="tile_memory">Memory</string>
+    <string name="memory_free">%1$s free</string>
+    <string name="memory_clearing">Clearing…</string>
+    <string name="memory_freed">%1$s freed</string>
+    <string name="memory_nothing">Nothing to clear</string>
+    <string name="megabytes">%1$d MB</string>
+    <string name="tile_fast">Fast mode</string>
+    <string name="fast_on">No animations</string>
+    <string name="fast_off">With animations</string>
+    <string name="fast_denied">No permission</string></resources>
