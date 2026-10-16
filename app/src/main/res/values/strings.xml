@@ -38,7 +38,7 @@
     <string name="listening">🎤  Слушаю…</string>
     <string name="voice_model_missing">Голосовая модель не установлена</string>
     <string name="didnt_catch">Не расслышал</string>
-    <string name="about_beam">О Beam</string>
+    <string name="about_beam">О Beam Mod</string>
     <string name="version">Версия</string>
     <string name="made_by">Автор</string>
     <string name="modified_by">Модификация</string>
@@ -65,7 +65,7 @@
     <string name="update_install">Установить</string>
     <string name="update_checked_at">Проверено %1$s</string>
     <string name="update_auto">Проверять раз в день</string>
-    <string name="update_needs_grant">Beam пока не может устанавливать обновления. Разрешите один раз с компьютера: adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow</string>
+    <string name="update_needs_grant">Beam Mod пока не может устанавливать обновления. Разрешите один раз с компьютера: adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow</string>
     <string name="screensaver">Заставка</string>
     <string name="screensaver_which">Показывать</string>
     <string name="screensaver_setup">Настроить заставку</string>
@@ -109,8 +109,8 @@
     <string name="language">Язык</string>
     <string name="language_system">Как в системе</string>
     <string name="bg_xmb">XMB</string>
-    <string name="app_name">Beam</string>
-    <string name="panel_overlay_description">Открывает панель Beam голосовой кнопкой пульта поверх любого приложения.</string>
+    <string name="app_name">Beam Mod</string>
+    <string name="panel_overlay_description">Открывает панель Beam Mod голосовой кнопкой пульта поверх любого приложения.</string>
     <string name="rows_customize">Настроить ряды</string>
     <string name="rows_new_one">Новый ряд: %1$s</string>
     <string name="rows_new_many">Новых рядов: %1$d</string>

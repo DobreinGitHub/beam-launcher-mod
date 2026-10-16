@@ -1,7 +1,7 @@
 ﻿<#
-  Packs the one-click installer for a release: Beam-Setup-<tag>.zip with Установить.cmd, tools\setup.ps1,
+  Packs the one-click installer for a release: BeamMod-Setup-<version>.zip with Установить.cmd, tools\setup.ps1,
   tools\restore.ps1 and this release's Beam APK (so it needs no download).
-    .\tools\pack-setup.ps1 -ApkDir .publish\release-1.0-ru-v2 -Tag v1.0-ru-v2
+    .\tools\pack-setup.ps1 -ApkDir .publish\release-1.1 -Tag v1.1
   The APKs are checked against SHA256SUMS.txt in -ApkDir. The ZIP goes to build\setup\.
 #>
 param(
@@ -16,7 +16,7 @@ foreach ($line in Get-Content (Join-Path $ApkDir "SHA256SUMS.txt")) {
     if ($line -match '^([0-9a-fA-F]{64})\s+\*?(\S+)\s*$') { $sums[$Matches[2]] = $Matches[1].ToLower() }
 }
 $out = Join-Path $Root "build\setup"
-$stage = Join-Path $out "Beam-Setup-$Tag"
+$stage = Join-Path $out ("BeamMod-Setup-" + $Tag.TrimStart("v"))
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage "tools\apks") | Out-Null
 foreach ($name in $names) {
@@ -27,7 +27,7 @@ foreach ($name in $names) {
 Copy-Item (Join-Path $PSScriptRoot "setup.ps1"), (Join-Path $PSScriptRoot "restore.ps1") (Join-Path $stage "tools")
 Copy-Item (Join-Path $PSScriptRoot "Установить.cmd") $stage
 Copy-Item (Join-Path $Root "LICENSE") $stage
-$zip = Join-Path $out "Beam-Setup-$Tag.zip"
+$zip = "$stage.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 # The folder itself goes into the ZIP, so "Extract all" gives one tidy folder.

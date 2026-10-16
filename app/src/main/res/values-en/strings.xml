@@ -38,7 +38,7 @@
     <string name="listening">🎤  Listening…</string>
     <string name="voice_model_missing">Voice model is not installed</string>
     <string name="didnt_catch">Didn\'t catch that</string>
-    <string name="about_beam">About Beam</string>
+    <string name="about_beam">About Beam Mod</string>
     <string name="version">Version</string>
     <string name="made_by">Author</string>
     <string name="modified_by">Modified by</string>
@@ -65,7 +65,7 @@
     <string name="update_install">Install</string>
     <string name="update_checked_at">Checked %1$s</string>
     <string name="update_auto">Check once a day</string>
-    <string name="update_needs_grant">Beam can\'t install updates yet. Allow it once from a computer: adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow</string>
+    <string name="update_needs_grant">Beam Mod can\'t install updates yet. Allow it once from a computer: adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow</string>
     <string name="screensaver">Screensaver</string>
     <string name="screensaver_which">Show</string>
     <string name="screensaver_setup">Set up the screensaver</string>
@@ -109,8 +109,8 @@
     <string name="language">Language</string>
     <string name="language_system">System default</string>
     <string name="bg_xmb">XMB</string>
-    <string name="app_name">Beam</string>
-    <string name="panel_overlay_description">Opens the Beam panel with the remote\'s voice button, over any app.</string>
+    <string name="app_name">Beam Mod</string>
+    <string name="panel_overlay_description">Opens the Beam Mod panel with the remote\'s voice button, over any app.</string>
     <string name="rows_customize">Customize rows</string>
     <string name="rows_new_one">New row: %1$s</string>
     <string name="rows_new_many">New rows: %1$d</string>

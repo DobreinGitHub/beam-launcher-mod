@@ -256,7 +256,7 @@ private fun QuickPanel(
     Spacer(Modifier.height(TileGap + 6.dp))
     // No quick switches: the theme and sounds follow XGIMI's own settings, and the rest are set
     // once and live in their sections. The remote's app keys are assigned in XGIMI's settings
-    // (Общие → Кнопки пульта, tonisaf's module). «О Beam» closes the panel: its chevron says so.
+    // (Общие → Кнопки пульта, tonisaf's module).
     Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
         listOf(Page.Appearance, Page.Home).forEach { p ->
             WideTile(p.icon, p.title, Modifier.weight(1f).height(TileHeight).focusRequester(pageFocus.getValue(p))) { onPage(p) }
@@ -271,7 +271,6 @@ private fun QuickPanel(
         WideTile(
             Page.About.icon, Page.About.title,
             Modifier.weight(1f).height(TileHeight).focusRequester(pageFocus.getValue(Page.About)).updateDot(),
-            chevron = true,
         ) { onPage(Page.About) }
     }
 }

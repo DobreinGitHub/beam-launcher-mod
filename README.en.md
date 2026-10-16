@@ -1,6 +1,6 @@
-<p align="center"><img src="docs/beam_logo.png" width="128" height="128" alt="Beam"></p>
+<p align="center"><img src="docs/beam_logo.png" width="128" height="128" alt="Beam Mod"></p>
 
-# Beam
+# Beam Mod
 
 A home screen for the **XGIMI Play 6** projector (Android 11), written in Jetpack Compose. It replaces
 XGIMI's stock shell with its Chinese services and ads. The firmware itself is left alone: everything is
@@ -8,8 +8,7 @@ installed and rolled back over adb. The interface is in Russian and English. [Р
 
 > An unofficial project, not affiliated with XGIMI. Made and tested only on the XGIMI Play 6.
 
-A modification by **Dobrein** of [tonisaf/beam-launcher](https://github.com/tonisaf/beam-launcher)
-(by tonisaf). Version and credits are in the launcher itself: settings → "About Beam".
+A modification of the [Beam](https://github.com/tonisaf/beam-launcher) launcher (by tonisaf) by **Dobrein**. Version and credits are in the launcher itself: settings → "About Beam Mod".
 
 ## What it does
 
@@ -35,16 +34,16 @@ real drain), warnings at 15% and 5% over any app.
 - The theme follows XGIMI's Theme style (and its Auto); the light one in XGIMI's colours. Or pin your own.
 - Backgrounds as cards, applied as soon as one is selected; an animated PS3 XMB style background.
 - Navigation sounds are the same switch as XGIMI's key press sound.
-- The interface language is chosen in Beam: the firmware refuses English as the system language.
+- The interface language is chosen in Beam Mod: the firmware refuses English as the system language.
 
 **Settings**: a page in the style of XGIMI's quick panel, over any app on the remote's voice button:
-appearance, home screen, screensaver (XGIMI's or Aerial Views), About Beam. XGIMI's
+appearance, home screen, screensaver (XGIMI's or Aerial Views), About Beam Mod. XGIMI's
 panel and settings open from there too; only one of the panels is ever open.
 
 **Remote buttons**: the four Chinese video service buttons can be assigned to any app or action: in XGIMI's
 settings → General → «Кнопки пульта» (tonisaf's module, installed by the installer).
 
-**Updates**: About Beam checks this build's releases once a day, verifies the SHA-256, signature and
+**Updates**: About Beam Mod checks this build's releases once a day, verifies the SHA-256, signature and
 version, and hands the APK to Android's installer (code ported from Beam 1.0.1).
 
 ## Differences from Beam 1.0.1 (tonisaf)
@@ -69,15 +68,15 @@ version.
 
 **Coming from the original Beam.** This build is signed with another key and doesn't install over the
 original. The installer brings the stock launcher back, removes the old Beam and its button stubs and
-installs this build; Beam's settings start over.
+installs this build; Beam Mod's settings start over.
 
 ## Screenshots
 
 The screenshots show the Russian interface.
 
-| Home screen | Beam settings panel |
+| Home screen | Beam Mod settings panel |
 |---|---|
-| ![Home screen](docs/screenshots/home.jpg) | ![Beam settings panel](docs/screenshots/panel.jpg) |
+| ![Home screen](docs/screenshots/home.jpg) | ![Beam Mod settings panel](docs/screenshots/panel.jpg) |
 
 | Appearance | Moving a tile |
 |---|---|
@@ -110,7 +109,7 @@ The stock settings have no ADB switch; the SystemUI Tuner app turns it on:
 
 ### Step 2. Run the installer
 
-1. Download `Beam-Setup-….zip` from the [latest release](https://github.com/DobreinGitHub/beam-launcher-mod/releases/latest)
+1. Download `BeamMod-Setup-….zip` from the [latest release](https://github.com/DobreinGitHub/beam-launcher-mod/releases/latest)
    and unpack it (right-click → "Extract all"). Turn off any VPN on the computer.
 2. Run **«Установить.cmd»**. If Windows says "Windows protected your PC": "More info" → "Run anyway".
 3. Enter the projector's IP. A debugging request appears on the projector: tick "Always allow" and press OK.
@@ -126,24 +125,24 @@ The stock settings have no ADB switch; the SystemUI Tuner app turns it on:
      (yes by default);
    - **time zone** — Europe/Moscow by default.
 5. Wait for «Всё готово». The projector restarts by itself a few times: don't turn it off or close the
-   window. At the end it starts in Beam.
+   window. At the end it starts in Beam Mod.
 
 The installer downloads adb (if there is none), the russifier (about 190 MB) and the LeanKey keyboard,
-and checks them against their SHA-256. Beam is already in the archive.
+and checks them against their SHA-256. Beam Mod is already in the archive.
 What changes on the projector: [below](#what-restoreps1-changes). It can be run again safely.
 
 ### Step 3. Check
 
-Press Home: Beam should open. The remote's voice button opens Beam's settings, the settings button
+Press Home: Beam Mod should open. The remote's voice button opens Beam Mod's settings, the settings button
 XGIMI's panel. The remote's four app buttons are assigned in XGIMI's settings → General → «Кнопки пульта».
 
 ### If something doesn't work
 
 - **The projector doesn't answer:** same network, VPN off, the right IP. After the projector sleeps,
   ADB sometimes turns off: turn it on again in SystemUI Tuner, the installer waits.
-- **The russifier says the firmware isn't supported:** it works only with firmware v1.7.116. Beam
+- **The russifier says the firmware isn't supported:** it works only with firmware v1.7.116. Beam Mod
   installs without it.
-- **The russification broke off:** the installer still installs Beam. To finish the translation:
+- **The russification broke off:** the installer still installs Beam Mod. To finish the translation:
   `XgimiInstaller.exe` in the russifier's folder (the installer prints its path at the end; usually
   `russifier` next to it or `C:\Users\Public\Beam\russifier`) → «Дополнительно» → «Завершить
   настройку». Keep that folder: removing the translation runs from it.
@@ -164,11 +163,11 @@ Replace `192.168.1.50` with the projector's IP. Parameters:
 
 - `-TimeZone Europe/Kyiv`, `-Locale`, `-BluetoothName "Your name"` instead of Europe/Moscow, ru-RU and
   "XGIMI Play 6"; `-SkipSystem` leaves those three alone. The firmware refuses English as the system
-  language: Beam's language is chosen in Beam.
+  language: Beam Mod's language is chosen in Beam Mod.
 - `-AerialViews`: the Aerial Views screensaver (release 1.8.5, checked against its SHA-256);
   `-KeepBackgroundApps`: don't close background apps (`persist.xgimi.restrictbackground.enable`, from
   the next boot).
-- The Beam APK comes from the build, `tools\apks\` or `-Apk`, else it is downloaded from the release and
+- The Beam Mod APK comes from the build, `tools\apks\` or `-Apk`, else it is downloaded from the release and
   checked against `SHA256SUMS.txt` (`-Release v0.2` for another release, `-NoDownload` for none). Other
   APKs to install along the way (LeanKey, SmartTube…) go into `tools\apks\`.
 - The IP and the path to adb can go into `local.env` once (`DEVICE=…`, `ADB=…`).
@@ -178,23 +177,23 @@ Replace `192.168.1.50` with the projector's IP. Parameters:
 
 Read this before running it:
 
-- installs Beam and removes the remote button stubs of earlier versions (tonisaf's module assigns the
+- installs Beam Mod and removes the remote button stubs of earlier versions (tonisaf's module assigns the
   buttons now; real apps with the same package names stay);
 - **disables** (`pm disable-user`, nothing is uninstalled) the stock launcher `com.xgimi.home`, the
   Sogou keyboard, ads, telemetry, bug reporting, the Chinese app store, and XGIMI's voice and IoT
   services. The full list is in the script, section 2. The stock launcher is disabled only after
-  Beam is installed and set as the home screen;
+  Beam Mod is installed and set as the home screen;
 - makes LeanKey the system keyboard if it is installed;
-- grants Beam permissions over adb: usage statistics, notification access (for "Now playing"), TV
+- grants Beam Mod permissions over adb: usage statistics, notification access (for "Now playing"), TV
   channels, `WRITE_SECURE_SETTINGS`, and modifying system settings;
-- turns on Beam's accessibility service (added to the ones already enabled): it catches the voice
-  button and draws the panel over apps. The firmware resets it on boot; Beam turns it back on by
+- turns on Beam Mod's accessibility service (added to the ones already enabled): it catches the voice
+  button and draws the panel over apps. The firmware resets it on boot; Beam Mod turns it back on by
   itself;
-- makes Beam the home screen;
+- makes Beam Mod the home screen;
 - sets the system language to Russian, the time zone to **Europe/Moscow** and the Bluetooth name to
   "XGIMI Play 6". Other values are set with `-Locale`, `-TimeZone`, `-BluetoothName` (or `LOCALE`,
   `TIMEZONE`, `BT_NAME` in `local.env`); `-SkipSystem` leaves these three settings alone. Note
-  that the firmware won't accept English as the system language; use Beam's own language setting
+  that the firmware won't accept English as the system language; use Beam Mod's own language setting
   instead;
 - optionally: `-AerialViews` installs and turns on the Aerial Views screensaver, `-KeepBackgroundApps`
   stops the firmware closing background apps (`persist.xgimi.restrictbackground.enable`).
@@ -206,8 +205,8 @@ Read this before running it:
 ```
 
 The script enables everything it disabled (the stock launcher first), restores the system
-keyboard, removes Beam from the accessibility services (the others stay), and then removes Beam itself (and remote button stubs of earlier versions, if any). The russifier
-and the remote buttons module stay: they're removed with the russifier's own installer. If the stock launcher can't be enabled, Beam is not removed,
+keyboard, removes Beam Mod from the accessibility services (the others stay), and then removes Beam Mod itself (and remote button stubs of earlier versions, if any). The russifier
+and the remote buttons module stay: they're removed with the russifier's own installer. If the stock launcher can't be enabled, Beam Mod is not removed,
 so you don't end up without a home screen. The language, time zone and Bluetooth name are not
 reverted: the previous values are unknown. The screensaver goes back to XGIMI's (Aerial Views stays
 installed) and the firmware closes background apps again. If Projectivy is installed, it is enabled again too,
@@ -229,12 +228,12 @@ home screen (XGIMI's stock launcher stays enabled), and without the permissions 
 the panel on the voice button after a reboot, "Now playing", the channel rows, the starting tile
 order and the screensaver delay won't work.
 
-**The panel doesn't open from the voice button.** Check that the accessibility service "Beam:
-панель" is on. The script turns it on, the firmware resets it on boot, and Beam turns it back on
+**The panel doesn't open from the voice button.** Check that the accessibility service "Beam Mod:
+панель" is on. The script turns it on, the firmware resets it on boot, and Beam Mod turns it back on
 when it starts. That can't happen without the permission from the script (`WRITE_SECURE_SETTINGS`).
 
 **English interface?** Appearance → Language. This projector's system language can't be switched
-to English (the firmware refuses it), so the language is chosen inside Beam.
+to English (the firmware refuses it), so the language is chosen inside Beam Mod.
 
 **Does it work on other XGIMI models?** Not tested: the launcher opens, but the projector functions
 (brightness, keystone, focus, battery) may not work.
@@ -242,7 +241,7 @@ to English (the firmware refuses it), so the language is chosen inside Beam.
 **How do I put everything back?** [Rolling back](#rolling-back): `restore.ps1 -Revert`.
 
 **What about privacy?** There are no ads or analytics, and the source is open. Network access is
-used for the pictures of other apps' channels and for checking Beam's updates.
+used for the pictures of other apps' channels and for checking Beam Mod's updates.
 
 ## Building
 
@@ -268,9 +267,9 @@ keyPassword=...
 ```
 
 The key is created once: `keytool -genkeypair -alias beam -keyalg RSA -keysize 4096 -validity 36500
--keystore beam-release.jks`. Keep a copy: if the key is lost, everyone has to uninstall Beam and
+-keystore beam-release.jks`. Keep a copy: if the key is lost, everyone has to uninstall Beam Mod and
 install it again. Without this file (in CI, for example) the build is signed with the computer's
-debug key: it installs, but can't update a Beam signed with the real key, and vice versa. The
+debug key: it installs, but can't update a Beam Mod signed with the real key, and vice versa. The
 SHA-256 fingerprint of this build's release certificate:
 `DC:F7:75:50:94:E8:9D:D1:41:7F:2C:17:00:B1:F1:B0:7E:06:13:B3:07:60:5E:09:C0:AB:07:96:EC:33:09:67` (the original Beam uses another key).
 
@@ -278,15 +277,15 @@ SHA-256 fingerprint of this build's release certificate:
 
 ```sh
 cp local.env.example local.env   # put in the projector's IP (and paths if adb is not on PATH)
-./deploy.sh                      # build and install Beam
-./deploy.sh --no-start           # don't bring Beam to the screen after installing
+./deploy.sh                      # build and install Beam Mod
+./deploy.sh --no-start           # don't bring Beam Mod to the screen after installing
 ```
 
 `local.env` is not committed. Both `deploy.sh` and `tools/restore.ps1` read it.
 
-### How Beam controls the projector
+### How Beam Mod controls the projector
 
-Which services, classes and settings of the XGIMI firmware Beam calls, and what in it doesn't work
+Which services, classes and settings of the XGIMI firmware Beam Mod calls, and what in it doesn't work
 the way you'd expect: [docs/xgimi-firmware.en.md](docs/xgimi-firmware.en.md).
 
 ### Debug commands

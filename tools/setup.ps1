@@ -88,7 +88,7 @@ function Download([string]$Url, [string]$File, [string]$Sha256) {
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-Write-Host "Установка Beam на XGIMI Play 6" -ForegroundColor White
+Write-Host "Установка Beam Mod на XGIMI Play 6" -ForegroundColor White
 Write-Host "==============================" -ForegroundColor White
 
 # 1. adb
@@ -205,7 +205,7 @@ $model = Adb shell getprop ro.product.model
 Good "Подключено: $model"
 Info "Прошивка: $fingerprint"
 if ($fingerprint -notmatch '^XGIMI/') {
-    Warn "Это не похоже на проектор XGIMI. Beam сделан для XGIMI Play 6: на других устройствах часть функций не будет работать."
+    Warn "Это не похоже на проектор XGIMI. Beam Mod сделан для XGIMI Play 6: на других устройствах часть функций не будет работать."
     if (-not (Ask "Всё равно продолжить?" $false)) { exit 1 }
 }
 
@@ -217,10 +217,10 @@ if ($russifierInstalled) {
     Good "Русификатор XGIMI уже установлен — пропускаю (обновляется его собственным установщиком)."
 } elseif ($fingerprint -notmatch [regex]::Escape("/${russifierFirmware}:")) {
     Warn "Русификатор меню XGIMI поддерживает только прошивку $russifierFirmware, а здесь другая — пропускаю его."
-    Warn "Beam всё равно будет на русском."
+    Warn "Beam Mod всё равно будет на русском."
 } else {
     Write-Host ""
-    Info "Русификация XGIMI. Beam уже на русском, а настройки, быстрая панель и меню XGIMI — на английском"
+    Info "Русификация XGIMI. Beam Mod уже на русском, а настройки, быстрая панель и меню XGIMI — на английском"
     Info "и китайском. Русификатор (github.com/tonisaf/xgimi-play6-russifier) переводит их. Скачается"
     Info "около 190 МБ, проектор перезагрузится 2–3 раза, всего 10–15 минут."
     $russify = Ask "Русифицировать меню XGIMI?" $true
@@ -243,7 +243,7 @@ if ($remoteInstalled) {
 Write-Host ""
 Info "Заставка Aerial Views: вместо заставки XGIMI — 4K-видео с видами городов и природы, часы и"
 Info "подписи на русском. Стороннее приложение: видео берёт из интернета и отправляет разработчику"
-Info "статистику (отключается в его настройках). Вернуть заставку XGIMI: Beam → «Заставка»."
+Info "статистику (отключается в его настройках). Вернуть заставку XGIMI: Beam Mod → «Заставка»."
 $aerial = Ask "Поставить заставку Aerial Views?" $false
 
 Write-Host ""
@@ -274,11 +274,11 @@ if ($btName -notmatch '^[\x20-\x7E]+$' -or $btName -eq "null" -or $btName -match
 Title "План"
 if ($russify) { Info "• русификация меню XGIMI ($russifierVersion)" }
 if ($remote) { Info "• модуль кнопок пульта" }
-Info "• Beam: домашний экран, клавиатура LeanKey вместо Sogou, отключение рекламы и китайских сервисов"
+Info "• Beam Mod: домашний экран, клавиатура LeanKey вместо Sogou, отключение рекламы и китайских сервисов"
 Info "• русский язык, часовой пояс $timeZone, Bluetooth-имя «$btName»"
 if ($aerial) { Info "• заставка Aerial Views" }
 if ($keepBackground) { Info "• фоновые приложения не закрываются" }
-Info "В конце проектор перезагрузится и откроется Beam."
+Info "В конце проектор перезагрузится и откроется Beam Mod."
 if ($Check) {
     Write-Host "`nПроверка закончена (-Check): ничего не изменено." -ForegroundColor Green
     exit 0
@@ -321,7 +321,7 @@ if ($russify -or $remote) {
         }
     }
     if (-not $kit) {
-        Warn "Пропускаю, Beam ставлю дальше."
+        Warn "Пропускаю, Beam Mod ставлю дальше."
         $problems += "Русификация и модуль кнопок не установлены: запустите установщик ещё раз или поставьте их отдельно (XgimiInstaller.exe из релиза русификатора)."
     } else {
         $kitHome = Split-Path -Parent $kit
@@ -341,7 +341,7 @@ if ($russify -or $remote) {
                 if (-not (RebootAndWait)) { Warn "Проектор долго не загружается."; EnsureConnected }
             }
             if (-not $russified) {
-                Warn "Русификация не завершилась (подробности выше, журналы в $kit\runs). Beam ставлю дальше."
+                Warn "Русификация не завершилась (подробности выше, журналы в $kit\runs). Beam Mod ставлю дальше."
                 $problems += "Русификация не завершилась. Повторить: XgimiInstaller.exe в $kitHome → «Дополнительно» → «Завершить настройку»."
             }
         }
@@ -370,7 +370,7 @@ if ($russify -or $remote) {
     }
 }
 # 5. Beam
-Title "Установка Beam"
+Title "Установка Beam Mod"
 $apkDir = Join-Path $Tools "apks"
 $haveLeanKey = @(Get-ChildItem $apkDir -Filter "LeanKey*.apk" -ErrorAction SilentlyContinue).Count -gt 0
 if (-not $haveLeanKey -and -not ((Adb shell pm path $leanKeyPackage) -match "package:")) {
@@ -396,7 +396,7 @@ Info "Проектор перезагружается (2–4 минуты)…"
 Start-Sleep -Seconds 15
 if (-not (RebootAndWait)) { Warn "Проектор долго не загружается."; EnsureConnected }
 $homeApp = Adb shell cmd package resolve-activity -a android.intent.action.MAIN -c android.intent.category.HOME
-if ($homeApp -match 'com\.home\.tiles') { Good "Beam — домашний экран" } else { Warn "Домашний экран не Beam: нажмите «Домой» на пульте и выберите Beam."; $failed = $true }
+if ($homeApp -match 'com\.home\.tiles') { Good "Beam Mod — домашний экран" } else { Warn "Домашний экран не Beam Mod: нажмите «Домой» на пульте и выберите Beam Mod."; $failed = $true }
 # The russifier's helper (re-applies part of the translation at every boot) and the remote module are
 # accessibility services; if the system has dropped one, the russifier's «Завершить настройку» brings
 # it back.
@@ -431,5 +431,5 @@ if ($failed) {
     Write-Host "уже сделанные шаги повторятся без вреда." -ForegroundColor Yellow
     exit 1
 }
-Write-Host "Всё готово: Beam установлен и открыт на проекторе." -ForegroundColor Green
-Write-Host "Голосовая кнопка пульта — настройки Beam, кнопка настроек — панель XGIMI." -ForegroundColor Green
+Write-Host "Всё готово: Beam Mod установлен и открыт на проекторе." -ForegroundColor Green
+Write-Host "Голосовая кнопка пульта — настройки Beam Mod, кнопка настроек — панель XGIMI." -ForegroundColor Green

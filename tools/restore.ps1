@@ -151,6 +151,8 @@ $stockLauncher = "com.xgimi.home"
 $beamPackage = "com.home.tiles"
 $beamPanel = "com.home.tiles/com.home.tiles.PanelOverlay"
 $beamPanelShort = "com.home.tiles/.PanelOverlay"
+# Beam Mod's release key as dumpsys package shows it (signatures:[...], Signature.hashCode in hex).
+$beamSignature = "ff3002d2"
 $ime = "org.liskovsoft.androidtv.rukeyboard/com.liskovsoft.leankeyboard.ime.LeanbackImeService"
 # Package names the remote-button stubs of earlier releases took over (the firmware starts these apps for the remote's keys).
 $stubPackages = @("com.cibn.tv", "com.ktcp.tvvideo", "com.gitvjimi.video", "com.hunantv.license")
@@ -186,7 +188,7 @@ if ($Revert) {
         Check (Adb shell ime reset)
     }
     # 3. Beam out of the accessibility services (the others stay), and as the speech recogniser.
-    Step "Спец. возможности: убрать панель Beam" {
+    Step "Спец. возможности: убрать панель Beam Mod" {
         $current = Adb shell settings get secure enabled_accessibility_services
         if (-not $current -or $current -eq "null") { return $false }
         $list = @($current -split ':' | Where-Object { $_ -and $_ -ne $beamPanel -and $_ -ne $beamPanelShort })
@@ -198,7 +200,7 @@ if ($Revert) {
             Check (Adb shell settings put secure accessibility_enabled 0)
         }
     }
-    Step "Распознаватель речи: убрать Beam" {
+    Step "Распознаватель речи: убрать Beam Mod" {
         if ((Adb shell settings get secure voice_recognition_service) -notmatch [regex]::Escape($beamPackage)) { return $false }
         Check (Adb shell settings delete secure voice_recognition_service)
     }
@@ -213,7 +215,7 @@ if ($Revert) {
             Expect (Adb shell pm uninstall $p) "Success"
         }
     }
-    Step "Лаунчер Beam" {
+    Step "Лаунчер Beam Mod" {
         if (-not $script:StockBack) { throw "стоковый лаунчер не включён: Beam оставлен" }
         if (-not (Installed $beamPackage)) { return $false }
         Expect (Adb shell pm uninstall $beamPackage) "Success"
@@ -280,7 +282,7 @@ function Get-ReleaseFiles([string[]]$Names) {
 $localBeam = @($Apk, (Join-Path $Root "app\build\outputs\apk\release\app-release.apk"), (Join-Path $apkDir "app-release.apk")) |
     Where-Object { $_ -and (Test-Path $_) }
 if (-not $NoDownload -and -not $localBeam) {
-    Step "Скачивание Beam из релиза GitHub" {
+    Step "Скачивание Beam Mod из релиза GitHub" {
         $tag = Get-ReleaseFiles @("app-release.apk")
         Write-Host "      релиз $tag в tools\apks\" -ForegroundColor DarkGray
     }
@@ -290,22 +292,24 @@ $beamApk = @(
     (Join-Path $Root "app\build\outputs\apk\release\app-release.apk"),
     (Join-Path $apkDir "app-release.apk")
 ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-Step "Лаунчер Beam" {
+Step "Лаунчер Beam Mod" {
     if (-not $beamApk) {
-        throw "нет APK Beam: скачайте со страницы Releases, соберите (./gradlew :app:assembleRelease), положите app-release.apk в tools\apks\ или укажите -Apk"
+        throw "нет APK Beam Mod: скачайте со страницы Releases, соберите (./gradlew :app:assembleRelease), положите app-release.apk в tools\apks\ или укажите -Apk"
     }
     $out = Adb install -r $beamApk
     # A Beam signed with another key (the original one, say) can't be updated in place. Android
     # reports a newer original Beam (1.0.1 and later) as a downgrade before it looks at the key, so
-    # that case is told apart by the version name: this build's always has "-ru" in it. The stock
+    # that case is told apart by the installed app's key: Beam Mod's release key shows in dumpsys as
+    # signatures:[ff3002d2] (see $beamSignature). The stock
     # launcher comes back first so there is always a home screen, then that Beam and its
     # remote-button stubs go (only stubs: a real app with the same package name stays), and this
     # one goes in. Its own settings (theme, tile order) start over.
-    $installedVersion = if ((Adb shell dumpsys package $beamPackage) -match 'versionName=(\S+)') { $Matches[1] } else { "" }
+    $dump = Adb shell dumpsys package $beamPackage
+    $installedVersion = if ($dump -match 'versionName=(\S+)') { $Matches[1] } else { "" }
     $foreign = ($out -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match') -or
-        ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE' -and $installedVersion -notmatch '-ru')
+        ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE' -and $dump -notmatch "signatures:\[$beamSignature\]")
     if ($foreign) {
-        Write-Host "      установлен Beam с другой подписью: заменяю его (настройки Beam сбросятся)" -ForegroundColor Yellow
+        Write-Host "      установлен другой Beam (с другой подписью): заменяю его на Beam Mod (настройки Beam сбросятся)" -ForegroundColor Yellow
         if (Installed $stockLauncher) { Expect (Adb shell pm enable --user 0 $stockLauncher) "enabled" }
         foreach ($p in $stubPackages) {
             if ((Installed $p) -and ((Adb shell dumpsys package $p) -match 'com\.home\.tiles\.permission\.REMOTE_BUTTON')) {
@@ -317,7 +321,7 @@ Step "Лаунчер Beam" {
     }
     # Already updated past this APK (by Beam's own updater, say): keep the newer one.
     if ($out -match 'INSTALL_FAILED_VERSION_DOWNGRADE') {
-        Write-Host "      уже установлена более новая версия Beam ($installedVersion): оставляю её" -ForegroundColor DarkGray
+        Write-Host "      уже установлена более новая версия Beam Mod ($installedVersion): оставляю её" -ForegroundColor DarkGray
         return
     }
     Expect $out "Success"
@@ -325,7 +329,7 @@ Step "Лаунчер Beam" {
 # Everything below changes the system and the stock launcher gets disabled: without Beam there
 # would be no home screen, so stop here.
 if (-not (Installed "com.home.tiles")) {
-    Write-Host "Beam не установлен: дальше не продолжаю, чтобы не остаться без домашнего экрана." -ForegroundColor Red
+    Write-Host "Beam Mod не установлен: дальше не продолжаю, чтобы не остаться без домашнего экрана." -ForegroundColor Red
     exit 1
 }
 # The remote-button stubs of earlier releases: tonisaf's module (XGIMI settings → Общие → Кнопки
@@ -371,7 +375,7 @@ Step "LeanKey — системная клавиатура" {
     Expect (Adb shell ime set $ime) "selected"
 }
 
-Write-Host "`n4. Лаунчер Beam: разрешения и домашний экран" -ForegroundColor Cyan
+Write-Host "`n4. Лаунчер Beam Mod: разрешения и домашний экран" -ForegroundColor Cyan
 Step "Статистика использования (порядок плиток)" { Check (Adb shell appops set com.home.tiles GET_USAGE_STATS allow) }
 Step "Доступ к медиа («Сейчас играет»)" {
     Check (Adb shell cmd notification allow_listener com.home.tiles/com.home.tiles.MediaListener)
@@ -384,7 +388,7 @@ Step "Системные настройки (восстановление спе
 }
 Step "Микрофон пульта (голосовая кнопка)" { Check (Adb shell pm grant com.home.tiles android.permission.RECORD_AUDIO) }
 Step "Время до заставки (screen_off_timeout)" { Check (Adb shell appops set com.home.tiles WRITE_SETTINGS allow) }
-Step "Обновления Beam (установка загруженной версии)" { Check (Adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow) }
+Step "Обновления Beam Mod (установка загруженной версии)" { Check (Adb shell appops set com.home.tiles REQUEST_INSTALL_PACKAGES allow) }
 $script:HomeSet = $false
 Step "Домашний экран" {
     Expect (Adb shell cmd package set-home-activity com.home.tiles/.MainActivity) "Success"
@@ -397,7 +401,7 @@ Step "Стоковый лаунчер XGIMI ($stockLauncher)" {
 }
 
 Write-Host "`n5. Спец. возможности (прошивка сбрасывает их при загрузке, лаунчер потом возвращает сам)" -ForegroundColor Cyan
-Step "Панель Beam (голосовая кнопка)" {
+Step "Панель Beam Mod (голосовая кнопка)" {
     # Added to the services already enabled (Key Mapper, ...), not replacing them.
     $component = $beamPanel
     $current = Adb shell settings get secure enabled_accessibility_services

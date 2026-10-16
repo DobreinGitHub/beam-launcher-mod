@@ -31,7 +31,7 @@ import java.security.MessageDigest
 /*
  * Updates from this mod's GitHub releases. Ported from tonisaf's Beam 1.0.1 (MIT,
  * github.com/tonisaf/beam-launcher, Updates.kt and UpdatePolicy.kt), for this repository and its
- * "1.0-ru-v2" version names. Public releases only; nothing installs silently: the APK must match
+ * Beam Mod version names ("1.1"). Public releases only; nothing installs silently: the APK must match
  * GitHub's SHA-256, this package, this signing key and a higher version code, and Android asks
  * before installing it.
  */
@@ -295,7 +295,7 @@ internal object Updates {
 }
 
 /**
- * Whether release [tag] ("v1.0-ru-v3") is newer than the [installed] version ("1.0-ru-v2"): the
+ * Whether release [tag] ("v1.2", or "v1.0-ru-v3" in the earlier naming) is newer than the [installed] version ("1.1"): the
  * base version first, then the mod's revision. Anything unreadable counts as not newer; the version
  * code checked in the APK has the last word anyway.
  */
