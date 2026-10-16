@@ -53,6 +53,8 @@ class PanelOverlay : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
         LauncherSettings.init(this)
+        // The remote's app keys, taken from the firmware for the actions set in «Кнопки пульта».
+        RemoteKeys.start(this)
         Sounds.init(this)
         XgimiService.bind(this)
         // The low-battery warning has to come over any app, not only while the launcher shows.

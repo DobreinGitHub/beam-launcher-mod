@@ -59,6 +59,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         repo = AppRepository(this)
         LauncherSettings.init(this)
+        // The remote's app keys, taken from the firmware for the actions set in «Кнопки пульта».
+        RemoteKeys.start(this)
         AccessibilityGuard.ensure(this)
         Sounds.init(this)
         Hdmi.migrateBootSource(this)
