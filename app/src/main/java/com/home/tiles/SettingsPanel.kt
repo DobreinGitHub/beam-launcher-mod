@@ -126,7 +126,9 @@ fun PanelScreen(
 ) {
     val context = LocalContext.current
     // The section shown, or null for the panel.
-    var page by remember { mutableStateOf(if (rows) Page.Home else null) }
+    // Opened straight on a section (the rows list, or «Кнопки пульта» from XGIMI's settings): Back closes.
+    val direct = remember { rows || PanelOpenOn.takeRemoteButtons() }
+    var page by remember { mutableStateOf(if (rows) Page.Home else if (direct) Page.Remote else null) }
     // The tile to put the selection on when the panel shows: the first, or the section just left.
     var lastPage by remember { mutableStateOf<Page?>(null) }
     // Handing over to XGIMI: the tiles fade, the darkening stays until XGIMI's own is on screen.
@@ -144,7 +146,7 @@ fun PanelScreen(
     fun back() {
         // A view inside the section (the remote keys' action list) closes first.
         if (page != null && PanelSubBack.handler?.invoke() == true) return
-        if (page != null && !rows) page = null else onDismiss()
+        if (page != null && !direct) page = null else onDismiss()
     }
     fun xgimi(quick: Boolean) {
         leaving = true

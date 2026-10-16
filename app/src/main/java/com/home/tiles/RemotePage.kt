@@ -145,8 +145,11 @@ internal fun RemoteButtonsPage() {
         RemoteKeys.chooseModel(RemoteKeys.Model.entries[(model.ordinal + delta).mod(RemoteKeys.Model.entries.size)])
     }
     // tonisaf's module holds the same keys: the firmware refuses them to Beam Mod while it is there.
+    // (Our own com.beam.remote, the entry from XGIMI's settings, is signed like Beam Mod: not that one.)
     val moduleThere = remember(RemoteKeys.refused.size) {
-        runCatching { context.packageManager.getPackageInfo(RemoteKeys.OLD_MODULE, 0) }.isSuccess
+        val pm = context.packageManager
+        runCatching { pm.getPackageInfo(RemoteKeys.OLD_MODULE, 0) }.isSuccess &&
+            pm.checkSignatures(context.packageName, RemoteKeys.OLD_MODULE) != android.content.pm.PackageManager.SIGNATURE_MATCH
     }
     if (moduleThere) {
         Spacer(Modifier.height(18.dp))
@@ -402,6 +405,30 @@ private fun keyIcon(key: RemoteKeys.Key): ImageVector? = when (key.stock) {
     RemoteKeys.Stock.Atmosphere -> Icons.Outlined.FilterVintage
     RemoteKeys.Stock.Source -> Icons.AutoMirrored.Outlined.Input
     is RemoteKeys.Stock.App -> if (key.code == 2119) Icons.Outlined.SmartDisplay else null
+}
+
+/** Opens the settings page straight on «Кнопки пульта»: once, for the next page that opens. */
+internal object PanelOpenOn {
+    @Volatile private var remoteButtons = false
+    fun requestRemoteButtons() { remoteButtons = true }
+    fun takeRemoteButtons(): Boolean = remoteButtons.also { remoteButtons = false }
+}
+
+/**
+ * The way in from XGIMI's settings (Общие → «Кнопки пульта»): that entry opens com.beam.remote, our
+ * small app of that name (the remote-entry module), which comes here. Open only to apps signed like
+ * Beam Mod (the OPEN_SETTINGS permission).
+ */
+class RemoteButtonsActivity : android.app.Activity() {
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        PanelOpenOn.requestRemoteButtons()
+        if (!PanelOverlay.show()) {
+            PanelRequests.count.intValue++
+            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        finish()
+    }
 }
 
 /** A section's own Back, for a view inside it (the remote keys' action list): returns true if it handled Back. */

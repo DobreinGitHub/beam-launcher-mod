@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Held by our com.beam.remote (remote-entry, same signature): opens «Кнопки пульта». -->
+    <permission
+        android:name="com.home.tiles.permission.OPEN_SETTINGS"
+        android:protectionLevel="signature" />
+
     <!-- «Кнопки пульта»: the button that removes tonisaf's old module, which holds the same keys. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission
@@ -143,6 +148,16 @@
             android:permission="android.permission.DUMP"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!-- From XGIMI's settings (Общие → «Кнопки пульта»), through our com.beam.remote. -->
+        <activity
+            android:name=".RemoteButtonsActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:permission="com.home.tiles.permission.OPEN_SETTINGS"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
+
         <!-- Catches the remote's voice key everywhere and draws the panel over the current app.
              Enabled over adb (settings put secure enabled_accessibility_services ...). -->
         <service

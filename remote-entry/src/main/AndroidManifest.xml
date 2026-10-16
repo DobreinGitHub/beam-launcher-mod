@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Beam Mod's entry to its «Кнопки пульта» page, open only to apps signed like it. -->
+    <uses-permission android:name="com.home.tiles.permission.OPEN_SETTINGS" />
+
+    <queries>
+        <package android:name="com.home.tiles" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:label="Beam Mod: кнопки пульта">
+        <!-- The exact screen XGIMI settings → Общие → «Кнопки пульта» opens. No launcher entry. -->
+        <activity
+            android:name=".RemoteActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
+    </application>
+</manifest>

@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "TileLauncher"
 include(":app")
+include(":remote-entry")
