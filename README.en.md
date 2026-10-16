@@ -41,7 +41,8 @@ real drain), warnings at 15% and 5% over any app.
 appearance, home screen, remote buttons, screensaver (XGIMI's or Aerial Views), About Beam. XGIMI's
 panel and settings open from there too; only one of the panels is ever open.
 
-**Remote buttons**: the four Chinese video service buttons can be assigned to any app.
+**Remote buttons**: the four Chinese video service buttons can be assigned to any app or action: in XGIMI's
+settings → General → «Кнопки пульта» (tonisaf's module, installed by the installer) or in Beam.
 
 **Updates**: About Beam checks this build's releases once a day, verifies the SHA-256, signature and
 version, and hands the APK to Android's installer (code ported from Beam 1.0.1).
@@ -66,7 +67,7 @@ version.
 | Theme and sounds | its own; UISFX sounds | follow XGIMI; system sounds |
 | Background | its backgrounds and your own picture | backgrounds as cards, background in the app's colour |
 | Settings panel | removed | XGIMI style, over any app |
-| Remote buttons | no stubs needed | assigned in Beam |
+| Remote buttons | no stubs needed | tonisaf's module in XGIMI's settings, or Beam |
 
 **Coming from the original Beam.** This build is signed with another key and doesn't install over the
 original. The installer brings the stock launcher back, removes the old Beam and its button stubs and
@@ -119,6 +120,8 @@ The stock settings have no ADB switch; the SystemUI Tuner app turns it on:
    - **translate XGIMI's menus** — XGIMI's settings and panel in Russian
      ([xgimi-play6-russifier](https://github.com/tonisaf/xgimi-play6-russifier) by tonisaf). On a new
      projector: yes. Not asked if the translation is already installed;
+   - **the remote buttons module** — the four Chinese service buttons are assigned in XGIMI's settings →
+     General → «Кнопки пульта» (a module from the russifier's kit, yes by default);
    - **the [Aerial Views](https://github.com/theothernt/AerialViews) screensaver** — 4K videos instead of
      XGIMI's screensaver (a third-party app, no by default);
    - **don't close background apps** — the firmware stops closing a VPN or music when you switch apps
@@ -134,7 +137,7 @@ What changes on the projector: [below](#what-restoreps1-changes). It can be run 
 ### Step 3. Check
 
 Press Home: Beam should open. The remote's voice button opens Beam's settings, the settings button
-XGIMI's panel. The remote's four app buttons are assigned in Beam's settings → "Remote buttons".
+XGIMI's panel. The remote's four app buttons are assigned in XGIMI's settings → General → «Кнопки пульта».
 
 ### If something doesn't work
 

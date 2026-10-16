@@ -226,6 +226,19 @@ if ($russifierInstalled) {
     $russify = Ask "Русифицировать меню XGIMI?" $true
 }
 
+# The remote-buttons module comes with the russifier's kit (tonisaf), works on the same firmware only.
+$remoteInstalled = (Adb shell pm path com.beam.remote) -match "package:"
+$remote = $false
+if ($remoteInstalled) {
+    Good "Модуль кнопок пульта уже установлен — пропускаю."
+} elseif ($fingerprint -match [regex]::Escape("/${russifierFirmware}:")) {
+    Write-Host ""
+    Info "Кнопки пульта. Четыре кнопки китайских видеосервисов на пульте можно назначить на любое"
+    Info "приложение или действие (пауза, следующий трек). Назначаются в настройках XGIMI → Общие →"
+    Info "«Кнопки пульта». Это модуль из русификатора tonisaf (если русификатор не нужен, скачается всё равно)."
+    $remote = Ask "Установить модуль кнопок пульта?" $true
+}
+
 Write-Host ""
 Info "Заставка Aerial Views: вместо заставки XGIMI — 4K-видео с видами городов и природы, часы и"
 Info "подписи на русском. Стороннее приложение: видео берёт из интернета и отправляет разработчику"
@@ -259,6 +272,7 @@ if ($btName -notmatch '^[\x20-\x7E]+$' -or $btName -eq "null" -or $btName -match
 
 Title "План"
 if ($russify) { Info "• русификация меню XGIMI ($russifierVersion)" }
+if ($remote) { Info "• модуль кнопок пульта" }
 Info "• Beam: домашний экран, кнопки пульта, клавиатура LeanKey вместо Sogou, отключение рекламы и китайских сервисов"
 Info "• русский язык, часовой пояс $timeZone, Bluetooth-имя «$btName»"
 if ($aerial) { Info "• заставка Aerial Views" }
@@ -285,8 +299,8 @@ function FindKit([string]$Dir) {
 }
 $problems = @()
 $kit = $null
-if ($russify) {
-    Title "Русификация меню XGIMI"
+if ($russify -or $remote) {
+    Title $(if ($russify) { "Русификация меню XGIMI" } else { "Модуль кнопок пульта" })
     $kitRoot = KitRoot
     $kit = FindKit $kitRoot
     if (-not $kit) {
@@ -306,36 +320,52 @@ if ($russify) {
         }
     }
     if (-not $kit) {
-        Warn "Русификацию пропускаю, Beam ставлю дальше."
-        $problems += "Русификация не установлена: запустите установщик ещё раз или поставьте её отдельно (XgimiInstaller.exe из релиза русификатора)."
+        Warn "Пропускаю, Beam ставлю дальше."
+        $problems += "Русификация и модуль кнопок не установлены: запустите установщик ещё раз или поставьте их отдельно (XgimiInstaller.exe из релиза русификатора)."
     } else {
         $kitHome = Split-Path -Parent $kit
         $python = Join-Path $kit "runtime\python.exe"
         $launch = Join-Path $kit "launch.py"
         # The same adb for both, otherwise two adb servers of different versions keep killing each other.
         $env:XGIMI_ADB = $Adb
-        $ok = $false
-        for ($pass = 1; $pass -le 2; $pass++) {
-            & $python -I $launch prepare-install --device $Serial
-            $code = $LASTEXITCODE
-            if ($code -eq 0) { $ok = $true; break }
-            if ($code -ne 10 -or $pass -eq 2) { break }
-            # 10: the Russian locale is written but needs a full reboot before the translation goes in.
-            Info "Перезагружаю проектор, чтобы включился русский язык (2–4 минуты)…"
-            if (-not (RebootAndWait)) { Warn "Проектор долго не загружается."; EnsureConnected }
+        $russified = $false
+        if ($russify) {
+            for ($pass = 1; $pass -le 2; $pass++) {
+                & $python -I $launch prepare-install --device $Serial
+                $code = $LASTEXITCODE
+                if ($code -eq 0) { $russified = $true; break }
+                if ($code -ne 10 -or $pass -eq 2) { break }
+                # 10: the Russian locale is written but needs a full reboot before the translation goes in.
+                Info "Перезагружаю проектор, чтобы включился русский язык (2–4 минуты)…"
+                if (-not (RebootAndWait)) { Warn "Проектор долго не загружается."; EnsureConnected }
+            }
+            if (-not $russified) {
+                Warn "Русификация не завершилась (подробности выше, журналы в $kit\runs). Beam ставлю дальше."
+                $problems += "Русификация не завершилась. Повторить: XgimiInstaller.exe в $kitHome → «Дополнительно» → «Завершить настройку»."
+            }
         }
-        if ($ok) {
-            Info "Завершение: проектор перезагрузится, русификатор включит автозапуск перевода (2–4 минуты)…"
+        $remoteDone = $false
+        if ($remote) {
+            Info "Ставлю модуль кнопок пульта…"
+            & $python -I $launch install-remote --device $Serial
+            $remoteDone = $LASTEXITCODE -eq 0
+            if (-not $remoteDone) {
+                $problems += "Модуль кнопок пульта не установился (подробности выше). Повторить: XgimiInstaller.exe в $kitHome → «Дополнительно» → кнопки пульта."
+            }
+        }
+        # One reboot for both: the firmware's memory rules for their services are read only at boot,
+        # then the russifier's «Завершить настройку» switches the services on again.
+        if ($russified -or $remoteDone) {
+            Info "Завершение: проектор перезагрузится, службы русификатора и кнопок включатся (2–4 минуты)…"
             & $python -I $launch finish-setup --device $Serial
-            if ($LASTEXITCODE -ne 0) { $ok = $false }
+            if ($LASTEXITCODE -ne 0) {
+                $problems += "Не завершилась настройка русификатора. Повторить: XgimiInstaller.exe в $kitHome → «Дополнительно» → «Завершить настройку»."
+            } elseif ($russified) {
+                Good "Меню XGIMI русифицированы. Папку $kitHome не удаляйте: из неё работает удаление русификации."
+            }
+            if ($remoteDone -and $LASTEXITCODE -eq 0) { Good "Модуль кнопок пульта: настройки XGIMI → Общие → «Кнопки пульта»." }
         }
         EnsureConnected
-        if ($ok) {
-            Good "Меню XGIMI русифицированы. Папку $kitHome не удаляйте: из неё работает удаление русификации."
-        } else {
-            Warn "Русификация не завершилась (подробности выше, журналы в $kit\runs). Beam ставлю дальше."
-            $problems += "Русификация не завершилась. Повторить: XgimiInstaller.exe в $kitHome → «Дополнительно» → «Завершить настройку»."
-        }
     }
 }
 # 5. Beam
@@ -366,27 +396,33 @@ Start-Sleep -Seconds 15
 if (-not (RebootAndWait)) { Warn "Проектор долго не загружается."; EnsureConnected }
 $homeApp = Adb shell cmd package resolve-activity -a android.intent.action.MAIN -c android.intent.category.HOME
 if ($homeApp -match 'com\.home\.tiles') { Good "Beam — домашний экран" } else { Warn "Домашний экран не Beam: нажмите «Домой» на пульте и выберите Beam."; $failed = $true }
-# The russifier's helper re-applies part of the translation at every boot; if the system has dropped it,
-# the russifier's own «Завершить настройку» brings it back.
-if ((Adb shell pm path com.beam.russifier.boot) -match "package:") {
-    $helper = "com.beam.russifier.boot/com.beam.russifier.boot.StartupBridge"
+# The russifier's helper (re-applies part of the translation at every boot) and the remote module are
+# accessibility services; if the system has dropped one, the russifier's «Завершить настройку» brings
+# it back.
+$services = @()
+if ((Adb shell pm path com.beam.russifier.boot) -match "package:") { $services += @{ Name = "Русификатор XGIMI"; Component = "com.beam.russifier.boot/"; Effect = "часть меню XGIMI после перезагрузки может быть на английском" } }
+if ((Adb shell pm path com.beam.remote) -match "package:") { $services += @{ Name = "Модуль кнопок пульта"; Component = "com.beam.remote/"; Effect = "назначенные кнопки пульта не сработают" } }
+function Missing { $list = Adb shell settings get secure enabled_accessibility_services; @($services | Where-Object { $list -notmatch [regex]::Escape($_.Component) }) }
+if ($services.Count -gt 0) {
+    $missing = Missing
     $kitDir = if ($kit) { $kit } else { FindKit (KitRoot) }
-    if ((Adb shell settings get secure enabled_accessibility_services) -match [regex]::Escape($helper)) {
-        Good "Русификатор XGIMI работает"
-    } elseif ($kitDir) {
-        Info "Служба русификатора отключилась, включаю заново (ещё одна перезагрузка)…"
+    if ($missing.Count -gt 0 -and $kitDir) {
+        Info "Служба отключилась ($(($missing | ForEach-Object { $_.Name }) -join ', ')), включаю заново (ещё одна перезагрузка)…"
         $env:XGIMI_ADB = $Adb
         & (Join-Path $kitDir "runtime\python.exe") -I (Join-Path $kitDir "launch.py") finish-setup --device $Serial
         EnsureConnected
-        if ((Adb shell settings get secure enabled_accessibility_services) -match [regex]::Escape($helper)) { Good "Русификатор XGIMI работает" }
-        else { Warn "Служба русификатора не включилась: часть меню XGIMI после перезагрузки может быть на английском."; $failed = $true }
-    } else {
-        Warn "Служба русификатора отключена: часть меню XGIMI после перезагрузки может быть на английском."
-        Warn "Включить: XgimiInstaller.exe русификатора → «Дополнительно» → «Завершить настройку»."
-        $failed = $true
+        $missing = Missing
+    }
+    foreach ($service in $services) {
+        if ($missing | Where-Object { $_.Component -eq $service.Component }) {
+            Warn "$($service.Name): служба отключена — $($service.Effect)."
+            Warn "Включить: XgimiInstaller.exe русификатора → «Дополнительно» → «Завершить настройку»."
+            $failed = $true
+        } else {
+            Good "$($service.Name) работает"
+        }
     }
 }
-
 Write-Host ""
 foreach ($problem in $problems) { Warn $problem; $failed = $true }
 if ($failed) {
