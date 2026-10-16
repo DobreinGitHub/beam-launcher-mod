@@ -69,11 +69,11 @@
 
 ## Скриншоты
 
-| Главный экран | Панель настроек Beam Mod |
+| Главный экран | Перемещение плитки |
 |---|---|
 | ![Главный экран](docs/screenshots/home.jpg) | ![Перемещение плитки](docs/screenshots/move.jpg) |
 
-| Оформление | Перемещение плитки |
+| Оформление | Панель настроек Beam Mod |
 |---|---|
 | ![Оформление](docs/screenshots/appearance.jpg) | ![Панель настроек Beam Mod](docs/screenshots/panel.jpg) |
 
