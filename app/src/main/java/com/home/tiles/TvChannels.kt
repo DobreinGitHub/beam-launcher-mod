@@ -774,7 +774,7 @@ private fun CardTitle(item: TvItem, card: DpSize) {
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         delay(TITLE_DELAY_MS)
-        alpha.animateTo(1f, tween(150))
+        alpha.animateTo(1f, motion(150))
     }
     val dim = Colors.TextDim
     val text = remember(item, dim) {
@@ -863,8 +863,8 @@ private fun CardFrame(
         Sounds.activate()
         onClick()
     }
-    val scale by animateFloatAsState(if (focused) FOCUS_SCALE else 1f, tween(150), label = "card")
-    val border by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "border")
+    val scale by animateFloatAsState(if (focused) FOCUS_SCALE else 1f, motion(150), label = "card")
+    val border by animateFloatAsState(if (focused) 1f else 0f, motion(150), label = "border")
     val screenShown = LocalScreenShown.current
     Box(
         Modifier

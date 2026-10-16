@@ -149,4 +149,6 @@
     <string name="tile_fast">Fast mode</string>
     <string name="fast_on">No animations</string>
     <string name="fast_off">With animations</string>
-    <string name="fast_denied">No permission</string></resources>
+    <string name="fast_denied">No permission</string>    <string name="home_status">Apps and rows</string>
+    <string name="remote_set">%1$d set</string>
+</resources>

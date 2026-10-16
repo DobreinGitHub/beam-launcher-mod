@@ -1,5 +1,7 @@
 package com.home.tiles
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.snap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.animateColorAsState
@@ -150,7 +152,7 @@ private fun NavTabs(
     val places = remember(tabs.size) { List(tabs.size) { mutableStateOf(Offset.Zero to Size.Zero) } }
     val x = remember { Animatable(0f) }
     val w = remember { Animatable(0f) }
-    val shown by animateFloatAsState(if (focused >= 0) 1f else 0f, tween(150), label = "tabs")
+    val shown by animateFloatAsState(if (focused >= 0) 1f else 0f, motion(150), label = "tabs")
     val dark = LauncherSettings.dark
     val focusFill = FocusBg
     val focusText = FocusText
@@ -178,7 +180,7 @@ private fun NavTabs(
             },
     ) {
         tabs.forEachIndexed { i, label ->
-            val textColor by animateColorAsState(if (focused == i) focusText else Colors.Text, tween(150), label = "tab")
+            val textColor by animateColorAsState(if (focused == i) focusText else Colors.Text, motion(150), label = "tab")
             Box(
                 Modifier
                     .height(TabHeight)
@@ -210,7 +212,8 @@ private fun NavTabs(
 private val TabHeight = 56.dp
 // The pill's edge around the tabs: 64dp tall in all, like the buttons and chips beside it.
 private val TabInset = 4.dp
-private val TabSlide = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 900f)
+private val TabSlide: AnimationSpec<Float>
+    get() = if (Effects.reduced) snap() else spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 900f)
 
 /**
  * A round top-bar button with only an icon, like Google TV's: no caption. Selected, it fills like
@@ -220,8 +223,8 @@ private val TabSlide = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy,
 private fun NavIconButton(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
     val dark = LauncherSettings.dark
-    val fill by animateColorAsState(if (focused) FocusBg else Colors.Button, tween(150), label = "fill")
-    val tint by animateColorAsState(if (focused) FocusText else Colors.Text, tween(150), label = "tint")
+    val fill by animateColorAsState(if (focused) FocusBg else Colors.Button, motion(150), label = "fill")
+    val tint by animateColorAsState(if (focused) FocusText else Colors.Text, motion(150), label = "tint")
     Box(
         modifier
             .size(TabHeight + TabInset * 2)

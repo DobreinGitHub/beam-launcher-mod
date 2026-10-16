@@ -1,5 +1,7 @@
 package com.home.tiles
 
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -266,27 +268,69 @@ private fun QuickPanel(
     // Where XGIMI's panel has its brightness bar.
     WideTile(Icons.Outlined.Tune, tr(R.string.tile_quick), Modifier.fillMaxWidth().height(64.dp).focusRequester(firstFocus), chevron = true) { onXgimi(true) }
     Spacer(Modifier.height(TileGap + 6.dp))
-    // Quick tiles, where XGIMI's panel has its own: memory and fast mode. The theme and sounds follow
-    // XGIMI's own settings, and the rest are set once and live in their sections.
+    // Quick actions first, where XGIMI's panel has its own tiles. The theme and sounds follow XGIMI's
+    // own settings, so no switches for them.
     Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
         MemoryTile(Modifier.weight(1f))
         FastModeTile(Modifier.weight(1f))
     }
     Spacer(Modifier.height(TileGap))
-    // «О Beam Mod» wide, like the pill above.
-    listOf(Page.Appearance to Page.Home, Page.Remote to Page.Screensaver).forEach { (a, b) ->
-        Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
-            listOf(a, b).forEach { p ->
-                WideTile(p.icon, p.title, Modifier.weight(1f).height(TileHeight).focusRequester(pageFocus.getValue(p))) { onPage(p) }
-            }
-        }
-        Spacer(Modifier.height(TileGap))
+    // Then Beam Mod's sections, each saying how it is set: on the left how it looks, on the right
+    // how it works.
+    val context = LocalContext.current
+    Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+        SectionTile(Page.Appearance, appearanceStatus(), pageFocus, onPage)
+        SectionTile(Page.Home, tr(R.string.home_status), pageFocus, onPage)
     }
-    WideTile(
-        Page.About.icon, Page.About.title,
-        Modifier.fillMaxWidth().height(64.dp).focusRequester(pageFocus.getValue(Page.About)).updateDot(),
+    Spacer(Modifier.height(TileGap))
+    Row(horizontalArrangement = Arrangement.spacedBy(TileGap)) {
+        SectionTile(Page.Screensaver, remember { screensaverStatus(context) }, pageFocus, onPage)
+        SectionTile(Page.Remote, remoteStatus(), pageFocus, onPage)
+    }
+    Spacer(Modifier.height(TileGap))
+    // «О Beam Mod» wide, like the pill above: the version, or the update waiting.
+    StatusTile(
+        Page.About.icon, Page.About.title, aboutStatus(context),
+        Modifier.fillMaxWidth().focusRequester(pageFocus.getValue(Page.About)).updateDot(),
+        height = 64.dp,
     ) { onPage(Page.About) }
 }
+
+@Composable
+private fun RowScope.SectionTile(page: Page, status: String, pageFocus: Map<Page, FocusRequester>, onPage: (Page) -> Unit) {
+    StatusTile(page.icon, page.title, status, Modifier.weight(1f).focusRequester(pageFocus.getValue(page)), statusLines = 1) { onPage(page) }
+}
+
+/** «Как в XGIMI · Обычный»: the theme and the background. */
+@Composable
+private fun appearanceStatus(): String {
+    val theme = when {
+        LauncherSettings.followXgimi -> tr(R.string.theme_xgimi)
+        LauncherSettings.dark -> tr(R.string.theme_dark)
+        else -> tr(R.string.theme_light)
+    }
+    return theme + " · " + tr(Backgrounds[LauncherSettings.background].nameRes)
+}
+
+/** «Aerial Views · 10 мин»: the screensaver and when it starts. */
+private fun screensaverStatus(context: android.content.Context): String {
+    val current = Screensavers.current(context) ?: Screensavers.XGIMI
+    val name = Screensavers.installed(context).firstOrNull { it.component == current }?.label ?: tr(R.string.screensaver_xgimi)
+    val after = ScreensaverTimeout.current(context)
+    val time = ScreensaverTimeout.options.firstOrNull { it.first == after }?.second
+    return if (time != null) "$name · $time" else name
+}
+
+/** How many of the remote's app keys have an action of their own. */
+@Composable
+private fun remoteStatus(): String {
+    val set = RemoteKeys.model.keys.count { RemoteKeys.actions.containsKey(it.code) }
+    return if (set == 0) tr(R.string.action_firmware) else tr(R.string.remote_set, set)
+}
+
+private fun aboutStatus(context: android.content.Context): String =
+    Updates.release?.let { tr(R.string.update_available, it.tag.removePrefix("v")) }
+        ?: (tr(R.string.version) + " " + runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty())
 
 /**
  * The panel's top, like XGIMI's: the time large, network and battery beside it, the date under
@@ -402,7 +446,16 @@ private fun FastModeTile(modifier: Modifier) {
  * accent, as XGIMI fills a switched-on tile.
  */
 @Composable
-private fun StatusTile(icon: ImageVector, title: String, status: String, modifier: Modifier, on: Boolean = false, onClick: () -> Unit) {
+private fun StatusTile(
+    icon: ImageVector,
+    title: String,
+    status: String,
+    modifier: Modifier,
+    on: Boolean = false,
+    height: Dp = TileHeight,
+    statusLines: Int = 2,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     val fg = when {
         focused -> FocusText
@@ -416,7 +469,7 @@ private fun StatusTile(icon: ImageVector, title: String, status: String, modifie
     }
     Row(
         modifier
-            .height(TileHeight)
+            .height(height)
             .background(if (focused) FocusBg else if (on) Accent else CardBg, TileShape)
             .panelControl({ focused = it }, onClick)
             .padding(start = 14.dp, end = 10.dp),
@@ -426,7 +479,7 @@ private fun StatusTile(icon: ImageVector, title: String, status: String, modifie
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             T(title, 16.sp, color = fg, maxLines = 2)
-            T(status, 14.sp, Modifier.padding(top = 2.dp), color = dim, maxLines = 2)
+            T(status, 14.sp, Modifier.padding(top = 2.dp), color = dim, maxLines = statusLines)
         }
     }
 }

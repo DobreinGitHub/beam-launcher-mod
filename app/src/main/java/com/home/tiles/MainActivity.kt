@@ -144,7 +144,7 @@ object XgimiScreens {
  */
 @Composable
 fun Modifier.hiddenUnderPanels(): Modifier {
-    val alpha by animateFloatAsState(if (XgimiScreens.shown.value || PanelState.open) 0f else 1f, tween(150), label = "chrome")
+    val alpha by animateFloatAsState(if (XgimiScreens.shown.value || PanelState.open) 0f else 1f, motion(150), label = "chrome")
     return graphicsLayer { this.alpha = alpha }
 }
 
@@ -317,7 +317,7 @@ private fun ScreenSwitch(screen: NavTab, modifier: Modifier, content: @Composabl
                 if (tab in built) {
                     val shown by animateFloatAsState(
                         if (tab == screen) 1f else 0f,
-                        tween(ScreenSlideMs, easing = FastOutSlowInEasing),
+                        motion(ScreenSlideMs),
                         label = "screen",
                     )
                     // All apps sits to the right of home: it comes and goes on the right, home on the left.

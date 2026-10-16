@@ -298,8 +298,8 @@ fun DeviceChip(
     DisposableEffect(Unit) { onDispose { if (focused) view.post(onGone) } }
     val focusFill = FocusBg
     val focusText = FocusText
-    val fill by animateColorAsState(if (focused) focusFill else Colors.Button, tween(150), label = "fill")
-    val text by animateColorAsState(if (focused) focusText else Colors.Text, tween(150), label = "text")
+    val fill by animateColorAsState(if (focused) focusFill else Colors.Button, motion(150), label = "fill")
+    val text by animateColorAsState(if (focused) focusText else Colors.Text, motion(150), label = "text")
     val open = !compact || focused
     Row(
         Modifier
@@ -321,8 +321,8 @@ fun DeviceChip(
         }
         AnimatedVisibility(
             open,
-            enter = expandHorizontally(tween(180), expandFrom = Alignment.Start) + fadeIn(tween(180)),
-            exit = shrinkHorizontally(tween(150), shrinkTowards = Alignment.Start) + fadeOut(tween(100)),
+            enter = expandHorizontally(motion(180), expandFrom = Alignment.Start) + fadeIn(motion(180)),
+            exit = shrinkHorizontally(motion(150), shrinkTowards = Alignment.Start) + fadeOut(motion(100)),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.width(12.dp))

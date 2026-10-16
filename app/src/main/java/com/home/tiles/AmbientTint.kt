@@ -58,12 +58,12 @@ object AmbientTint {
  */
 @Composable
 fun Backdrop() {
-    val target = AmbientTint.target.value?.takeIf { LauncherSettings.ambientTint }
+    val target = AmbientTint.target.value?.takeIf { LauncherSettings.ambientTint && !Effects.reduced }
     // Fading out keeps the last colour rather than blending towards grey on the way.
     val last = remember { arrayOf(Color.Transparent) }
     if (target != null) last[0] = target
-    val color by animateColorAsState(last[0], tween(500), label = "ambient")
-    val strength by animateFloatAsState(if (target != null) 1f else 0f, tween(500), label = "ambient")
+    val color by animateColorAsState(last[0], motion(500), label = "ambient")
+    val strength by animateFloatAsState(if (target != null) 1f else 0f, motion(500), label = "ambient")
     val mask = remember { washMask() }
     if (Colors.isXmb) {
         // XMB paints its gradient and waves together (see XmbWavesLite); the wash goes over them.

@@ -2,6 +2,7 @@
 
 package com.home.tiles
 
+import androidx.compose.animation.core.snap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.focusRestorer
@@ -257,8 +258,9 @@ private val NameGap = 9.dp
  */
 @OptIn(ExperimentalFoundationApi::class)
 private class GridKeyline(private val centerLine: Float) : BringIntoViewSpec {
-    override val scrollAnimationSpec: AnimationSpec<Float> =
-        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f)
+    // Fast mode: straight there.
+    override val scrollAnimationSpec: AnimationSpec<Float>
+        get() = if (Effects.reduced) snap() else spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f)
 
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
         offset + size / 2 - centerLine

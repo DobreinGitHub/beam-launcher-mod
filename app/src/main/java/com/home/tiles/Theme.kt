@@ -56,6 +56,7 @@ object LauncherSettings {
         ambientTintState.value = prefs.getBoolean("ambientTint", true)
         seenChannelsState.value = prefs.getStringSet("seenChannels", null)?.toSet()
         followXgimiState.value = prefs.getBoolean("followXgimiTheme", true)
+        FastMode.init(context)
         refreshXgimiTheme()
     }
 

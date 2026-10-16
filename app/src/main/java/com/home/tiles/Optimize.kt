@@ -4,7 +4,16 @@ import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -50,8 +59,26 @@ object Memory {
  * scale (animator duration) is left alone: it also drives every app's own interface animations,
  * Beam Mod's included, and turning it off makes them jump rather than feel faster.
  * Needs WRITE_SECURE_SETTINGS, which the installer grants.
+ *
+ * Beam Mod follows it too (see [Effects]): [state] tracks the setting, changed here or anywhere else.
  */
 object FastMode {
+    val state = mutableStateOf(false)
+    private var watching = false
+
+    fun init(context: Context) {
+        if (watching) return
+        watching = true
+        val app = context.applicationContext
+        state.value = on(app)
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { state.value = on(app) }
+        }
+        for (name in listOf(Settings.Global.WINDOW_ANIMATION_SCALE, Settings.Global.TRANSITION_ANIMATION_SCALE)) {
+            app.contentResolver.registerContentObserver(Settings.Global.getUriFor(name), false, observer)
+        }
+    }
+
     fun on(context: Context): Boolean {
         val resolver = context.contentResolver
         return Settings.Global.getFloat(resolver, Settings.Global.WINDOW_ANIMATION_SCALE, 1f) == 0f &&
@@ -63,5 +90,18 @@ object FastMode {
         val scale = if (on) 0f else 1f
         Settings.Global.putFloat(context.contentResolver, Settings.Global.WINDOW_ANIMATION_SCALE, scale)
         Settings.Global.putFloat(context.contentResolver, Settings.Global.TRANSITION_ANIMATION_SCALE, scale)
+        state.value = on
     }.isSuccess
 }
+
+/**
+ * Beam Mod's own half of fast mode: no focus light, no background tint following the selection, no
+ * moving XMB or loading shimmer, and every move and fade of its own done at once ([motion]).
+ */
+object Effects {
+    val reduced: Boolean get() = FastMode.state.value
+}
+
+/** The spec for one of Beam Mod's own animations: [ms] long, or at once in fast mode. */
+fun <T> motion(ms: Int, easing: Easing = FastOutSlowInEasing): FiniteAnimationSpec<T> =
+    if (Effects.reduced) snap() else tween(ms, easing = easing)

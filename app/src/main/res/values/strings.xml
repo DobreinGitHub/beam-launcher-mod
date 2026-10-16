@@ -149,4 +149,6 @@
     <string name="tile_fast">Быстрый режим</string>
     <string name="fast_on">Без анимаций</string>
     <string name="fast_off">С анимациями</string>
-    <string name="fast_denied">Нет разрешения</string></resources>
+    <string name="fast_denied">Нет разрешения</string>    <string name="home_status">Приложения и ряды</string>
+    <string name="remote_set">Назначено: %1$d</string>
+</resources>

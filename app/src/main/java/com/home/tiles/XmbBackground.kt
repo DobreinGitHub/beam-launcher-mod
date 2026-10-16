@@ -135,7 +135,7 @@ private fun XmbWavesLite(paintUnder: DrawScope.() -> Unit, underKey: Any) {
         val rnd = Random(7)
         List(26) { Sparkle(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat() * 6.28f, 0.6f + rnd.nextFloat()) }
     }
-    val animate = LauncherSettings.bgAnimation && rememberResumed()
+    val animate = LauncherSettings.bgAnimation && !Effects.reduced && rememberResumed()
     LaunchedEffect(animate) {
         if (!animate) return@LaunchedEffect
         val start = withFrameNanos { it } - (time * 1e9f).toLong()
@@ -224,7 +224,7 @@ private fun XmbWaves() {
     val shader = remember { RuntimeShader(WAVES_AGSL) }
     val brush = remember(shader) { ShaderBrush(shader) }
     var time by remember { mutableFloatStateOf(0f) }
-    val animate = LauncherSettings.bgAnimation && rememberResumed()
+    val animate = LauncherSettings.bgAnimation && !Effects.reduced && rememberResumed()
     LaunchedEffect(animate) {
         if (!animate) return@LaunchedEffect
         val start = withFrameNanos { it } - (time * 1e9f).toLong()

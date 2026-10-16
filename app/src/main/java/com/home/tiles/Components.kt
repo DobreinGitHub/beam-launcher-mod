@@ -143,7 +143,7 @@ fun T(
  * their items, so the neighbours stay on top of the light.
  */
 fun DrawScope.drawFocusGlow(color: Color, strength: Float, center: Offset, halfW: Float, halfH: Float, spread: Float) {
-    if (strength <= 0f) return
+    if (strength <= 0f || Effects.reduced) return
     val ry = halfH + spread
     val rx = halfW + spread
     // The light's shape is a small picture made once, stretched into the oval and coloured as it
@@ -210,8 +210,8 @@ fun rememberTileGlows(): MutableMap<Any, TileGlow> = remember { mutableStateMapO
 @Composable
 fun RegisterTileGlow(glows: MutableMap<Any, TileGlow>, key: Any, lit: Boolean, color: Color) {
     // As long as the tile takes to grow (see Tile).
-    val level = animateFloatAsState(if (lit) 1f else 0f, tween(150), label = "glow")
-    val animated = animateColorAsState(color, tween(250), label = "glow")
+    val level = animateFloatAsState(if (lit) 1f else 0f, motion(150), label = "glow")
+    val animated = animateColorAsState(color, motion(250), label = "glow")
     val target = rememberUpdatedState(color)
     DisposableEffect(glows, key) {
         glows[key] = TileGlow(level, animated, target)
@@ -278,7 +278,8 @@ fun rememberArt(repo: AppRepository, entry: AppEntry): State<TileArt?> =
  */
 @Composable
 fun Modifier.skeleton(shape: Shape): Modifier {
-    val sweep = rememberInfiniteTransition(label = "skeleton").animateFloat(
+    // Fast mode: the faint shape alone, nothing sweeping.
+    val sweep = if (Effects.reduced) null else rememberInfiniteTransition(label = "skeleton").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart),
@@ -288,6 +289,7 @@ fun Modifier.skeleton(shape: Shape): Modifier {
     return drawBehind {
         val outline = shape.createOutline(size, layoutDirection, this)
         drawOutline(outline, base.copy(alpha = 0.10f))
+        if (sweep == null) return@drawBehind
         // The band is as wide as the shape and travels from fully left of it to fully right.
         val band = size.width
         val x = -band + (size.width + band) * sweep.value
@@ -374,7 +376,7 @@ fun Tile(
     val press = remember { DpadPress() }
     // Google TV style selection: the selected tile grows a little and gets an outline; the row
     // draws the light behind it (see drawFocusGlow), under the neighbours.
-    val border by animateFloatAsState(if (highlighted || lifted) 1f else 0f, tween(150), label = "border")
+    val border by animateFloatAsState(if (highlighted || lifted) 1f else 0f, motion(150), label = "border")
     val scale by animateFloatAsState(
         when {
             lifted -> FOCUS_SCALE_LIFTED
@@ -382,7 +384,7 @@ fun Tile(
             highlighted -> FOCUS_SCALE
             else -> 1f
         },
-        tween(150),
+        motion(150),
         label = "focus",
     )
     val click = {

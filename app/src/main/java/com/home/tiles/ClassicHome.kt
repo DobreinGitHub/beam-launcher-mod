@@ -2,6 +2,7 @@
 
 package com.home.tiles
 
+import androidx.compose.animation.core.snap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.focusRestorer
@@ -328,7 +329,7 @@ internal fun ClassicHome(
                         Modifier
                             // Tiles slide to their new places when the order changes; the moved
                             // one is drawn above the neighbour it passes.
-                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = tween(MoveSlideMs))
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = motion(MoveSlideMs))
                             .zIndex(if (moving) 1f else 0f),
                     ) {
                         // Name above the selected tile; may run wider than the tile. Not over
@@ -374,7 +375,7 @@ internal fun ClassicHome(
                     // Opening as it's switched on, closing as it's switched off, gap and all.
                     val fold = remember { Animatable(if (shown.entering) 0f else 1f) }
                     LaunchedEffect(shown.leaving) {
-                        fold.animateTo(if (shown.leaving) 0f else 1f, tween(RowFoldMs, easing = FastOutSlowInEasing))
+                        fold.animateTo(if (shown.leaving) 0f else 1f, motion(RowFoldMs))
                     }
                     val dim = rememberRowDim(channel.key, focusedRow)
                     // A clear gap between the apps and the first channel, a smaller one between channels
@@ -445,7 +446,7 @@ private fun rememberRowDim(key: String, focusedRow: State<String?>): State<Float
         var first = true
         snapshotFlow { focusedRow.value.let { it == null || it == key } }.collectLatest { lit ->
             val target = if (lit) 1f else DimAlpha
-            if (first) dim.snapTo(target) else dim.animateTo(target, tween(RowDimMs))
+            if (first) dim.snapTo(target) else dim.animateTo(target, motion(RowDimMs))
             first = false
         }
     }
@@ -565,9 +566,9 @@ private fun Modifier.foldHeight(fold: () -> Float): Modifier = layout { measurab
 @OptIn(ExperimentalFoundationApi::class)
 private fun rowKeyline(keyline: Float) = object : BringIntoViewSpec {
     // A spring, not a tween: the scroll is re-aimed every frame, and a tween restarted each time
-    // only creeps (it took about 2 s). Critically damped, settles in about 0.4 s.
-    override val scrollAnimationSpec: AnimationSpec<Float> =
-        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f)
+    // only creeps (it took about 2 s). Critically damped, settles in about 0.4 s. Fast mode: straight there.
+    override val scrollAnimationSpec: AnimationSpec<Float>
+        get() = if (Effects.reduced) snap() else spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 600f)
 
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
         offset - keyline
@@ -622,7 +623,7 @@ private class MoveFollower(private val list: LazyListState, private val scope: C
             // place only from the second frame on; measuring earlier aimed from a stale spot.
             withFrameNanos {}
             withFrameNanos {}
-            list.animateScrollBy(wanted - scrolled(), tween(MoveSlideMs))
+            list.animateScrollBy(wanted - scrolled(), motion(MoveSlideMs))
             target = null
             // Whatever cut the scroll short, the tile ends up fully in view.
             list.bringIntoRow(index)
@@ -642,8 +643,8 @@ private suspend fun LazyListState.bringIntoRow(index: Int) {
     val start = info.viewportStartOffset + info.beforeContentPadding
     val end = info.viewportEndOffset - info.afterContentPadding
     when {
-        shown.offset < start -> animateScrollBy((shown.offset - start).toFloat(), tween(MoveSlideMs))
-        shown.offset + shown.size > end -> animateScrollBy((shown.offset + shown.size - end).toFloat(), tween(MoveSlideMs))
+        shown.offset < start -> animateScrollBy((shown.offset - start).toFloat(), motion(MoveSlideMs))
+        shown.offset + shown.size > end -> animateScrollBy((shown.offset + shown.size - end).toFloat(), motion(MoveSlideMs))
     }
 }
 
@@ -669,7 +670,7 @@ private fun Modifier.slideToPlace(enabled: Boolean): Modifier = composed {
                 return@offset IntOffset.Zero
             }
             val anim = current ?: Animatable(target, IntOffset.VectorConverter).also { drawn = it }
-            if (anim.targetValue != target) scope.launch { anim.animateTo(target, tween(RowSlideMs)) }
+            if (anim.targetValue != target) scope.launch { anim.animateTo(target, motion(RowSlideMs)) }
             anim.value - target
         }
 }
