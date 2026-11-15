@@ -28,7 +28,9 @@ A modification of the [Beam](https://github.com/tonisaf/beam-launcher) launcher 
 fresh installs.
 
 **Battery**: the projector's and the XGIMI stand's charge together, time left at once (learned from the
-real drain), warnings at 15% and 5% over any app.
+real drain), warnings at 15% and 5% over any app. Third-party USB PD power appears as external power,
+not a stand; the green bolt appears as soon as external power is accepted, without waiting for a percentage increase.
+An amber plug indicates that the battery is draining while plugged in.
 
 **Appearance**
 

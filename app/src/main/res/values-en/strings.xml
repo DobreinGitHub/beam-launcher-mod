@@ -46,6 +46,10 @@
     <string name="idle">Idle time</string>
     <string name="no_write_settings">No permission to change the time (appops WRITE_SETTINGS)</string>
     <string name="battery_low">Low battery: %1$d%%. Plug in the adapter</string>
+    <string name="battery_plugged_checking">Power connected · checking charge</string>
+    <string name="battery_charging">Charging</string>
+    <string name="battery_plugged_draining">Power connected · battery draining</string>
+    <string name="battery_full">Fully charged</string>
     <string name="battery_left_hm">≈ %1$dh %2$02dm</string>
     <string name="battery_left_m">≈ %1$d min</string>
     <string name="stand_on">Battery stand attached · %1$d%%</string>
