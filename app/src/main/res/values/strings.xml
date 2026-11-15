@@ -46,6 +46,10 @@
     <string name="idle">Бездействие</string>
     <string name="no_write_settings">Нет разрешения менять время (appops WRITE_SETTINGS)</string>
     <string name="battery_low">Низкий заряд: %1$d%%. Подключите питание</string>
+    <string name="battery_plugged_checking">Питание подключено · проверяем заряд</string>
+    <string name="battery_charging">Заряжается</string>
+    <string name="battery_plugged_draining">Питание подключено · заряд снижается</string>
+    <string name="battery_full">Заряжено полностью</string>
     <string name="battery_left_hm">≈ %1$d ч %2$02d мин</string>
     <string name="battery_left_m">≈ %1$d мин</string>
     <string name="stand_on">Подставка подключена · %1$d%%</string>

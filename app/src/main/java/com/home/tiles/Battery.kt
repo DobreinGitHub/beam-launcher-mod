@@ -37,7 +37,10 @@ import java.util.concurrent.TimeUnit
 enum class PowerSource {
     BATTERY,
 
-    /** On the adapter and the charge is going up (or hasn't had time to show either way). */
+    /** External power is detected, but the battery has not yet changed. */
+    PLUGGED_CHECKING,
+
+    /** On external power and the battery's level has risen. */
     CHARGING,
 
     /** On the adapter, but the charge still goes down: the projector draws more than it gets. */
@@ -52,18 +55,48 @@ enum class PowerSource {
 
 /**
  * XGIMI's battery stand as the firmware reports it (its "copower" device type, in the order of the
- * firmware's CopowerDeviceTypeEnum): 0 a plain adapter, 1 the stand powering the projector, 2 the
- * stand too low to, 3 the projector's own battery, 4 the stand with its charger plugged in, which
- * passes the charger's power on. With 0 and 3 there is no stand, whatever its last level says (the
- * firmware keeps the last one after the stand is taken off).
+ * firmware's CopowerDeviceTypeEnum): 0 a plain adapter, 1 the stand powering the projector, 2
+ * low-power external supply (including third-party USB PD), 3 the projector's own battery, 4 the
+ * stand with its charger plugged in. Only 1 and 4 identify an attached stand. The firmware may
+ * retain a valid old stand level after it is removed.
  */
 enum class StandState { NONE, POWERING, LOW, CHARGING }
 
-private fun standState(type: Int?): StandState = when (type) {
+internal fun standState(type: Int?): StandState = when (type) {
     1 -> StandState.POWERING
-    2 -> StandState.LOW
     4 -> StandState.CHARGING
     else -> StandState.NONE
+}
+
+/** A fresh level change overrides the previous direction; a source change clears it. */
+internal class PowerTrend {
+    private var source: Triple<Boolean, StandState, Int?>? = null
+    private var level: Int? = null
+    var direction: Int = 0
+        private set
+
+    fun update(adapter: Boolean, stand: StandState, copowerType: Int?, percent: Int): Int {
+        val nextSource = Triple(adapter, stand, copowerType)
+        if (source != nextSource) {
+            source = nextSource
+            level = null
+            direction = 0
+        }
+        level?.let { previous ->
+            if (percent != previous) direction = if (percent > previous) 1 else -1
+        }
+        level = percent
+        return direction
+    }
+}
+
+internal fun powerSource(adapter: Boolean, stand: StandState, full: Boolean, level: Int, trend: Int): PowerSource = when {
+    stand == StandState.POWERING || stand == StandState.LOW -> PowerSource.STAND
+    !adapter -> PowerSource.BATTERY
+    full || level >= 100 -> PowerSource.FULL
+    trend > 0 -> PowerSource.CHARGING
+    trend < 0 -> PowerSource.PLUGGED_DRAINING
+    else -> PowerSource.PLUGGED_CHECKING
 }
 
 /**
@@ -78,11 +111,13 @@ class BatteryInfo(
     val minutesLeft: Int?,
     val stand: StandState = StandState.NONE,
     val standLevel: Int? = null,
+    val adapterPowered: Boolean = false,
+    val copowerType: Int? = null,
 ) {
     val standCharging get() = stand == StandState.CHARGING
 }
 
-private class Reading(val level: Int, val adapter: Boolean, val full: Boolean, val stand: StandState, val standLevel: Int?)
+private class Reading(val level: Int, val adapter: Boolean, val full: Boolean, val stand: StandState, val standLevel: Int?, val copowerType: Int?)
 
 /**
  * The XGIMI projector's Android battery service is a stub ("not present", always 100%); the real
@@ -97,19 +132,21 @@ private fun readXgimiBattery(): Reading? = runCatching {
     val adapter = cls.getMethod("isAdapterPowered").invoke(pm) as? Boolean ?: false
     val full = runCatching { cls.getMethod("isBatteryChargedFull").invoke(pm) as? Boolean }.getOrNull() ?: false
     // XGIMI's battery stand is its "copower" device, see StandState.
-    val stand = standState(runCatching { (cls.getMethod("getCopowerDeviceType").invoke(pm) as Number).toInt() }.getOrNull())
+    val copowerType = runCatching { (cls.getMethod("getCopowerDeviceType").invoke(pm) as Number).toInt() }.getOrNull()
+    val stand = standState(copowerType)
     // While it charges the stand reports 0 ("invalid" in the firmware's log): no level then.
     val standLevel = if (stand == StandState.NONE) null else
         runCatching { (cls.getMethod("getCopowerBatteryLevel").invoke(pm) as Number).toInt() }.getOrNull()
             ?.takeIf { it in 0..100 && !(stand == StandState.CHARGING && it == 0) }
-    if (level in 0..100) Reading(level, adapter, full, stand, standLevel) else null
+    if (level in 0..100) Reading(level, adapter, full, stand, standLevel, copowerType) else null
 }.onFailure { android.util.Log.w("Battery", "XGIMI battery unavailable", it) }.getOrNull()
 
 /**
  * Polls the battery for the whole process: the top bar shows [info], and the low-battery warning
  * must come over whatever app is playing, so it runs from the accessibility service too.
  * The level moves by whole percents, so whether it charges or drains, and how fast, is read from
- * its change over the last [WINDOW_MS]; plugging the adapter in or out starts that over.
+ * its change over the last [WINDOW_MS]. The latest whole-percent change identifies charge direction
+ * immediately; plugging external power in or out starts both observations over.
  */
 object BatteryMonitor {
     private const val POLL_S = 5L
@@ -123,10 +160,8 @@ object BatteryMonitor {
     private var appContext: Context? = null
     private val executor = Executors.newSingleThreadScheduledExecutor()
     private val samples = ArrayDeque<Pair<Long, Int>>() // elapsed time, level of the charge in use
-    private val standSamples = ArrayDeque<Pair<Long, Int>>() // elapsed time, the stand's level
-    private var lastSource: Pair<Boolean, StandState>? = null // adapter, stand
-    private var trend = 0
-    private var standTrend = 0
+    private var lastSource: Triple<Boolean, StandState, Int?>? = null // adapter, stand, raw copower type
+    private val powerTrend = PowerTrend()
     private val warned = mutableSetOf<Int>()
     private val standWarned = mutableSetOf<Int>()
     private var hadStand: Boolean? = null
@@ -161,8 +196,9 @@ object BatteryMonitor {
     /** The remembered rates, for the adb hook (--ez battery_get true). */
     fun describeRates(): String {
         val prefs = appContext?.let(::prefs) ?: return "not started"
+        val current = info
         return listOf(OWN, STAND).flatMap { s -> listOf(true, false).map { e -> "$s eco=$e: ${prefs.getLong("$KEY_RATE$s:$e", 0L) / 1000}s/%" } }
-            .joinToString("; ") + " | now ${info?.minutesLeft} min"
+            .joinToString("; ") + " | now ${current?.minutesLeft} min, percent=${current?.percent}, power=${current?.power}, adapter=${current?.adapterPowered}, copowerType=${current?.copowerType}, stand=${current?.stand}, standLevel=${current?.standLevel}"
     }
 
     private fun other(source: String) = if (source == OWN) STAND else OWN
@@ -181,14 +217,13 @@ object BatteryMonitor {
         val onStand = reading.stand == StandState.POWERING || reading.stand == StandState.LOW
         // The charge in use: the stand's while it carries the projector, else the projector's own.
         val level = if (onStand) reading.standLevel ?: reading.level else reading.level
-        val source = reading.adapter to reading.stand
+        val source = Triple(reading.adapter, reading.stand, reading.copowerType)
         if (source != lastSource) {
             samples.clear()
-            standSamples.clear()
-            trend = 0
-            standTrend = 0
+            lastLevel = null
             lastSource = source
         }
+        val trend = powerTrend.update(reading.adapter, reading.stand, reading.copowerType, reading.level)
         fun ArrayDeque<Pair<Long, Int>>.add(value: Int): Pair<Long, Int> {
             addLast(now to value)
             while (size > 1 && now - first().first > WINDOW_MS) removeFirst()
@@ -196,18 +231,7 @@ object BatteryMonitor {
             return (now - since) to (value - then)
         }
         val (span, change) = samples.add(level)
-        if (span >= MIN_TREND_MS && change != 0) trend = if (change > 0) 1 else -1
-        reading.standLevel?.let { stand ->
-            val (standSpan, standChange) = standSamples.add(stand)
-            if (standSpan >= MIN_TREND_MS && standChange != 0) standTrend = if (standChange > 0) 1 else -1
-        }
-        val power = when {
-            onStand -> PowerSource.STAND
-            !reading.adapter -> PowerSource.BATTERY
-            reading.full || reading.level >= 100 -> PowerSource.FULL
-            trend < 0 -> PowerSource.PLUGGED_DRAINING
-            else -> PowerSource.CHARGING
-        }
+        val power = powerSource(reading.adapter, reading.stand, reading.full, reading.level, trend)
         // Two percents at least, so one step of the level doesn't make a wild guess.
         val live = if (span >= MIN_TREND_MS && change <= -2) span / -change else null
         val drainSource = when (power) {
@@ -228,7 +252,7 @@ object BatteryMonitor {
             // now goes on playing once the stand runs out.
             else -> ((level + reading.level) * rate / 60_000).toInt()
         }
-        state.value = BatteryInfo(reading.level, power, minutesLeft, reading.stand, reading.standLevel)
+        state.value = BatteryInfo(reading.level, power, minutesLeft, reading.stand, reading.standLevel, reading.adapter, reading.copowerType)
         noteStand(reading)
         warnIfLow(reading)
     }
@@ -301,8 +325,8 @@ private fun timeLeft(minutes: Int): String =
 
 /**
  * Switch-style battery readout for the top bar; hidden when the device has no battery.
- * Charging: green battery with a bolt. On the adapter but draining: an amber plug. Full: a green
- * plug. On battery: red at 15% and below (the time left is in Beam's settings header, see batteryTimeLeft).
+ * Accepted external power: green battery with a bolt, without waiting for a level change.
+ * Confirmed drain on external power: amber plug. Full: green plug. On battery: red at 15% and below.
  * [weight]: of the percentages; Regular beside the top bar's tabs, Light in a large header.
  */
 @Composable
@@ -316,12 +340,12 @@ fun BatteryIndicator(
     val info = BatteryMonitor.info ?: return
     val low = info.power == PowerSource.BATTERY && info.percent <= 15
     val tint = when (info.power) {
-        PowerSource.CHARGING, PowerSource.FULL -> ChargingGreen
+        PowerSource.CHARGING, PowerSource.PLUGGED_CHECKING, PowerSource.FULL -> ChargingGreen
         PowerSource.BATTERY -> if (low) LowRed else color
         PowerSource.PLUGGED_DRAINING, PowerSource.STAND -> color
     }
     val badge = when (info.power) {
-        PowerSource.CHARGING -> Icons.Rounded.Bolt to ChargingGreen
+        PowerSource.CHARGING, PowerSource.PLUGGED_CHECKING -> Icons.Rounded.Bolt to ChargingGreen
         PowerSource.FULL -> Icons.Rounded.Power to ChargingGreen
         PowerSource.PLUGGED_DRAINING -> Icons.Rounded.Power to DrainAmber
         PowerSource.BATTERY, PowerSource.STAND -> null
@@ -428,13 +452,20 @@ private fun DrawScope.drawBattery(percent: Int, tint: Color, scale: Float, at: O
     }
 }
 /**
- * The time the charge in use lasts, "≈ 1 ч 20 мин", once it can be told; null otherwise. Shown in
- * Beam's settings header, not the top bar: there it would crowd the devices and the clock.
+ * The power state or remaining runtime for Beam's settings header. Runtime is only shown while
+ * running on battery or the stand, never as an estimate while external power is attached.
  */
 @Composable
 fun batteryTimeLeft(): String? {
     BatteryMonitor.start(LocalContext.current)
-    return BatteryMonitor.info?.minutesLeft?.let(::timeLeft)
+    val info = BatteryMonitor.info ?: return null
+    return when (info.power) {
+        PowerSource.BATTERY, PowerSource.STAND -> info.minutesLeft?.let(::timeLeft)
+        PowerSource.PLUGGED_CHECKING -> tr(R.string.battery_plugged_checking)
+        PowerSource.CHARGING -> tr(R.string.battery_charging)
+        PowerSource.PLUGGED_DRAINING -> tr(R.string.battery_plugged_draining)
+        PowerSource.FULL -> tr(R.string.battery_full)
+    }
 }
 
 private const val KEY_RATE = "msPerPercent:"
