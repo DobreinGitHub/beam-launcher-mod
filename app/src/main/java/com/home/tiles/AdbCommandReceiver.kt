@@ -92,15 +92,24 @@ class AdbCommandReceiver : BroadcastReceiver() {
             val url = intent.getStringExtra("voice_url")
             val sha256 = intent.getStringExtra("voice_sha256")
             val app = context.applicationContext
+            resultData = "installing"
             val pending = goAsync()
             Thread {
                 try {
-                    if (url != null) VoiceModel.download(app, url, sha256) else VoiceModel.installFrom(VoiceModelProvider.pushedZip(app), app)
+                    val installed = if (url != null) {
+                        VoiceModel.download(app, url, sha256)
+                    } else {
+                        VoiceModel.installFrom(VoiceModelProvider.pushedZip(app), app)
+                    }
+                    pending.resultData = if (installed) "installed" else "error: voice model installation failed"
+                } catch (e: Exception) {
+                    Log.e("Voice", "Model installation failed", e)
+                    pending.resultData = "error: ${e.message ?: e.javaClass.simpleName}"
                 } finally {
                     pending.finish()
                 }
             }.start()
-            resultData = "installing"
+            return
         }
         if (intent.hasExtra("voice_status")) resultData = "installed=${VoiceModel.installed(context)}"
         // Voice commands that open apps: --es voice_app "Name|package1,package2|phrase one;phrase two"
